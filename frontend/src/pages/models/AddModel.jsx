@@ -1,28 +1,32 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { getTodayFormatted, formatDate } from "../../utils/dateUtils";
+import { useSessionTimeout } from "../../hooks/useSessionTimeout";
 
 export default function AddModel() {
   const navigate = useNavigate();
   const suggestionsRef = useRef(null);
   const [searchParams] = useSearchParams();
   const isAdminAdd = searchParams.get("admin") === "true";
+  const modelId = searchParams.get("modelId"); // Get modelId from URL params
+
+  // Initialize session timeout for admin users
+  useSessionTimeout();
+
+  // State to track if model name and company should be locked
+  const [isAddingColorVariant, setIsAddingColorVariant] = useState(false);
+
+  // Derived state: lock additional fields (date, warranty) for admin color variants
+  const shouldLockAdditionalFields = isAdminAdd;
 
   // Form state
-  const getTodayDate = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const day = String(today.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
   const [formData, setFormData] = useState({
     modelName: "",
     company: "",
     colour: "",
     quantity: "",
     purchasedInWarranty: false,
-    purchaseDate: getTodayDate(), // Default to today's date in YYYY-MM-DD format
+    purchaseDate: getTodayFormatted(), // Default to today's date in dd/mm/yyyy format
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,6 +43,43 @@ export default function AddModel() {
     useState(false);
   const [showPurchasePriceDialog, setShowPurchasePriceDialog] = useState(false);
   const [autoAppliedPrice, setAutoAppliedPrice] = useState(null);
+
+  // Effect to fetch model data when adding color variant
+  useEffect(() => {
+    if (modelId) {
+      setIsAddingColorVariant(true);
+      const fetchModelData = async () => {
+        try {
+          const response = await fetch(
+            `http://localhost:5000/api/models/${modelId}`
+          );
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || "Error fetching model data");
+          }
+
+          // Pre-fill form with existing model data
+          setFormData({
+            modelName: data.data.modelName,
+            company: data.data.company,
+            colour: "",
+            quantity: "",
+            purchasedInWarranty: data.data.purchasedInWarranty || false,
+            purchaseDate: data.data.purchaseDate
+              ? formatDate(data.data.purchaseDate)
+              : getTodayFormatted(),
+          });
+
+          setError("");
+        } catch (err) {
+          setError(err.message || "Error fetching model data");
+        }
+      };
+
+      fetchModelData();
+    }
+  }, [modelId]);
   const [referenceModel, setReferenceModel] = useState(null);
   const suggestionTimeoutRef = useRef(null);
   const companySuggestionTimeoutRef = useRef(null);
@@ -67,6 +108,62 @@ export default function AddModel() {
     ],
     []
   );
+
+  // Date validation and parsing functions
+  const validateDateFormat = (dateString) => {
+    const regex = /^\d{2}\/\d{2}\/\d{4}$/;
+    if (!regex.test(dateString)) return false;
+
+    const [day, month, year] = dateString.split("/");
+    const date = new Date(year, month - 1, day);
+    return (
+      date.getFullYear() === parseInt(year) &&
+      date.getMonth() === parseInt(month) - 1 &&
+      date.getDate() === parseInt(day)
+    );
+  };
+
+  const parseDate = (dateString) => {
+    if (!dateString) return "";
+    const [day, month, year] = dateString.split("/");
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  };
+
+  const handleDateChange = (e) => {
+    const value = e.target.value;
+
+    // Allow typing in dd/mm/yyyy format
+    let formattedValue = value;
+
+    // Auto-format as user types
+    if (value.length === 2 && !value.includes("/")) {
+      formattedValue = value + "/";
+    } else if (value.length === 5 && value.split("/").length === 2) {
+      formattedValue = value + "/";
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      purchaseDate: formattedValue,
+    }));
+  };
+
+  const handleDateBlur = (e) => {
+    const value = e.target.value;
+    if (value && validateDateFormat(value)) {
+      // Valid format, keep it
+      setFormData((prev) => ({
+        ...prev,
+        purchaseDate: value,
+      }));
+    } else if (value) {
+      // Invalid format, reset to today
+      setFormData((prev) => ({
+        ...prev,
+        purchaseDate: getTodayFormatted(),
+      }));
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -519,7 +616,7 @@ export default function AddModel() {
       )}&company=${encodeURIComponent(
         currentFormData.company
       )}&purchaseDate=${encodeURIComponent(
-        currentFormData.purchaseDate
+        parseDate(currentFormData.purchaseDate)
       )}&purchasedInWarranty=${encodeURIComponent(
         currentFormData.purchasedInWarranty
       )}`;
@@ -591,7 +688,7 @@ export default function AddModel() {
       )}&company=${encodeURIComponent(
         formData.company
       )}&colour=${encodeURIComponent(colour)}&purchaseDate=${encodeURIComponent(
-        formData.purchaseDate
+        parseDate(formData.purchaseDate)
       )}&purchasedInWarranty=${encodeURIComponent(
         formData.purchasedInWarranty
       )}`;
@@ -740,9 +837,17 @@ export default function AddModel() {
       }
     } else {
       // Navigate to appropriate page based on where we came from
-      if (isAdminAdd) {
+      if (isAddingColorVariant && isAdminAdd) {
+        // Admin color variant: go back to admin panel
+        navigate("/admin?section=models");
+      } else if (isAddingColorVariant) {
+        // Regular color variant: go back to All Models page
+        navigate("/models/all");
+      } else if (isAdminAdd) {
+        // Admin add model: go back to admin panel
         navigate("/admin?section=models");
       } else {
+        // Regular add model: go back to All Models page
         navigate("/models/all");
       }
     }
@@ -750,7 +855,30 @@ export default function AddModel() {
 
   return (
     <div className="model-container">
-      <h2>Add New Model</h2>
+      <h2>{isAddingColorVariant ? "Add Color Variant" : "Add New Model"}</h2>
+
+      {isAddingColorVariant && (
+        <div
+          style={{
+            padding: "0.75rem 1rem",
+            backgroundColor: "#e8f5e8",
+            border: "1px solid #4caf50",
+            borderRadius: "0.5rem",
+            marginBottom: "1rem",
+            color: "#2e7d32",
+            fontSize: "0.875rem",
+          }}
+        >
+          <strong>Adding color variant for:</strong> {formData.modelName} (
+          {formData.company})
+          <br />
+          <small>
+            {shouldLockAdditionalFields
+              ? "Model name, company, purchase date, and warranty status are locked. You can edit color and quantity only."
+              : "Model name and company are locked. You can edit color, quantity, warranty, and purchase date."}
+          </small>
+        </div>
+      )}
 
       <div className="model-form">
         {/* Model Details */}
@@ -768,6 +896,11 @@ export default function AddModel() {
                   placeholder="Enter model name"
                   required
                   autoComplete="off"
+                  readOnly={isAddingColorVariant}
+                  style={{
+                    backgroundColor: isAddingColorVariant ? "#f5f5f5" : "white",
+                    cursor: isAddingColorVariant ? "not-allowed" : "text",
+                  }}
                   onKeyDown={(e) => {
                     // Handle keyboard navigation for suggestions
                     if (showSuggestions && modelSuggestions.length > 0) {
@@ -959,6 +1092,11 @@ export default function AddModel() {
                   placeholder="Enter company name"
                   required
                   autoComplete="off"
+                  readOnly={isAddingColorVariant}
+                  style={{
+                    backgroundColor: isAddingColorVariant ? "#f5f5f5" : "white",
+                    cursor: isAddingColorVariant ? "not-allowed" : "text",
+                  }}
                   onKeyDown={(e) => {
                     // Handle keyboard navigation for company suggestions
                     if (
@@ -1332,17 +1470,41 @@ export default function AddModel() {
             <div className="form-group">
               <label>Purchase Date</label>
               <input
-                type="date"
+                type="text"
                 name="purchaseDate"
                 value={formData.purchaseDate}
-                onChange={handleInputChange}
-                max={getTodayDate()} // Prevent future dates
-                disabled={isSubmitting}
+                onChange={handleDateChange}
+                onBlur={(e) => {
+                  handleDateBlur(e);
+                  e.target.style.borderColor = "#e5e7eb";
+                  e.target.style.boxShadow = "none";
+                }}
+                placeholder="dd/mm/yyyy"
+                maxLength="10"
+                disabled={isSubmitting || shouldLockAdditionalFields}
                 style={{
                   width: "100%",
-                  padding: "0.5rem",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
+                  padding: "0.625rem 0.875rem",
+                  border: "2px solid #e5e7eb",
+                  borderRadius: "0.5rem",
+                  fontSize: "0.9rem",
+                  fontWeight: "500",
+                  color: "#374151",
+                  backgroundColor: shouldLockAdditionalFields
+                    ? "#f5f5f5"
+                    : "#ffffff",
+                  transition: "all 0.2s ease",
+                  cursor:
+                    isSubmitting || shouldLockAdditionalFields
+                      ? "not-allowed"
+                      : "text",
+                }}
+                onFocus={(e) => {
+                  if (!isSubmitting && !shouldLockAdditionalFields) {
+                    e.target.style.borderColor = "#6366f1";
+                    e.target.style.boxShadow =
+                      "0 0 0 3px rgba(99, 102, 241, 0.1)";
+                  }
                 }}
               />
               {autoAppliedPrice && (
@@ -1433,18 +1595,24 @@ export default function AddModel() {
                   name="purchasedInWarranty"
                   checked={formData.purchasedInWarranty}
                   onChange={handleInputChange}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || shouldLockAdditionalFields}
                   style={{
                     width: "16px",
                     height: "16px",
-                    cursor: isSubmitting ? "not-allowed" : "pointer",
+                    cursor:
+                      isSubmitting || shouldLockAdditionalFields
+                        ? "not-allowed"
+                        : "pointer",
                   }}
                 />
                 <label
                   htmlFor="purchasedInWarranty"
                   style={{
                     margin: 0,
-                    cursor: isSubmitting ? "not-allowed" : "pointer",
+                    cursor:
+                      isSubmitting || shouldLockAdditionalFields
+                        ? "not-allowed"
+                        : "pointer",
                     fontSize: "0.9rem",
                     color: "#333",
                   }}
@@ -1487,7 +1655,11 @@ export default function AddModel() {
             type="button"
             className="btn btn-secondary"
             onClick={() =>
-              isAdminAdd
+              isAddingColorVariant && isAdminAdd
+                ? navigate("/admin?section=models")
+                : isAddingColorVariant
+                ? navigate("/models/all")
+                : isAdminAdd
                 ? navigate("/admin?section=models")
                 : navigate("/models/all")
             }

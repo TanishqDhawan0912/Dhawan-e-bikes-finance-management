@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { formatDate } from "../../utils/dateUtils";
+import { useSessionTimeout } from "../../hooks/useSessionTimeout";
 
 // Add CSS animation for moving line
 const style = document.createElement("style");
@@ -43,6 +45,9 @@ export default function AllModels() {
   const navigate = useNavigate();
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Initialize session timeout for admin users
+  useSessionTimeout();
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [searchLoading, setSearchLoading] = useState(false); // Search timer state
@@ -325,6 +330,11 @@ export default function AllModels() {
   const handleEdit = (modelId) => {
     // Navigate immediately without any focus interference
     navigate(`/models/edit/${modelId}`);
+  };
+
+  const handleAddColor = (modelId) => {
+    // Navigate to AddModel page with model details pre-filled and locked
+    navigate(`/models/add?modelId=${modelId}`);
   };
 
   const handleDelete = async (event, modelId) => {
@@ -818,8 +828,92 @@ export default function AllModels() {
                         fontSize: "0.875rem",
                       }}
                     >
-                      {group.modelName} ({group.company}) -{" "}
-                      {group.totalQuantity} units total
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "1rem",
+                          }}
+                        >
+                          <div>
+                            {group.modelName} ({group.company}) -{" "}
+                            {group.totalQuantity} units total
+                          </div>
+                          <button
+                            onClick={() => handleAddColor(group.models[0]._id)}
+                            style={{
+                              background:
+                                "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
+                              color: "white",
+                              border: "none",
+                              padding: "0.25rem 0.5rem",
+                              borderRadius: "0.25rem",
+                              fontSize: "0.7rem",
+                              fontWeight: "500",
+                              cursor: "pointer",
+                              transition:
+                                "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.25rem",
+                              boxShadow:
+                                "0 1px 2px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.04)",
+                              position: "relative",
+                              whiteSpace: "nowrap",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.background =
+                                "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)";
+                              e.target.style.boxShadow =
+                                "0 2px 4px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)";
+                              e.target.style.transform = "translateY(-1px)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.background =
+                                "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)";
+                              e.target.style.boxShadow =
+                                "0 1px 2px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.04)";
+                              e.target.style.transform = "translateY(0)";
+                            }}
+                            onMouseDown={(e) => {
+                              e.target.style.transform = "translateY(0)";
+                              e.target.style.boxShadow =
+                                "0 1px 2px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.04)";
+                              ("0 1px 2px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(0, 0, 0, 0.04)");
+                              ("0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 1px rgba(0, 0, 0, 0.03)");
+                              ("0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 1px rgba(0, 0, 0, 0.03)");
+                            }}
+                            title={`Add new color variant to ${group.modelName} (${group.company})`}
+                          >
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              style={{
+                                display: "inline-block",
+                                flexShrink: 0,
+                              }}
+                            >
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="12" y1="8" x2="12" y2="16"></line>
+                              <line x1="8" y1="12" x2="16" y2="12"></line>
+                            </svg>
+                            Add Color
+                          </button>
+                        </div>
+                      </div>
                     </td>
                   </tr>
 
@@ -1055,12 +1149,8 @@ export default function AllModels() {
                         }}
                       >
                         {model.purchaseDate
-                          ? new Date(model.purchaseDate)
-                              .toISOString()
-                              .split("T")[0]
-                          : new Date(model.createdAt)
-                              .toISOString()
-                              .split("T")[0]}
+                          ? formatDate(model.purchaseDate)
+                          : formatDate(model.createdAt)}
                       </td>
                       <td
                         style={{

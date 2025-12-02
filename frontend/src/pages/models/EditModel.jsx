@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { getTodayFormatted } from "../../utils/dateUtils";
 
 export default function EditModel() {
   const navigate = useNavigate();
@@ -8,21 +9,13 @@ export default function EditModel() {
   const isAdminEdit = searchParams.get("admin") === "true";
 
   // Form state
-  const getTodayDate = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const day = String(today.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
   const [formData, setFormData] = useState({
     modelName: "",
     company: "",
     colour: "",
     quantity: "",
     purchasedInWarranty: false,
-    purchaseDate: getTodayDate(), // Default to today's date
+    purchaseDate: getTodayFormatted(), // Default to today's date in dd/mm/yyyy format
   });
 
   const [loading, setLoading] = useState(true);
@@ -79,8 +72,8 @@ export default function EditModel() {
           quantity: model.data.quantity.toString(),
           purchasedInWarranty: model.data.purchasedInWarranty || false,
           purchaseDate: model.data.purchaseDate
-            ? new Date(model.data.purchaseDate).toISOString().split("T")[0]
-            : getTodayDate(),
+            ? getTodayFormatted()
+            : getTodayFormatted(),
         });
 
         // Check if model has purchase price
@@ -560,23 +553,24 @@ export default function EditModel() {
           <div className="form-row">
             <div className="form-group">
               <label>Purchase Date</label>
-              <input
-                type="date"
-                name="purchaseDate"
-                value={formData.purchaseDate}
-                onChange={handleInputChange}
-                max={getTodayDate()} // Prevent future dates
-                disabled={isSubmitting}
-                readOnly={true} // Make read-only to prevent changes during editing
+              <div
                 style={{
                   width: "100%",
-                  padding: "0.5rem",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
-                  backgroundColor: "#f5f5f5", // Light gray background to indicate read-only
+                  padding: "0.625rem 0.875rem",
+                  border: "2px solid #d1d5db",
+                  borderRadius: "0.5rem",
+                  fontSize: "0.9rem",
+                  fontWeight: "500",
+                  color: "#374151",
+                  backgroundColor: "#f9fafb",
+                  display: "flex",
+                  alignItems: "center",
+                  minHeight: "42px",
                   cursor: "not-allowed",
                 }}
-              />
+              >
+                {formData.purchaseDate || "No date set"}
+              </div>
               <small
                 style={{
                   display: "block",

@@ -66,8 +66,8 @@ export default function EditColor() {
           quantity: "",
           purchasedInWarranty: model.data.purchasedInWarranty || false,
           purchaseDate: model.data.purchaseDate
-            ? new Date(model.data.purchaseDate).toISOString().split("T")[0]
-            : new Date().toISOString().split("T")[0],
+            ? getTodayFormatted()
+            : getTodayFormatted(),
         });
 
         setError("");
@@ -85,6 +85,62 @@ export default function EditColor() {
       setLoading(false);
     }
   }, [id]);
+
+  // Date validation and parsing functions
+  const validateDateFormat = (dateString) => {
+    const regex = /^\d{2}\/\d{2}\/\d{4}$/;
+    if (!regex.test(dateString)) return false;
+
+    const [day, month, year] = dateString.split("/");
+    const date = new Date(year, month - 1, day);
+    return (
+      date.getFullYear() === parseInt(year) &&
+      date.getMonth() === parseInt(month) - 1 &&
+      date.getDate() === parseInt(day)
+    );
+  };
+
+  const parseDate = (dateString) => {
+    if (!dateString) return "";
+    const [day, month, year] = dateString.split("/");
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  };
+
+  const handleDateChange = (e) => {
+    const value = e.target.value;
+
+    // Allow typing in dd/mm/yyyy format
+    let formattedValue = value;
+
+    // Auto-format as user types
+    if (value.length === 2 && !value.includes("/")) {
+      formattedValue = value + "/";
+    } else if (value.length === 5 && value.split("/").length === 2) {
+      formattedValue = value + "/";
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      purchaseDate: formattedValue,
+    }));
+  };
+
+  const handleDateBlur = (e) => {
+    const value = e.target.value;
+    if (value && validateDateFormat(value)) {
+      // Valid format, keep it
+      setFormData((prev) => ({
+        ...prev,
+        purchaseDate: value,
+      }));
+    } else if (value) {
+      // Invalid format, reset to today
+      setFormData((prev) => ({
+        ...prev,
+        purchaseDate: getTodayFormatted(),
+      }));
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -126,7 +182,7 @@ export default function EditColor() {
       )}&company=${encodeURIComponent(
         formData.company || ""
       )}&colour=${encodeURIComponent(colour)}&purchaseDate=${encodeURIComponent(
-        formData.purchaseDate || ""
+        parseDate(formData.purchaseDate || "")
       )}&purchasedInWarranty=${encodeURIComponent(
         formData.purchasedInWarranty || false
       )}`;
@@ -369,17 +425,24 @@ export default function EditColor() {
             <div className="form-group">
               <label>Purchase Date</label>
               <input
-                type="date"
+                type="text"
                 name="purchaseDate"
                 value={formData.purchaseDate}
-                onChange={handleInputChange}
+                onChange={handleDateChange}
+                onBlur={handleDateBlur}
+                placeholder="dd/mm/yyyy"
+                maxLength="10"
                 disabled={true}
                 style={{
                   width: "100%",
-                  padding: "0.5rem",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
-                  backgroundColor: "#f5f5f5",
+                  padding: "0.625rem 0.875rem",
+                  border: "2px solid #d1d5db",
+                  borderRadius: "0.5rem",
+                  fontSize: "0.9rem",
+                  fontWeight: "500",
+                  color: "#374151",
+                  backgroundColor: "#f9fafb",
+                  transition: "all 0.2s ease",
                   cursor: "not-allowed",
                 }}
               />

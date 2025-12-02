@@ -1,5 +1,7 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { formatDate } from "../utils/dateUtils";
+import { useSessionTimeout } from "../hooks/useSessionTimeout";
 import {
   FaTools,
   FaBatteryFull,
@@ -22,8 +24,11 @@ export default function Admin() {
   const [filterWarranty, setFilterWarranty] = useState("all");
   const [companies, setCompanies] = useState([]);
 
+  // Initialize session timeout for admin
+  useSessionTimeout();
+
+  // Handle authentication check in useEffect
   useEffect(() => {
-    // Check if user is authenticated
     const isAdminAuth = sessionStorage.getItem("adminAuth");
     if (!isAdminAuth) {
       navigate("/admin-login", { replace: true });
@@ -47,6 +52,12 @@ export default function Admin() {
       fetchModels();
     }
   }, [activeSection]);
+
+  // Check if user is authenticated
+  const isAdminAuth = sessionStorage.getItem("adminAuth");
+  if (!isAdminAuth) {
+    return null;
+  }
 
   const fetchModels = async () => {
     try {
@@ -257,15 +268,17 @@ export default function Admin() {
   };
 
   const handleLogout = () => {
+    // Clear session and warning timeouts
+    if (window.sessionTimeout) {
+      clearTimeout(window.sessionTimeout);
+    }
+    if (window.warningTimeout) {
+      clearTimeout(window.warningTimeout);
+    }
+    // Remove auth and navigate
     sessionStorage.removeItem("adminAuth");
     navigate("/", { replace: true });
   };
-
-  // If not authenticated, don't render anything (will redirect)
-  const isAdminAuth = sessionStorage.getItem("adminAuth");
-  if (!isAdminAuth) {
-    return null;
-  }
 
   const sidebarItems = [
     { id: "spares", name: "Spares", icon: FaTools, color: "#007bff" },
@@ -999,9 +1012,7 @@ export default function Admin() {
                                     }}
                                   >
                                     {group.purchaseDate &&
-                                      new Date(
-                                        group.purchaseDate
-                                      ).toLocaleDateString()}
+                                      formatDate(group.purchaseDate)}
                                     {group.purchasedInWarranty !==
                                       undefined && (
                                       <span
@@ -1148,7 +1159,7 @@ export default function Admin() {
                                     onClick={() => {
                                       if (group.models.length > 0) {
                                         navigate(
-                                          `/models/edit-color/${group.models[0]._id}`
+                                          `/models/add?modelId=${group.models[0]._id}&admin=true`
                                         );
                                       }
                                     }}
