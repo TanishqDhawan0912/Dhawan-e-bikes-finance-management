@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { formatDate } from "../../utils/dateUtils";
 
@@ -29,14 +29,15 @@ const groupColorsByDate = (colors) => {
   });
   const groups = Array.from(map.entries()).map(([date, list]) => ({
     date,
-    colors: list,
+    colors: list.reverse(), // Reverse colors within each date group (latest first)
   }));
   const toDate = (s) => {
     const p = String(s || "").split("/");
     if (p.length === 3) return new Date(`${p[2]}-${p[1]}-${p[0]}`);
     return new Date(s || "");
   };
-  groups.sort((a, b) => toDate(a.date) - toDate(b.date));
+  // Sort from newest to oldest (latest entries on top)
+  groups.sort((a, b) => toDate(b.date) - toDate(a.date));
   return groups;
 };
 
@@ -71,12 +72,12 @@ function AddMoreStock() {
 
   // State for new stock entry form
   const [newStockEntry, setNewStockEntry] = useState({
-    quantity: "",
+    quantity: "", // For non-color tracking mode
     purchasePrice: "",
     purchaseDate: formatDate(new Date()),
-    color: "",
-    minStockLevel: "",
+    colorQuantities: [{ color: "", quantity: "", minStockLevel: "" }], // For color tracking mode
   });
+  const [colorQuantityError, setColorQuantityError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [formWarning, setFormWarning] = useState("");
@@ -86,11 +87,14 @@ function AddMoreStock() {
   const [editingEntryIndex, setEditingEntryIndex] = useState(null);
   const [editingEntry, setEditingEntry] = useState(null);
   const [showEditDatePicker, setShowEditDatePicker] = useState(false);
+  const datePickerRef = useRef(null);
 
   // State for edit entry color management
   const [editEntryColors, setEditEntryColors] = useState([]);
   const [newEditColor, setNewEditColor] = useState("");
+  const [newEditColorCustom, setNewEditColorCustom] = useState("");
   const [newEditColorQuantity, setNewEditColorQuantity] = useState("");
+  const [newEditColorMinStockLevel, setNewEditColorMinStockLevel] = useState("");
   const [newEditColorPurchasePrice, setNewEditColorPurchasePrice] =
     useState("");
 
@@ -102,10 +106,165 @@ function AddMoreStock() {
       ? false
       : Array.isArray(spare?.colorQuantity) && spare.colorQuantity.length > 0;
 
+  // Check if user is authenticated as admin (for purchase price unlock)
+  const [isPurchasePriceUnlocked, setIsPurchasePriceUnlocked] = useState(() => {
+    // Check if admin is already authenticated on mount
+    return !!sessionStorage.getItem("adminSecurityKey");
+  });
+  const [showPurchasePriceDialog, setShowPurchasePriceDialog] = useState(false);
+  const [purchasePriceSecurityKey, setPurchasePriceSecurityKey] = useState("");
+  const [showPurchasePriceKey, setShowPurchasePriceKey] = useState(false);
+  const [purchasePriceDialogError, setPurchasePriceDialogError] = useState("");
+
+  // Dialog to ask user whether to enter purchase price now or later
+  const [showPurchasePriceDecisionDialog, setShowPurchasePriceDecisionDialog] =
+    useState(false);
+
+  // Dialog to ask user whether to use existing min stock level or enter new one
+  const [showMinStockLevelDialog, setShowMinStockLevelDialog] = useState(false);
+  const [pendingColorIndex, setPendingColorIndex] = useState(null);
+  const [pendingColorValue, setPendingColorValue] = useState("");
+  const [existingMinStockLevel, setExistingMinStockLevel] = useState(0);
+  const [isNewEditMinStockAuto, setIsNewEditMinStockAuto] = useState(false);
+
+  // Ensure that for each color, a single default minStockLevel is used everywhere.
+  // When multiple entries for the same color exist, the latest minStockLevel
+  // (from the last occurrence in the array) becomes the default applied to all.
+  const normalizeColorMinStockLevels = (colorQuantity) => {
+    if (!Array.isArray(colorQuantity) || colorQuantity.length === 0) {
+      return colorQuantity;
+    }
+
+    const latestMinByColor = {};
+    for (let i = colorQuantity.length - 1; i >= 0; i--) {
+      const cq = colorQuantity[i];
+      const key = String(cq.color || "").toLowerCase().trim();
+      if (!key) continue;
+      if (latestMinByColor[key] === undefined) {
+        latestMinByColor[key] = cq.minStockLevel !== undefined ? cq.minStockLevel : 0;
+      }
+    }
+
+    return colorQuantity.map((cq) => {
+      const key = String(cq.color || "").toLowerCase().trim();
+      if (!key || latestMinByColor[key] === undefined) return cq;
+      if (cq.minStockLevel === latestMinByColor[key]) return cq;
+      return { ...cq, minStockLevel: latestMinByColor[key] };
+    });
+  };
+
+  // When adding a new color in the edit entry section, prefill min stock if this color
+  // already exists anywhere in spare.colorQuantity
+  const handleNewEditColorChange = (value) => {
+    setNewEditColor(value);
+
+    if (!value || value === "other") {
+      // For "other" or empty, don't auto-fill
+      setIsNewEditMinStockAuto(false);
+      return;
+    }
+
+    const existingColorEntry = (spare?.colorQuantity || []).find(
+      (cq) => (cq.color || "").toLowerCase() === String(value).toLowerCase()
+    );
+
+    if (existingColorEntry && existingColorEntry.minStockLevel !== undefined) {
+      setNewEditColorMinStockLevel(
+        String(parseInt(existingColorEntry.minStockLevel || 0))
+      );
+      setIsNewEditMinStockAuto(true);
+    } else {
+      setIsNewEditMinStockAuto(false);
+    }
+  };
+
+  // Sync unlock state with sessionStorage when component mounts or when admin logs in
+  useEffect(() => {
+    const checkAdminAuth = () => {
+      const hasAuth = !!sessionStorage.getItem("adminSecurityKey");
+      setIsPurchasePriceUnlocked(hasAuth);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // When user switches to another tab/page, immediately lock purchase price
+        sessionStorage.removeItem("adminAuth");
+        sessionStorage.removeItem("adminSecurityKey");
+        setIsPurchasePriceUnlocked(false);
+        setShowPurchasePriceDialog(false);
+        setPurchasePriceSecurityKey("");
+        setPurchasePriceDialogError("");
+      } else {
+        // When user returns, re-sync with storage (will stay locked until key entered again)
+        checkAdminAuth();
+      }
+    };
+
+    checkAdminAuth();
+
+    // Listen for storage changes (in case admin logs in from another tab)
+    window.addEventListener("storage", checkAdminAuth);
+    // Lock purchase price on tab/page visibility changes
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("storage", checkAdminAuth);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      // When leaving this page (component unmount), always lock and clear admin auth
+      sessionStorage.removeItem("adminAuth");
+      sessionStorage.removeItem("adminSecurityKey");
+      setIsPurchasePriceUnlocked(false);
+      setShowPurchasePriceDialog(false);
+      setPurchasePriceSecurityKey("");
+      setPurchasePriceDialogError("");
+    };
+  }, []);
+
+  // Handle purchase price unlock
+  const handleUnlockPurchasePrice = async () => {
+    setPurchasePriceDialogError("");
+    
+    if (!purchasePriceSecurityKey.trim()) {
+      setPurchasePriceDialogError("Please enter security key");
+      return;
+    }
+
+    try {
+      const response = await fetch("http://localhost:5000/api/admin/auth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ securityKey: purchasePriceSecurityKey }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Store admin authentication
+        sessionStorage.setItem("adminAuth", "true");
+        sessionStorage.setItem("adminSecurityKey", purchasePriceSecurityKey);
+        setIsPurchasePriceUnlocked(true);
+        setShowPurchasePriceDialog(false);
+        setPurchasePriceSecurityKey("");
+        setPurchasePriceDialogError("");
+      } else {
+        setPurchasePriceDialogError("Invalid security key");
+      }
+    } catch (err) {
+      console.error("Authentication error:", err);
+      setPurchasePriceDialogError("Authentication failed. Please try again.");
+    }
+  };
+
   // State to track if we need to re-scroll
   const [needsRescroll, setNeedsRescroll] = useState(false);
 
   const [activeColorByDate, setActiveColorByDate] = useState({});
+  
+  // Store original entry state for comparison to detect changes
+  const [originalEditEntry, setOriginalEditEntry] = useState(null);
+  const [originalEditEntryColors, setOriginalEditEntryColors] = useState([]);
 
   // State for editing color entries
   const [editingColorIndex, setEditingColorIndex] = useState(null);
@@ -120,6 +279,40 @@ function AddMoreStock() {
   
   // Ref for form section to enable scrolling
   const formSectionRef = useRef(null);
+
+  // Predefined color options (similar to model stock entries)
+  const colorOptions = useMemo(
+    () => [
+      { value: "black", label: "Black", hex: "#000000" },
+      { value: "blue", label: "Blue", hex: "#0000FF" },
+      { value: "white", label: "White", hex: "#FFFFFF" },
+      {
+        value: "white-black",
+        label: "White-Black",
+        hex: "linear-gradient(45deg, #FFFFFF 50%, #000000 50%)",
+      },
+      { value: "peacock", label: "Peacock", hex: "#006994" },
+      { value: "green", label: "Green", hex: "#006400" },
+      { value: "cherry", label: "Cherry", hex: "#8B0000" },
+      { value: "red", label: "Red", hex: "#FF0000" },
+      { value: "grey", label: "Grey", hex: "#808080" },
+      { value: "silver", label: "Silver", hex: "#C0C0C0" },
+      { value: "yellow", label: "Yellow", hex: "#FFFF00" },
+    ],
+    []
+  );
+
+  // Helper function to get color display (for preview)
+  const getColourDisplay = (colorValue) => {
+    if (!colorValue) return "#f5f5f5";
+    const color = colorOptions.find((c) => c.value === colorValue);
+    if (color && color.hex && !color.hex.includes("gradient")) {
+      return color.hex;
+    }
+    return "#f5f5f5";
+  };
+
+  // Get existing colors for the selected purchase date (for Add New Color Entry form)
 
   // Helper function to create default stock entry when color tracking is enabled
   const createDefaultStockEntry = () => {
@@ -208,124 +401,240 @@ function AddMoreStock() {
 
       // Re-trigger edit after a brief delay
       setTimeout(() => {
-        setEditingEntryIndex(index);
-        setEditingEntry({
+        const entryWithDate = {
           ...entry,
           purchaseDate: entry.purchaseDate || formatDate(new Date()),
+        };
+        setEditingEntryIndex(index);
+        setEditingEntry(entryWithDate);
+        
+        // Store original entry state for comparison
+        setOriginalEditEntry({
+          ...entryWithDate,
+          purchasePrice: parseFloat(entry.purchasePrice || 0),
         });
 
         // Initialize colors if needed
+        let initialColors = [];
         if (isColorTrackingEnabled) {
           setEditingEntry((prev) => ({ ...prev, quantity: 0 }));
-          if (
+          
+          // For spares, colors are stored in spare.colorQuantity array, grouped by purchase date
+          // Find all colors with the same purchase date as this entry
+          const entryPurchaseDate = displayDate(entry.purchaseDate || "");
+          const colorsForThisDate = (spare?.colorQuantity || []).filter(
+            (cq) => displayDate(cq.purchaseDate || "") === entryPurchaseDate
+          );
+
+          if (colorsForThisDate.length > 0) {
+            initialColors = colorsForThisDate.map((cq) => ({
+              color: cq.color || "",
+              quantity: parseInt(cq.quantity || 0),
+              purchasePrice: parseFloat(cq.purchasePrice || 0),
+              minStockLevel: parseInt(cq.minStockLevel || 0),
+            }));
+            setEditEntryColors(initialColors);
+          } else if (
             Array.isArray(entry.colorQuantities) &&
             entry.colorQuantities.length > 0
           ) {
-            setEditEntryColors(
-              entry.colorQuantities.map((cq) => ({
+            // Fallback: check if entry has colorQuantities (for backward compatibility)
+            initialColors = entry.colorQuantities.map((cq) => ({
                 color: cq.color,
                 quantity: parseInt(cq.quantity || 0),
-              }))
-            );
+              purchasePrice: parseFloat(cq.purchasePrice || 0),
+              minStockLevel: parseInt(cq.minStockLevel || 0),
+            }));
+            setEditEntryColors(initialColors);
           } else if (entry.color) {
-            setEditEntryColors([
-              { color: entry.color, quantity: entry.quantity },
-            ]);
+            initialColors = [
+              { 
+                color: entry.color, 
+                quantity: entry.quantity,
+                purchasePrice: parseFloat(entry.purchasePrice || 0),
+                minStockLevel: parseInt(entry.minStockLevel || 0),
+              },
+            ];
+            setEditEntryColors(initialColors);
           } else {
             setEditEntryColors([]);
           }
+          
+          // Store original colors for comparison
+          setOriginalEditEntryColors(JSON.parse(JSON.stringify(initialColors)));
+        } else {
+          setEditEntryColors([]);
+          setOriginalEditEntryColors([]);
         }
+        
+        // Pre-fill purchase price from entry when adding new colors
+        const initialPurchasePrice = entry.purchasePrice 
+          ? (typeof entry.purchasePrice === 'number' ? entry.purchasePrice.toString() : entry.purchasePrice)
+          : "";
         setNewEditColor("");
         setNewEditColorQuantity("");
-        setNewEditColorPurchasePrice("");
+        setNewEditColorPurchasePrice(initialPurchasePrice);
       }, 50);
       return;
     }
 
     // Normal edit flow
     setEditingEntryIndex(index);
-    setEditingEntry({
+    const entryWithDate = {
       ...entry,
       purchaseDate: entry.purchaseDate || formatDate(new Date()),
+    };
+    setEditingEntry(entryWithDate);
+    
+    // Store original entry state for comparison
+    setOriginalEditEntry({
+      ...entryWithDate,
+      purchasePrice: parseFloat(entry.purchasePrice || 0),
     });
+    
+    // Scroll to edit form after state is updated
+    setTimeout(() => {
+      const editFormSection = document.getElementById("edit-stock-section");
+      if (editFormSection) {
+        editFormSection.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }
+    }, 100);
 
     // Initialize edit entry colors if color tracking is enabled
+    let initialColors = [];
     if (isColorTrackingEnabled) {
       // Reset quantity to 0 when color tracking is enabled
       setEditingEntry((prev) => ({ ...prev, quantity: 0 }));
 
-      if (
+      // For spares, colors are stored in spare.colorQuantity array, grouped by purchase date
+      // Find all colors with the same purchase date as this entry
+      const entryPurchaseDate = displayDate(entry.purchaseDate || "");
+      const colorsForThisDate = (spare?.colorQuantity || []).filter(
+        (cq) => displayDate(cq.purchaseDate || "") === entryPurchaseDate
+      );
+
+      if (colorsForThisDate.length > 0) {
+        initialColors = colorsForThisDate.map((cq) => ({
+          color: cq.color || "",
+          quantity: parseInt(cq.quantity || 0),
+          purchasePrice: parseFloat(cq.purchasePrice || 0),
+          minStockLevel: parseInt(cq.minStockLevel || 0),
+        }));
+        setEditEntryColors(initialColors);
+      } else if (
         Array.isArray(entry.colorQuantities) &&
         entry.colorQuantities.length > 0
       ) {
-        setEditEntryColors(
-          entry.colorQuantities.map((cq) => ({
+        // Fallback: check if entry has colorQuantities (for backward compatibility)
+        initialColors = entry.colorQuantities.map((cq) => ({
             color: cq.color,
             quantity: parseInt(cq.quantity || 0),
-          }))
-        );
+          purchasePrice: parseFloat(cq.purchasePrice || 0),
+          minStockLevel: parseInt(cq.minStockLevel || 0),
+        }));
+        setEditEntryColors(initialColors);
       } else if (entry.color) {
-        setEditEntryColors([
+        initialColors = [
           {
             color: entry.color,
             quantity: entry.quantity,
+            purchasePrice: parseFloat(entry.purchasePrice || 0),
+            minStockLevel: parseInt(entry.minStockLevel || 0),
           },
-        ]);
+        ];
+        setEditEntryColors(initialColors);
       } else {
         setEditEntryColors([]);
       }
+      
+      // Store original colors for comparison (deep copy)
+      setOriginalEditEntryColors(JSON.parse(JSON.stringify(initialColors)));
     } else {
       setEditEntryColors([]);
+      setOriginalEditEntryColors([]);
     }
+    
+    // Pre-fill purchase price from entry when adding new colors
+    const initialPurchasePrice = entry.purchasePrice 
+      ? (typeof entry.purchasePrice === 'number' ? entry.purchasePrice.toString() : entry.purchasePrice)
+      : "";
     setNewEditColor("");
+    setNewEditColorCustom("");
     setNewEditColorQuantity("");
-    setNewEditColorPurchasePrice("");
+    setNewEditColorMinStockLevel("");
+    setNewEditColorPurchasePrice(initialPurchasePrice);
     setNeedsRescroll(false);
   };
 
   // Add color to edit entry
   const addEditEntryColor = () => {
+    // Get purchase price from the entry (all colors in an entry share the same purchase price)
+    // Purchase price is optional, so allow 0 or undefined
+    const entryPurchasePrice = parseFloat(editingEntry?.purchasePrice || 0);
+
+    // Validate inputs (purchase price is optional)
+    if (!newEditColor.trim() || !newEditColorQuantity.trim() || !newEditColorMinStockLevel.trim()) {
+      setFormError("Please fill all required fields");
+      return;
+    }
+
     if (
-      newEditColor.trim() &&
-      newEditColorQuantity.trim() &&
-      newEditColorPurchasePrice.trim() &&
-      parseInt(newEditColorQuantity) >= 0 &&
-      parseFloat(newEditColorPurchasePrice) >= 0
+      parseInt(newEditColorQuantity) <= 0 ||
+      parseInt(newEditColorMinStockLevel) < 0
     ) {
+      setFormError("Quantity must be greater than 0. Min stock level must be 0 or greater.");
+      return;
+    }
+
+    // For "other" color, require custom color name
+    if (newEditColor === "other" && !newEditColorCustom.trim()) {
+      setFormError("Please enter a custom color name");
+      return;
+    }
+
+    // Get the actual color value (custom name if "other")
+    const colorValue = newEditColor === "other" ? newEditColorCustom.trim() : newEditColor.trim();
+
       // Check if color already exists
       const existingIndex = editEntryColors.findIndex(
-        (cq) => cq.color.toLowerCase() === newEditColor.trim().toLowerCase()
+      (cq) => cq.color.toLowerCase() === colorValue.toLowerCase()
       );
 
       if (existingIndex !== -1) {
-        // Update existing color quantity and purchase price
+      // Update existing color quantity and min stock level (purchase price comes from entry)
         setEditEntryColors((prev) =>
           prev.map((cq, index) =>
             index === existingIndex
               ? {
                   ...cq,
                   quantity: parseInt(newEditColorQuantity),
-                  purchasePrice: parseFloat(newEditColorPurchasePrice),
+                purchasePrice: entryPurchasePrice, // Use entry's purchase price (can be 0)
+                minStockLevel: parseInt(newEditColorMinStockLevel || 0),
                 }
               : cq
           )
         );
       } else {
-        // Add new color
+      // Add new color with entry's purchase price
         setEditEntryColors((prev) => [
           ...prev,
           {
-            color: newEditColor.trim(),
+          color: colorValue,
             quantity: parseInt(newEditColorQuantity),
-            purchasePrice: parseFloat(newEditColorPurchasePrice),
+          purchasePrice: entryPurchasePrice, // Use entry's purchase price automatically (can be 0)
+          minStockLevel: parseInt(newEditColorMinStockLevel || 0),
           },
         ]);
       }
       setFormError("");
       setNewEditColor("");
+    setNewEditColorCustom("");
       setNewEditColorQuantity("");
-      setNewEditColorPurchasePrice("");
-    }
+    setNewEditColorMinStockLevel("");
+    // Don't reset purchase price as it's not user input anymore
   };
 
   // Remove color from edit entry
@@ -336,24 +645,103 @@ function AddMoreStock() {
   };
 
   const handleSaveEdit = async () => {
-    if (!editingEntry) return;
-    if (isColorTrackingEnabled) {
+    if (!editingEntry || !originalEditEntry) return;
+    
+    // Check if there are pending typed inputs in the "Add New Color" form
       const hasPendingTypedInputs =
         (newEditColor || "").trim() ||
+      (newEditColorCustom || "").trim() ||
         (newEditColorQuantity || "").trim() ||
-        (newEditColorPurchasePrice || "").trim();
+      (newEditColorMinStockLevel || "").trim();
+    
       if (hasPendingTypedInputs) {
         setFormError(
-          "Color, quantity, and purchase price inputs changed. Click Add to save before saving changes"
+        "Color and quantity inputs changed. Click Add to save before saving changes"
         );
         return;
       }
-      if (editEntryColors.length === 0) {
+    
+    // Check if anything has actually changed (before validation)
+    const hasChanges = checkIfEntryChanged();
+    
+    if (!hasChanges) {
+      // Nothing changed, just close the edit form silently without any prompts
+      // Clear any form validation states and errors
+      setFormError("");
+      setFormWarning("");
+      handleCancelEdit();
+      return;
+    }
+    
+    // Only validate if there are actual changes
+    if (isColorTrackingEnabled) {
+      if (editEntryColors.length === 0 && originalEditEntryColors.length > 0) {
+        // Only show error if colors were removed (original had colors, now has none)
         setFormError("Add at least one color quantity using Add");
         return;
       }
     }
+    
     await performSaveEdit();
+  };
+  
+  // Helper function to check if entry has changed
+  const checkIfEntryChanged = () => {
+    if (!originalEditEntry || !editingEntry) return false;
+    
+    // Check if basic entry fields changed
+    const purchaseDateChanged = 
+      displayDate(originalEditEntry.purchaseDate || "") !== 
+      displayDate(editingEntry.purchaseDate || "");
+    
+    const purchasePriceChanged = 
+      parseFloat(originalEditEntry.purchasePrice || 0) !== 
+      parseFloat(editingEntry.purchasePrice || 0);
+    
+    if (purchaseDateChanged || purchasePriceChanged) {
+      return true;
+    }
+    
+    // Check if color quantities changed (for color tracking)
+    if (isColorTrackingEnabled) {
+      // Compare colors arrays
+      if (editEntryColors.length !== originalEditEntryColors.length) {
+        return true;
+      }
+      
+      // Deep comparison of colors
+      const sortedCurrent = [...editEntryColors].sort((a, b) => 
+        (a.color || "").localeCompare(b.color || "")
+      );
+      const sortedOriginal = [...originalEditEntryColors].sort((a, b) => 
+        (a.color || "").localeCompare(b.color || "")
+      );
+      
+      for (let i = 0; i < sortedCurrent.length; i++) {
+        const current = sortedCurrent[i];
+        const original = sortedOriginal[i];
+        
+        if (
+          (current.color || "").toLowerCase() !== (original.color || "").toLowerCase() ||
+          parseInt(current.quantity || 0) !== parseInt(original.quantity || 0) ||
+          parseFloat(current.purchasePrice || 0) !== parseFloat(original.purchasePrice || 0) ||
+          parseInt(current.minStockLevel || 0) !== parseInt(original.minStockLevel || 0)
+        ) {
+          return true;
+        }
+      }
+    } else {
+      // For non-color tracking, check quantity
+      const quantityChanged = 
+        parseInt(originalEditEntry.quantity || 0) !== 
+        parseInt(editingEntry.quantity || 0);
+      
+      if (quantityChanged) {
+        return true;
+      }
+    }
+    
+    return false;
   };
 
   const performSaveEdit = async () => {
@@ -366,10 +754,11 @@ function AddMoreStock() {
         ? editEntryColors.reduce((total, cq) => total + cq.quantity, 0)
         : parseInt(editingEntry?.quantity || 0);
 
-      // Update the entry with total quantity
+      // Update the entry with total quantity and purchase price
       const updatedEntry = {
         ...editingEntry,
         quantity: totalQuantity,
+        purchasePrice: editingEntry?.purchasePrice || 0,
         color:
           editEntryColors.length > 0
             ? editEntryColors[0].color
@@ -381,6 +770,47 @@ function AddMoreStock() {
             }))
           : editingEntry.colorQuantities || [],
       };
+
+      // Check if purchase price is actually being CHANGED (not just present)
+      const newPurchasePrice = parseFloat(updatedEntry.purchasePrice || 0);
+      const originalPurchasePrice = parseFloat(originalEditEntry?.purchasePrice || 0);
+      const purchasePriceChanged = newPurchasePrice > 0 && newPurchasePrice !== originalPurchasePrice;
+      
+      // For color tracking, also check if any color's purchase price changed
+      let colorPurchasePriceChanged = false;
+      if (isColorTrackingEnabled) {
+        colorPurchasePriceChanged = editEntryColors.some(cq => {
+          const newCqPrice = parseFloat(cq.purchasePrice || 0);
+          if (newCqPrice <= 0) return false;
+          // Find original color entry to compare
+          const originalCq = originalEditEntryColors.find(
+            orig => orig.color?.toLowerCase() === cq.color?.toLowerCase()
+          );
+          const originalCqPrice = parseFloat(originalCq?.purchasePrice || 0);
+          return newCqPrice !== originalCqPrice;
+        });
+      }
+
+      const hasPurchasePriceUpdate = purchasePriceChanged || colorPurchasePriceChanged;
+
+      // Check admin authentication BEFORE making the request if purchase price is being updated
+      if (hasPurchasePriceUpdate && !isPurchasePriceUnlocked) {
+        setFormError("Please unlock the purchase price field with security key first.");
+        return;
+      }
+      
+      if (hasPurchasePriceUpdate) {
+        const securityKey = sessionStorage.getItem("adminSecurityKey");
+        if (!securityKey) {
+          setFormError("Admin authentication required to update purchase price. Please unlock with security key first.");
+          return;
+        }
+      }
+
+      // Get security key if purchase price is being updated
+      const securityKey = hasPurchasePriceUpdate 
+        ? sessionStorage.getItem("adminSecurityKey") 
+        : null;
 
       if (!isColorTrackingEnabled) {
         const filteredEntries = currentStockEntries.filter(
@@ -403,8 +833,14 @@ function AddMoreStock() {
       let updatedColorQuantity = [...currentColorQuantity];
 
       if (isColorTrackingEnabled) {
-        const prevColors =
-          Array.isArray(editingEntry.colorQuantities) &&
+        // Use originalEditEntryColors which contains the colors that were in this entry when editing started
+        // This ensures we're subtracting the correct colors for this specific purchase date
+        const prevColors = originalEditEntryColors.length > 0
+          ? originalEditEntryColors.map((cq) => ({
+              color: String(cq.color || ""),
+              quantity: parseInt(cq.quantity || 0),
+            }))
+          : Array.isArray(editingEntry.colorQuantities) &&
           editingEntry.colorQuantities.length > 0
             ? editingEntry.colorQuantities.map((cq) => ({
                 color: String(cq.color || ""),
@@ -419,10 +855,16 @@ function AddMoreStock() {
               ]
             : [];
 
+        // Get the purchase date for this entry
+        const entryPurchaseDate = displayDate(editingEntry?.purchaseDate || "");
+
         // Subtract previous entry color quantities from global colorQuantity
+        // Match by both color name AND purchase date to avoid affecting other dates
         prevColors.forEach((prev) => {
           const idx = updatedColorQuantity.findIndex(
-            (cq) => cq.color.toLowerCase() === prev.color.toLowerCase()
+            (cq) => 
+              cq.color.toLowerCase() === prev.color.toLowerCase() &&
+              displayDate(cq.purchaseDate || "") === entryPurchaseDate
           );
           if (idx !== -1) {
             const newQty =
@@ -432,26 +874,41 @@ function AddMoreStock() {
         });
 
         editEntryColors.forEach((newCq) => {
+          // Find existing color entry by BOTH color name AND purchase date
           const existingIndex = updatedColorQuantity.findIndex(
-            (cq) => cq.color.toLowerCase() === newCq.color.toLowerCase()
+            (cq) => 
+              cq.color.toLowerCase() === newCq.color.toLowerCase() &&
+              displayDate(cq.purchaseDate || "") === entryPurchaseDate
           );
 
           if (existingIndex !== -1) {
+            // Update existing color entry for this purchase date
             updatedColorQuantity[existingIndex].quantity =
               parseInt(updatedColorQuantity[existingIndex].quantity || 0) +
               newCq.quantity;
-            updatedColorQuantity[existingIndex].purchaseDate =
-              editingEntry?.purchaseDate ||
-              updatedColorQuantity[existingIndex].purchaseDate ||
-              "";
+            // Update minStockLevel and purchasePrice if provided
+            if (newCq.minStockLevel !== undefined) {
+              updatedColorQuantity[existingIndex].minStockLevel = newCq.minStockLevel || 0;
+            }
+            if (newCq.purchasePrice !== undefined) {
+              updatedColorQuantity[existingIndex].purchasePrice = newCq.purchasePrice || 0;
+            }
           } else if (newCq.quantity > 0) {
+            // Create a new color entry for this purchase date
+            // Even if the color exists for a different date, create a separate entry
             updatedColorQuantity.push({
               color: newCq.color,
               quantity: newCq.quantity,
+              minStockLevel: newCq.minStockLevel || 0,
+              purchasePrice: newCq.purchasePrice || 0,
               purchaseDate: editingEntry?.purchaseDate || "",
             });
           }
         });
+
+        // Normalize min stock levels so the latest value for each color
+        // becomes the default across all entries
+        updatedColorQuantity = normalizeColorMinStockLevels(updatedColorQuantity);
       }
 
       // Check if quantity is zero and handle removal
@@ -476,6 +933,14 @@ function AddMoreStock() {
             (_, index) => index !== editingEntryIndex
           );
 
+          const requestBody = {
+            [stockField]: updatedStockEntries,
+            ...(isColorTrackingEnabled && {
+              colorQuantity: updatedColorQuantity,
+            }),
+            securityKey: securityKey || null, // Always include, backend will validate
+          };
+
           const response = await fetch(
             `http://localhost:5000/api/spares/${id}`,
             {
@@ -483,14 +948,18 @@ function AddMoreStock() {
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({
-                [stockField]: updatedStockEntries,
-                ...(isColorTrackingEnabled && {
-                  colorQuantity: updatedColorQuantity,
-                }),
-              }),
+              body: JSON.stringify(requestBody),
             }
           );
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            if (errorData.requiresAuth) {
+              setFormError("Admin authentication required to update purchase price. Please log in as admin.");
+              return;
+            }
+            throw new Error(errorData.message || "Failed to remove stock entry");
+          }
 
           if (response.ok) {
             const updatedSpare = await response.json();
@@ -501,8 +970,6 @@ function AddMoreStock() {
             setEditEntryColors([]);
             setNewEditColor("");
             setNewEditColorQuantity("");
-          } else {
-            throw new Error("Failed to remove stock entry");
           }
         } else {
           // Keep the entry with zero quantity if it's the only one or no other entries have value
@@ -510,6 +977,14 @@ function AddMoreStock() {
             index === editingEntryIndex ? updatedEntry : entry
           );
 
+          const requestBody = {
+            [stockField]: updatedStockEntries,
+            ...(isColorTrackingEnabled && {
+              colorQuantity: updatedColorQuantity,
+            }),
+            securityKey: securityKey || null, // Always include, backend will validate
+          };
+
           const response = await fetch(
             `http://localhost:5000/api/spares/${id}`,
             {
@@ -517,14 +992,18 @@ function AddMoreStock() {
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({
-                [stockField]: updatedStockEntries,
-                ...(isColorTrackingEnabled && {
-                  colorQuantity: updatedColorQuantity,
-                }),
-              }),
+              body: JSON.stringify(requestBody),
             }
           );
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            if (errorData.requiresAuth) {
+              setFormError("Admin authentication required to update purchase price. Please log in as admin.");
+              return;
+            }
+            throw new Error(errorData.message || "Failed to update stock entry");
+          }
 
           if (response.ok) {
             const updatedSpare = await response.json();
@@ -535,8 +1014,6 @@ function AddMoreStock() {
             setEditEntryColors([]);
             setNewEditColor("");
             setNewEditColorQuantity("");
-          } else {
-            throw new Error("Failed to update stock entry");
           }
         }
       } else {
@@ -545,18 +1022,30 @@ function AddMoreStock() {
           index === editingEntryIndex ? updatedEntry : entry
         );
 
+        const requestBody = {
+          [stockField]: updatedStockEntries,
+          ...(isColorTrackingEnabled && {
+            colorQuantity: updatedColorQuantity,
+          }),
+          securityKey: securityKey || null, // Always include, backend will validate
+        };
+
         const response = await fetch(`http://localhost:5000/api/spares/${id}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            [stockField]: updatedStockEntries,
-            ...(isColorTrackingEnabled && {
-              colorQuantity: updatedColorQuantity,
-            }),
-          }),
+          body: JSON.stringify(requestBody),
         });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          if (errorData.requiresAuth) {
+            setFormError("Admin authentication required to update purchase price. Please log in as admin.");
+            return;
+          }
+          throw new Error(errorData.message || "Failed to update stock entry");
+        }
 
         if (response.ok) {
           const updatedSpare = await response.json();
@@ -566,7 +1055,9 @@ function AddMoreStock() {
           setEditingEntry(null);
           setEditEntryColors([]);
           setNewEditColor("");
+          setNewEditColorCustom("");
           setNewEditColorQuantity("");
+          setNewEditColorPurchasePrice("");
         } else {
           throw new Error("Failed to update stock entry");
         }
@@ -582,7 +1073,14 @@ function AddMoreStock() {
     setEditingEntry(null);
     setEditEntryColors([]);
     setNewEditColor("");
+    setNewEditColorCustom("");
     setNewEditColorQuantity("");
+    setNewEditColorMinStockLevel("");
+    setNewEditColorPurchasePrice("");
+    setFormError("");
+    setFormWarning("");
+    setOriginalEditEntry(null);
+    setOriginalEditEntryColors([]);
   };
 
   // Helper function to sort entries by purchase date
@@ -661,6 +1159,28 @@ function AddMoreStock() {
   useEffect(() => {
     fetchSpareDetails();
   }, [fetchSpareDetails]);
+
+  // Close date picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        showDatePicker &&
+        datePickerRef.current &&
+        !datePickerRef.current.contains(event.target) &&
+        !event.target.closest('input[name="purchaseDate"]')
+      ) {
+        setShowDatePicker(false);
+      }
+    };
+
+    if (showDatePicker) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showDatePicker]);
 
   // When color tracking is enabled, automatically clear stockEntries on the backend
   useEffect(() => {
@@ -808,59 +1328,150 @@ function AddMoreStock() {
     if (formWarning) setFormWarning("");
   };
 
-  // Handle date selection from calendar
-  const handleDateSelect = (date) => {
+  // Handle color-quantity entries
+  const addColorQuantityEntry = () => {
+    // Check if the last entry has color, quantity, and minStockLevel filled
+    const lastEntry = newStockEntry.colorQuantities[newStockEntry.colorQuantities.length - 1];
+    if (
+      !lastEntry.color ||
+      !lastEntry.quantity ||
+      lastEntry.quantity === "" ||
+      parseInt(lastEntry.quantity) <= 0 ||
+      !lastEntry.minStockLevel ||
+      lastEntry.minStockLevel === "" ||
+      parseInt(lastEntry.minStockLevel) < 0
+    ) {
+      setColorQuantityError(
+        "Please fill color, quantity, and min stock level before adding a new entry"
+      );
+      setTimeout(() => setColorQuantityError(""), 3000);
+      return;
+    }
+    setColorQuantityError("");
     setNewStockEntry((prev) => ({
       ...prev,
-      purchaseDate: formatDate(date),
+      colorQuantities: [...prev.colorQuantities, { color: "", quantity: "", minStockLevel: "" }],
+    }));
+  };
+
+  const removeColorQuantityEntry = (index) => {
+    if (newStockEntry.colorQuantities.length === 1) {
+      setColorQuantityError("At least one color-quantity entry is required");
+      setTimeout(() => setColorQuantityError(""), 3000);
+      return;
+    }
+    setColorQuantityError("");
+    setNewStockEntry((prev) => ({
+      ...prev,
+      colorQuantities: prev.colorQuantities.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleColorQuantityChange = (index, field, value) => {
+    setNewStockEntry((prev) => {
+      const updated = [...prev.colorQuantities];
+      const current = { ...updated[index], [field]: value };
+
+      // If changing color and this color already exists in any existing colorQuantity entry
+      // on the spare, ask user whether to use existing min stock level or enter new one
+      if (field === "color" && value && value !== "other") {
+        const existingColorEntry = (spare?.colorQuantity || []).find(
+          (cq) => (cq.color || "").toLowerCase() === String(value).toLowerCase()
+        );
+        if (existingColorEntry && existingColorEntry.minStockLevel !== undefined) {
+          // Only show dialog if user hasn't entered a minStockLevel yet for this row
+          if (
+            current.minStockLevel === undefined ||
+            current.minStockLevel === ""
+          ) {
+            // Store the pending color change and show dialog
+            setPendingColorIndex(index);
+            setPendingColorValue(value);
+            setExistingMinStockLevel(parseInt(existingColorEntry.minStockLevel || 0));
+            setShowMinStockLevelDialog(true);
+            // Don't update the color yet - wait for user's choice
+            return prev;
+          }
+        }
+      }
+
+      updated[index] = current;
+
+      // Clear error if last row is now valid
+      const lastIndex = updated.length - 1;
+      if (
+        index === lastIndex &&
+        updated[lastIndex].color &&
+        updated[lastIndex].quantity &&
+        parseInt(updated[lastIndex].quantity) > 0
+      ) {
+        setColorQuantityError("");
+      }
+
+      return { ...prev, colorQuantities: updated };
+    });
+  };
+
+  // Handle user's choice for min stock level dialog
+  const handleMinStockLevelChoice = (useExisting) => {
+    if (pendingColorIndex !== null) {
+      setNewStockEntry((prev) => {
+        const updated = [...prev.colorQuantities];
+        const current = { ...updated[pendingColorIndex] };
+        current.color = pendingColorValue;
+        if (useExisting) {
+          current.minStockLevel = String(existingMinStockLevel);
+        } else {
+          // User wants to enter new value, leave minStockLevel empty
+          current.minStockLevel = "";
+        }
+        updated[pendingColorIndex] = current;
+        return { ...prev, colorQuantities: updated };
+      });
+    }
+    setShowMinStockLevelDialog(false);
+    setPendingColorIndex(null);
+    setPendingColorValue("");
+    setExistingMinStockLevel(0);
+  };
+
+  // Date picker helpers
+  const getDaysInMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  // Handle date selection from calendar (for new entry)
+  const handleDateSelect = (day) => {
+    const selectedDate = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth(),
+      day
+    );
+    const formattedDate = formatDate(selectedDate);
+    setNewStockEntry((prev) => ({
+      ...prev,
+      purchaseDate: formattedDate,
     }));
     setShowDatePicker(false);
   };
 
-  const handleEditDateSelect = (date) => {
+  // Handle date selection from calendar (for edit entry)
+  const handleEditDateSelect = (day) => {
+    const selectedDate = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth(),
+      day
+    );
+    const formattedDate = formatDate(selectedDate);
     setEditingEntry((prev) => ({
       ...prev,
-      purchaseDate: formatDate(date),
+      purchaseDate: formattedDate,
     }));
     setShowEditDatePicker(false);
-  };
-
-  // Toggle date picker
-  const toggleDatePicker = () => {
-    setShowDatePicker(!showDatePicker);
-  };
-
-  // Navigate to previous month
-  const previousMonth = () => {
-    setCurrentMonth(
-      new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1)
-    );
-  };
-
-  // Navigate to next month
-  const nextMonth = () => {
-    setCurrentMonth(
-      new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1)
-    );
-  };
-
-  // Format month name
-  const formatMonthName = (date) => {
-    const months = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ];
-    return `${months[date.getMonth()]} ${date.getFullYear()}`;
   };
 
   // Delete stock entry function
@@ -932,9 +1543,53 @@ function AddMoreStock() {
 
     try {
       const currentColorQuantity = spare?.colorQuantity || [];
+      const colorToDelete = currentColorQuantity[colorIndex];
+      
+      if (!colorToDelete) {
+        console.error("Color entry not found at index:", colorIndex);
+        return;
+      }
+
+      // Get the purchase date of the color being deleted
+      const deletedColorDate = displayDate(colorToDelete.purchaseDate || "");
+      
+      // Filter out the deleted color
       const updatedColorQuantity = currentColorQuantity.filter(
         (_, index) => index !== colorIndex
       );
+
+      // Get current stock entries and preserve them
+      const currentStockEntries = spare?.[stockField] || [];
+      
+      // Recalculate total quantity for the purchase date after deletion
+      const remainingColorsForDate = updatedColorQuantity.filter(
+        (cq) => displayDate(cq.purchaseDate || "") === deletedColorDate
+      );
+      const newTotalQuantity = remainingColorsForDate.reduce(
+        (sum, cq) => sum + parseInt(cq.quantity || 0),
+        0
+      );
+
+      // Update or remove the stock entry for this date
+      let updatedStockEntries = [...currentStockEntries];
+      const entryIndexForDate = updatedStockEntries.findIndex(
+        (entry) => displayDate(entry.purchaseDate || "") === deletedColorDate
+      );
+
+      if (entryIndexForDate !== -1) {
+        if (newTotalQuantity > 0) {
+          // Update the entry with new total quantity
+          updatedStockEntries[entryIndexForDate] = {
+            ...updatedStockEntries[entryIndexForDate],
+            quantity: newTotalQuantity,
+          };
+        } else {
+          // Remove the entry if no colors remain for this date
+          updatedStockEntries = updatedStockEntries.filter(
+            (_, index) => index !== entryIndexForDate
+          );
+        }
+      }
 
       const response = await fetch(`http://localhost:5000/api/spares/${id}`, {
         method: "PUT",
@@ -943,79 +1598,26 @@ function AddMoreStock() {
         },
         body: JSON.stringify({
           colorQuantity: updatedColorQuantity,
-          [stockField]: [],
+          [stockField]: updatedStockEntries,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete color entry");
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to delete color entry");
       }
 
       await fetchSpareDetails();
       setEditingColorIndex(null);
       setEditingColorEntry(null);
+      setActiveColorByDate({}); // Reset active color selection
       console.log("Color entry deleted successfully");
     } catch (error) {
       console.error("Error deleting color entry:", error);
+      alert("Failed to delete color entry: " + error.message);
     }
   };
 
-  // Handle pre-fill form with date and purchase price
-  const handlePreFillForm = (date, purchasePrice, buttonId) => {
-    // Set button animation state
-    setClickedButtonId(buttonId);
-    setTimeout(() => setClickedButtonId(null), 300);
-
-    // Set pre-filled state for animation
-    setPreFilledFields({
-      purchaseDate: true,
-      purchasePrice: true,
-    });
-
-    setNewStockEntry((prev) => ({
-      ...prev,
-      purchaseDate: date,
-      purchasePrice: purchasePrice?.toString() || "",
-      color: "",
-      quantity: "",
-      minStockLevel: "",
-    }));
-    setFormError("");
-    setFormWarning("");
-
-    // Scroll to form with slight delay for smooth animation
-    setTimeout(() => {
-      // Use ref first, then fallback to ID selector
-      const formElement = formSectionRef.current || document.getElementById("add-stock-form-section");
-      
-      if (formElement) {
-        formElement.scrollIntoView({ 
-          behavior: "smooth", 
-          block: "start",
-          inline: "nearest"
-        });
-      } else {
-        // Fallback: scroll to the first input field
-        const firstInput = document.querySelector('input[name="purchasePrice"]') || 
-                          document.querySelector('input[name="purchaseDate"]');
-        if (firstInput) {
-          firstInput.scrollIntoView({ 
-            behavior: "smooth", 
-            block: "center",
-            inline: "nearest"
-          });
-        }
-      }
-    }, 200);
-
-    // Remove animation highlight after animation completes
-    setTimeout(() => {
-      setPreFilledFields({
-        purchaseDate: false,
-        purchasePrice: false,
-      });
-    }, 2000);
-  };
 
   // Handle save edited color entry
   const handleSaveColorEntry = async (e) => {
@@ -1025,18 +1627,16 @@ function AddMoreStock() {
 
     if (
       !editingColorEntry?.color ||
-      !editingColorEntry?.quantity ||
-      !editingColorEntry?.purchasePrice
+      !editingColorEntry?.quantity
     ) {
-      setFormError("All required fields must be filled");
+      setFormError("Color and quantity are required fields");
       return;
     }
 
     if (
-      parseFloat(editingColorEntry.quantity) <= 0 ||
-      parseFloat(editingColorEntry.purchasePrice) <= 0
+      parseFloat(editingColorEntry.quantity) <= 0
     ) {
-      setFormError("Quantity and purchase price must be greater than 0");
+      setFormError("Quantity must be greater than 0");
       return;
     }
 
@@ -1054,7 +1654,9 @@ function AddMoreStock() {
               minStockLevel: editingColorEntry.minStockLevel
                 ? parseInt(editingColorEntry.minStockLevel)
                 : 0,
-              purchasePrice: parseFloat(editingColorEntry.purchasePrice),
+              purchasePrice: editingColorEntry.purchasePrice
+                ? parseFloat(editingColorEntry.purchasePrice)
+                : 0,
               purchaseDate: originalPurchaseDate, // Keep the original purchase date
             }
           : cq
@@ -1094,55 +1696,113 @@ function AddMoreStock() {
     setFormWarning("");
   };
 
-  // Handle form submission for new stock entry
-  const handleSubmitStockEntry = async (e) => {
-    e.preventDefault();
+  // Core submit logic so we can call it both from form submit and "Later" dialog
+  const submitStockEntry = async (allowMissingPurchasePrice = false) => {
     setFormError("");
     setFormWarning("");
 
-    // Validate form
-    if (
-      !newStockEntry.quantity ||
-      !newStockEntry.purchasePrice ||
+    // Validate form first (purchase price can be optional)
+    if (!isColorTrackingEnabled) {
+      // Non-color tracking mode validation
+      if (!newStockEntry.quantity || !newStockEntry.purchaseDate) {
+        setFormError("Quantity and purchase date are required");
+        return;
+      }
+
+      if (parseFloat(newStockEntry.quantity) <= 0) {
+        setFormError("Quantity must be greater than 0");
+        return;
+      }
+
+      // If user entered a purchase price, it must be > 0
+      if (
+        newStockEntry.purchasePrice &&
+        parseFloat(newStockEntry.purchasePrice) <= 0
+      ) {
+        setFormError("Purchase price must be greater than 0 when provided");
+        return;
+      }
+    } else {
+      // Color tracking mode validation
+      if (
       !newStockEntry.purchaseDate ||
-      (isColorTrackingEnabled && !newStockEntry.color)
+        !newStockEntry.colorQuantities ||
+        newStockEntry.colorQuantities.length === 0
     ) {
       setFormError(
-        isColorTrackingEnabled
-          ? "All fields are required"
-          : "Quantity, purchase price, and purchase date are required"
+          "Purchase date and at least one color-quantity pair are required"
       );
       return;
     }
 
-    if (
-      parseFloat(newStockEntry.quantity) <= 0 ||
-      parseFloat(newStockEntry.purchasePrice) <= 0 ||
-      (isColorTrackingEnabled &&
-        newStockEntry.minStockLevel &&
-        parseFloat(newStockEntry.minStockLevel) < 0)
-    ) {
-      setFormError(
-        "Quantity and purchase price must be greater than 0, and min stock level must be >= 0"
-      );
-      return;
-    }
-
-    // When color tracking is enabled, stock entries do not participate; skip duplicate checks against stock entries
-    // Duplicate check for color + purchase date when color tracking is enabled
-    if (isColorTrackingEnabled) {
-      const newDate = displayDate(newStockEntry.purchaseDate);
-      const hasDuplicateColorDate = (spare?.colorQuantity || []).some(
+      // Validate each color-quantity pair
+      const invalidPairs = newStockEntry.colorQuantities.filter(
         (cq) =>
-          String(cq.color || "").toLowerCase() ===
-            String(newStockEntry.color || "").toLowerCase() &&
-          displayDate(cq.purchaseDate) === newDate
+          !cq.color ||
+          !cq.quantity ||
+          parseInt(cq.quantity) <= 0 ||
+          !cq.minStockLevel ||
+          cq.minStockLevel === "" ||
+          parseInt(cq.minStockLevel) < 0 ||
+          (cq.color === "other" && !cq.customColor?.trim())
       );
-      if (hasDuplicateColorDate) {
+
+      if (invalidPairs.length > 0) {
+      setFormError(
+          "Please fill all color, quantity, and min stock level fields. Quantity must be greater than 0. Min stock level must be 0 or greater. Custom color name is required when 'Other' is selected."
+      );
+      return;
+    }
+
+      // If user entered a purchase price, it must be > 0
+      if (
+        newStockEntry.purchasePrice &&
+        parseFloat(newStockEntry.purchasePrice) <= 0
+      ) {
+        setFormError("Purchase price must be greater than 0 when provided");
+        return;
+      }
+
+      // Check for duplicate purchase date - prevent creating new entry with existing date
+      const newDate = displayDate(newStockEntry.purchaseDate);
+      const currentColorQuantity = spare?.colorQuantity || [];
+      const uniqueDates = new Set(currentColorQuantity.map(cq => displayDate(cq.purchaseDate || "")));
+      
+      if (uniqueDates.has(newDate)) {
         setFormWarning(
-          "A color entry with this purchase date already exists. Please use a different date."
+          "A stock entry with this purchase date already exists. Please use a different date or click the 'Edit' button on the existing entry to add more colors."
         );
+        setTimeout(() => setFormWarning(""), 5000);
         setIsSubmitting(false);
+        return;
+      }
+    }
+
+    // Decide whether we should prompt user about missing purchase price
+    const hasPurchasePrice =
+      newStockEntry.purchasePrice &&
+      parseFloat(newStockEntry.purchasePrice) > 0;
+
+    if (!hasPurchasePrice && !allowMissingPurchasePrice) {
+      // Ask user whether to enter purchase price now or later
+      setShowPurchasePriceDecisionDialog(true);
+      return;
+    }
+
+    // Check admin authentication BEFORE submitting when purchase price is being set
+    if (hasPurchasePrice && !isPurchasePriceUnlocked) {
+      setFormError(
+        "Please unlock the purchase price field with security key first."
+      );
+      return;
+    }
+
+    if (hasPurchasePrice) {
+      const securityKey = sessionStorage.getItem("adminSecurityKey");
+      if (!securityKey) {
+        setFormError(
+          "Admin authentication required to set purchase price. Please unlock with security key first."
+        );
         return;
       }
     }
@@ -1200,7 +1860,9 @@ function AddMoreStock() {
             ...filteredEntries,
             {
               quantity: parseInt(newStockEntry.quantity),
-              purchasePrice: parseFloat(newStockEntry.purchasePrice),
+              purchasePrice: hasPurchasePrice
+                ? parseFloat(newStockEntry.purchasePrice)
+                : 0,
               purchaseDate: newStockEntry.purchaseDate,
             },
           ];
@@ -1210,36 +1872,27 @@ function AddMoreStock() {
 
       // Update colorQuantity array when color tracking is enabled
       if (isColorTrackingEnabled) {
-        // Check for duplicate: same color + same purchase date
-        const newDate = displayDate(newStockEntry.purchaseDate);
-        const duplicateIndex = currentColorQuantity.findIndex(
-          (cq) =>
-            cq.color.toLowerCase() === newStockEntry.color.toLowerCase() &&
-            displayDate(cq.purchaseDate) === newDate
-        );
-
-        if (duplicateIndex !== -1) {
-          setFormWarning(
-            `A ${newStockEntry.color} color entry with purchase date ${newDate} already exists. Each color entry must have a unique purchase date.`
-          );
-          setTimeout(() => setFormWarning(""), 5000);
-          setIsSubmitting(false);
-          return;
-        }
-
-        // No duplicate found - create a new color entry (same color with different date = different entry)
-          updatedColorQuantity = [
-            ...currentColorQuantity,
-            {
-              color: newStockEntry.color.trim(),
-              quantity: parseInt(newStockEntry.quantity),
-              minStockLevel: newStockEntry.minStockLevel
-                ? parseInt(newStockEntry.minStockLevel)
-                : 0,
-              purchasePrice: parseFloat(newStockEntry.purchasePrice),
+        // Create a color entry for each color-quantity pair
+        const newColorEntries = newStockEntry.colorQuantities
+          .filter((cq) => cq.color && cq.quantity && parseInt(cq.quantity) > 0)
+          .map((cq) => ({
+            color:
+              cq.color === "other"
+                ? (cq.customColor ? cq.customColor.trim() : "")
+                : cq.color.trim(),
+            quantity: parseInt(cq.quantity),
+            minStockLevel: cq.minStockLevel ? parseInt(cq.minStockLevel) : 0,
+            purchasePrice: hasPurchasePrice
+              ? parseFloat(newStockEntry.purchasePrice)
+              : 0,
               purchaseDate: newStockEntry.purchaseDate,
-            },
-          ];
+          }));
+
+        updatedColorQuantity = [...currentColorQuantity, ...newColorEntries];
+
+        // Normalize min stock levels so the latest value for each color
+        // becomes the default across all entries
+        updatedColorQuantity = normalizeColorMinStockLevels(updatedColorQuantity);
       } else {
         updatedColorQuantity = currentColorQuantity;
       }
@@ -1247,10 +1900,18 @@ function AddMoreStock() {
       console.log("Updated stock entries:", updatedStockEntries);
       console.log("Updated color quantities:", updatedColorQuantity);
 
+      // Security key should already be validated above, but get it again for the request
+      const securityKey = sessionStorage.getItem("adminSecurityKey");
+
       // Update the spare: when color tracking is enabled, only update colorQuantity; otherwise update stockEntries
-      const requestBody = isColorTrackingEnabled
+      // Only include securityKey when a purchase price is actually being set
+      const baseBody = isColorTrackingEnabled
         ? { colorQuantity: updatedColorQuantity, [stockField]: [] }
         : { [stockField]: updatedStockEntries };
+
+      const requestBody = hasPurchasePrice && securityKey
+        ? { ...baseBody, securityKey }
+        : baseBody;
 
       const response = await fetch(`http://localhost:5000/api/spares/${id}`, {
         method: "PUT",
@@ -1262,6 +1923,11 @@ function AddMoreStock() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        if (errorData.requiresAuth) {
+          setFormError("Admin authentication required to set purchase price. Please log in as admin.");
+          setIsSubmitting(false);
+          return;
+        }
         throw new Error(errorData.message || "Error adding stock entry");
       }
 
@@ -1273,13 +1939,13 @@ function AddMoreStock() {
 
       // Reset form
       setNewStockEntry({
-        quantity: "",
         purchasePrice: "",
         purchaseDate: formatDate(new Date()),
-        color: "",
-        minStockLevel: "",
+        colorQuantities: [{ color: "", quantity: "", minStockLevel: "" }],
+        quantity: "", // Keep for non-color tracking mode
       });
 
+      setColorQuantityError("");
       setFormError("");
       setFormWarning("");
     } catch (err) {
@@ -1287,6 +1953,12 @@ function AddMoreStock() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Handle form submission for new stock entry
+  const handleSubmitStockEntry = async (e) => {
+    e.preventDefault();
+    await submitStockEntry(false);
   };
 
   if (loading) {
@@ -1456,10 +2128,44 @@ function AddMoreStock() {
                 }}
               />
             </div>
+            <div style={{ flex: 1 }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  color: "#374151",
+                }}
+              >
+                Selling Price
+              </label>
+              <input
+                type="text"
+                value={
+                  spare?.sellingPrice && parseFloat(spare.sellingPrice) > 0
+                    ? "₹" +
+                      parseFloat(spare.sellingPrice).toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })
+                    : "Not set"
+                }
+                readOnly
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "0.375rem",
+                  backgroundColor: "#f9fafb",
+                  color: spare?.sellingPrice && parseFloat(spare.sellingPrice) > 0 ? "#1f2937" : "#9ca3af",
+                  fontStyle: spare?.sellingPrice && parseFloat(spare.sellingPrice) > 0 ? "normal" : "italic",
+                }}
+              />
+            </div>
+            </div>
           </div>
         </div>
 
-        {/* Add New Stock Entry Section */}
+      {/* Add New Stock Entry Section - Always visible by default */}
         {editingEntryIndex === null && (
           <div 
             id="add-stock-form-section" 
@@ -1476,6 +2182,7 @@ function AddMoreStock() {
                 borderBottom: "2px solid #e5e7eb",
               }}
             >
+              <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
               <h3
                 style={{
                   margin: 0,
@@ -1484,9 +2191,7 @@ function AddMoreStock() {
                   fontWeight: "600",
                 }}
               >
-                {isColorTrackingEnabled
-                  ? "Add New Color Entry"
-                  : "Add New Stock Entry"}
+                  Add New Stock Entry
               </h3>
               {isColorTrackingEnabled && (
                 <div
@@ -1516,6 +2221,7 @@ function AddMoreStock() {
                   Color tracking enabled
                 </div>
               )}
+              </div>
             </div>
 
             <form onSubmit={handleSubmitStockEntry}>
@@ -1536,16 +2242,19 @@ function AddMoreStock() {
                 </div>
               )}
 
+              {/* Form fields - different for color tracking vs non-color tracking */}
+              {isColorTrackingEnabled ? (
+                <>
+                  {/* Purchase Date and Purchase Price - for color tracking */}
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                      gridTemplateColumns: "repeat(2, 1fr)",
                   gap: "1rem",
                   marginBottom: "1.5rem",
                 }}
               >
-                {isColorTrackingEnabled && (
-                  <div>
+                    <div style={{ position: "relative" }}>
                     <label
                       style={{
                         display: "block",
@@ -1554,28 +2263,211 @@ function AddMoreStock() {
                         fontWeight: "500",
                       }}
                     >
-                      Color *
+                        Purchase Date *
                     </label>
                     <input
                       type="text"
-                      name="color"
-                      value={newStockEntry.color}
+                        name="purchaseDate"
+                        value={newStockEntry.purchaseDate}
                       onChange={handleInputChange}
-                      placeholder="Enter color name"
-                      required={isColorTrackingEnabled}
+                        onFocus={() => setShowDatePicker(true)}
+                        placeholder="DD/MM/YYYY"
+                        required
                       disabled={isSubmitting}
                       style={{
                         width: "100%",
                         padding: "0.5rem",
-                        border: "1px solid #d1d5db",
+                          border: preFilledFields.purchaseDate
+                            ? "2px solid #3b82f6"
+                            : "1px solid #d1d5db",
                         borderRadius: "0.375rem",
                         fontSize: "0.875rem",
-                        backgroundColor: "#ffffff",
+                          backgroundColor: preFilledFields.purchaseDate
+                            ? "#eff6ff"
+                            : "#ffffff",
+                          boxShadow: preFilledFields.purchaseDate
+                            ? "0 0 0 3px rgba(59, 130, 246, 0.1)"
+                            : "none",
+                          transition: "all 0.3s ease",
+                          animation: preFilledFields.purchaseDate
+                            ? "pulse 0.6s ease-in-out"
+                            : "none",
                       }}
                     />
+                      {showDatePicker && (
+                        <div
+                          ref={datePickerRef}
+                          style={{
+                            position: "absolute",
+                            top: "100%",
+                            left: 0,
+                            zIndex: 1000,
+                            backgroundColor: "white",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "0.5rem",
+                            padding: "1rem",
+                            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                            marginTop: "0.25rem",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              marginBottom: "1rem",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCurrentMonth(
+                                  new Date(
+                                    currentMonth.getFullYear(),
+                                    currentMonth.getMonth() - 1
+                                  )
+                                )
+                              }
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                fontSize: "1.25rem",
+                              }}
+                            >
+                              ←
+                            </button>
+                            <div style={{ fontWeight: "600" }}>
+                              {currentMonth.toLocaleDateString("en-US", {
+                                month: "long",
+                                year: "numeric",
+                              })}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCurrentMonth(
+                                  new Date(
+                                    currentMonth.getFullYear(),
+                                    currentMonth.getMonth() + 1
+                                  )
+                                )
+                              }
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                fontSize: "1.25rem",
+                              }}
+                            >
+                              →
+                            </button>
+                          </div>
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "repeat(7, 1fr)",
+                              gap: "0.25rem",
+                            }}
+                          >
+                            {[
+                              "Sun",
+                              "Mon",
+                              "Tue",
+                              "Wed",
+                              "Thu",
+                              "Fri",
+                              "Sat",
+                            ].map((day) => (
+                              <div
+                                key={day}
+                                style={{
+                                  textAlign: "center",
+                                  fontWeight: "600",
+                                  fontSize: "0.75rem",
+                                  color: "#6b7280",
+                                  padding: "0.5rem",
+                                }}
+                              >
+                                {day}
+                              </div>
+                            ))}
+                            {Array.from({
+                              length: getFirstDayOfMonth(currentMonth),
+                            }).map((_, i) => (
+                              <div key={`empty-${i}`} />
+                            ))}
+                            {Array.from({
+                              length: getDaysInMonth(currentMonth),
+                            }).map((_, i) => {
+                              const dayNumber = i + 1;
+                              const currentDate = new Date(
+                                currentMonth.getFullYear(),
+                                currentMonth.getMonth(),
+                                dayNumber
+                              );
+                              const currentDateString = formatDate(currentDate);
+                              const isSelected =
+                                currentDateString === newStockEntry.purchaseDate;
+                              const isToday =
+                                currentDateString === formatDate(new Date());
+                              const isFuture =
+                                currentDate >
+                                new Date().setHours(23, 59, 59, 999);
+                              return (
+                                <div
+                                  key={i}
+                                  onClick={() =>
+                                    !isFuture && handleDateSelect(dayNumber)
+                                  }
+                                  style={{
+                                    padding: "0.5rem",
+                                    textAlign: "center",
+                                    cursor: isFuture ? "not-allowed" : "pointer",
+                                    borderRadius: "0.25rem",
+                                    backgroundColor: isSelected
+                                      ? "#3b82f6"
+                                      : isToday
+                                      ? "#f3f4f6"
+                                      : isFuture
+                                      ? "#f9fafb"
+                                      : "transparent",
+                                    color: isSelected
+                                      ? "white"
+                                      : isToday
+                                      ? "#1f2937"
+                                      : isFuture
+                                      ? "#d1d5db"
+                                      : "#374151",
+                                    fontSize: "0.875rem",
+                                    fontWeight: isToday ? "600" : "400",
+                                    border:
+                                      isToday && !isSelected
+                                        ? "1px solid #d1d5db"
+                                        : "none",
+                                    opacity: isFuture ? 0.5 : 1,
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (!isSelected && !isFuture) {
+                                      e.currentTarget.style.backgroundColor =
+                                        isToday ? "#e5e7eb" : "#f3f4f6";
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    if (!isSelected && !isFuture) {
+                                      e.currentTarget.style.backgroundColor =
+                                        isToday ? "#f3f4f6" : "transparent";
+                                    }
+                                  }}
+                                >
+                                  {dayNumber}
+                                </div>
+                              );
+                            })}
+                          </div>
                   </div>
                 )}
-                {isColorTrackingEnabled && (
+                    </div>
                   <div>
                     <label
                       style={{
@@ -1585,17 +2477,117 @@ function AddMoreStock() {
                         fontWeight: "500",
                       }}
                     >
-                      Min Stock Level
+                        Purchase Price
                     </label>
+                      {!isPurchasePriceUnlocked ? (
+                        <div
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem",
+                            border: "2px solid #d1d5db",
+                            borderRadius: "0.375rem",
+                            backgroundColor: "#f9fafb",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "0.5rem",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease",
+                          }}
+                          onClick={() => setShowPurchasePriceDialog(true)}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = "#3b82f6";
+                            e.currentTarget.style.backgroundColor = "#eff6ff";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = "#d1d5db";
+                            e.currentTarget.style.backgroundColor = "#f9fafb";
+                          }}
+                        >
+                          <span style={{ fontSize: "1.25rem" }}>🔒</span>
+                          <span style={{ color: "#6b7280", fontSize: "0.875rem" }}>
+                            Click to unlock with security key
+                          </span>
+                        </div>
+                      ) : (
                     <input
                       type="number"
-                      name="minStockLevel"
-                      value={newStockEntry.minStockLevel}
+                          name="purchasePrice"
+                          value={newStockEntry.purchasePrice}
                       onChange={handleInputChange}
-                      placeholder="Enter minimum stock level"
-                      min="0"
+                          placeholder="Enter purchase price"
+                          min="0.01"
+                          step="0.01"
+                          required
                       disabled={isSubmitting}
                       onWheel={(e) => e.target.blur()}
+                          style={{
+                            width: "100%",
+                            padding: "0.5rem",
+                            border: preFilledFields.purchasePrice
+                              ? "2px solid #3b82f6"
+                              : "1px solid #d1d5db",
+                            borderRadius: "0.375rem",
+                            fontSize: "0.875rem",
+                            backgroundColor: preFilledFields.purchasePrice
+                              ? "#eff6ff"
+                              : "#ffffff",
+                            boxShadow: preFilledFields.purchasePrice
+                              ? "0 0 0 3px rgba(59, 130, 246, 0.1)"
+                              : "none",
+                            transition: "all 0.3s ease",
+                            animation: preFilledFields.purchasePrice
+                              ? "pulse 0.6s ease-in-out"
+                              : "none",
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Color & Quantity Section */}
+                  <div style={{ marginBottom: "1.5rem" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        marginBottom: "0.5rem",
+                        color: "#374151",
+                        fontWeight: "500",
+                      }}
+                    >
+                      Color, Quantity & Min Stock Level *
+                    </label>
+                    {newStockEntry.colorQuantities.map((entry, index) => (
+                      <div
+                        key={index}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "2fr 1fr 1fr auto",
+                          gap: "0.5rem",
+                          marginBottom: "0.5rem",
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <div>
+                          <label
+                            style={{
+                              fontSize: "0.875rem",
+                              marginBottom: "0.25rem",
+                              display: "block",
+                            }}
+                          >
+                            Color
+                          </label>
+                          <select
+                            value={entry.color}
+                            onChange={(e) =>
+                              handleColorQuantityChange(
+                                index,
+                                "color",
+                                e.target.value
+                              )
+                            }
+                            disabled={isSubmitting}
                       style={{
                         width: "100%",
                         padding: "0.5rem",
@@ -1604,28 +2596,192 @@ function AddMoreStock() {
                         fontSize: "0.875rem",
                         backgroundColor: "#ffffff",
                       }}
-                    />
+                          >
+                            <option value="">Select color</option>
+                            {colorOptions.map((color) => {
+                              const selectedInForm = newStockEntry.colorQuantities
+                                .map((e, i) => (i !== index ? e.color : ""))
+                                .filter((c) => c && c !== "");
+                              const isSelectedInForm = selectedInForm.some(
+                                (c) => c.toLowerCase() === color.value.toLowerCase() || 
+                                       colorOptions.find(opt => opt.value.toLowerCase() === c.toLowerCase())?.label.toLowerCase() === color.label.toLowerCase()
+                              );
+                              
+                              // Only disable if already selected in the current form (not based on existing entries)
+                              const isDisabled = isSelectedInForm;
+                              return (
+                                <option
+                                  key={color.value}
+                                  value={color.value}
+                                  disabled={isDisabled}
+                                >
+                                  {color.label}{" "}
+                                  {isSelectedInForm ? "(already selected)" : ""}
+                                </option>
+                              );
+                            })}
+                            <option value="other" disabled={false}>
+                              Other (specify)
+                            </option>
+                          </select>
+                          {/* Color Preview */}
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "40px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "0.375rem",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "12px",
+                              position: "relative",
+                              overflow: "hidden",
+                              backgroundColor: "#f5f5f5",
+                              marginTop: "0.5rem",
+                            }}
+                          >
+                            {entry.color === "white-black" ? (
+                              <>
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    left: 0,
+                                    top: 0,
+                                    width: "50%",
+                                    height: "100%",
+                                    backgroundColor: "#FFFFFF",
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    right: 0,
+                                    top: 0,
+                                    width: "50%",
+                                    height: "100%",
+                                    backgroundColor: "#000000",
+                                  }}
+                                />
+                                <span
+                                  style={{
+                                    position: "relative",
+                                    zIndex: 1,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    width: "100%",
+                                    height: "100%",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      position: "absolute",
+                                      left: "25%",
+                                      color: "#000",
+                                      fontWeight: "bold",
+                                      fontSize: "14px",
+                                    }}
+                                  >
+                                    W
+                                  </span>
+                                  <span
+                                    style={{
+                                      position: "absolute",
+                                      right: "25%",
+                                      color: "#fff",
+                                      fontWeight: "bold",
+                                      fontSize: "14px",
+                                    }}
+                                  >
+                                    B
+                                  </span>
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    left: 0,
+                                    top: 0,
+                                    width: "100%",
+                                    height: "100%",
+                                    backgroundColor:
+                                      entry.color === "other" || !entry.color
+                                        ? "#f5f5f5"
+                                        : getColourDisplay(entry.color),
+                                  }}
+                                />
+                                <span
+                                  style={{
+                                    position: "relative",
+                                    zIndex: 1,
+                                    color:
+                                      entry.color === "white" ||
+                                      entry.color === "yellow"
+                                        ? "#000"
+                                        : entry.color && entry.color !== "other"
+                                        ? "#fff"
+                                        : "#666",
+                                  }}
+                                >
+                                  {entry.color && entry.color !== "other"
+                                    ? colorOptions.find(
+                                        (c) => c.value === entry.color
+                                      )?.label
+                                    : entry.color === "other"
+                                    ? (entry.customColor?.trim() || "Custom")
+                                    : "No color"}
+                                </span>
+                              </>
+                            )}
                   </div>
-                )}
+                          {entry.color === "other" && (
+                            <input
+                              type="text"
+                              placeholder="Enter custom color name"
+                              value={entry.customColor || ""}
+                              onChange={(e) => {
+                                const updated = [...newStockEntry.colorQuantities];
+                                updated[index] = { ...updated[index], customColor: e.target.value };
+                                setNewStockEntry((prev) => ({ ...prev, colorQuantities: updated }));
+                              }}
+                              disabled={isSubmitting}
+                              style={{
+                                width: "100%",
+                                padding: "0.5rem",
+                                border: "1px solid #d1d5db",
+                                borderRadius: "0.375rem",
+                                fontSize: "0.875rem",
+                                marginTop: "0.5rem",
+                                backgroundColor: "#ffffff",
+                              }}
+                            />
+                          )}
+                        </div>
                 <div>
                   <label
                     style={{
+                              fontSize: "0.875rem",
+                              marginBottom: "0.25rem",
                       display: "block",
-                      marginBottom: "0.5rem",
-                      color: "#374151",
-                      fontWeight: "500",
                     }}
                   >
-                    Quantity *
+                            Quantity
                   </label>
                   <input
                     type="number"
-                    name="quantity"
-                    value={newStockEntry.quantity}
-                    onChange={handleInputChange}
-                    placeholder="Enter quantity"
-                    min="1"
-                    required
+                            value={entry.quantity}
+                            onChange={(e) =>
+                              handleColorQuantityChange(
+                                index,
+                                "quantity",
+                                e.target.value
+                              )
+                            }
+                            placeholder="Quantity"
+                            min="0"
                     disabled={isSubmitting}
                     onWheel={(e) => e.target.blur()}
                     style={{
@@ -1638,52 +2794,178 @@ function AddMoreStock() {
                     }}
                   />
                 </div>
-
                 <div>
                   <label
                     style={{
+                              fontSize: "0.875rem",
+                              marginBottom: "0.25rem",
                       display: "block",
-                      marginBottom: "0.5rem",
-                      color: "#374151",
-                      fontWeight: "500",
                     }}
                   >
-                    Purchase Price *
+                            Min Stock Level *
                   </label>
                   <input
                     type="number"
-                    name="purchasePrice"
-                    value={newStockEntry.purchasePrice}
-                    onChange={handleInputChange}
-                    placeholder="Enter purchase price"
-                    min="0.01"
-                    step="0.01"
+                            value={entry.minStockLevel || ""}
+                            onChange={(e) =>
+                              handleColorQuantityChange(
+                                index,
+                                "minStockLevel",
+                                e.target.value
+                              )
+                            }
+                            placeholder="Min level"
+                            min="0"
                     required
                     disabled={isSubmitting}
                     onWheel={(e) => e.target.blur()}
                     style={{
                       width: "100%",
                       padding: "0.5rem",
-                      border: preFilledFields.purchasePrice
-                        ? "2px solid #3b82f6"
-                        : "1px solid #d1d5db",
+                              border: "1px solid #d1d5db",
                       borderRadius: "0.375rem",
                       fontSize: "0.875rem",
-                      backgroundColor: preFilledFields.purchasePrice
-                        ? "#eff6ff"
-                        : "#ffffff",
-                      boxShadow: preFilledFields.purchasePrice
-                        ? "0 0 0 3px rgba(59, 130, 246, 0.1)"
-                        : "none",
-                      transition: "all 0.3s ease",
-                      animation: preFilledFields.purchasePrice
-                        ? "pulse 0.6s ease-in-out"
-                        : "none",
+                              backgroundColor: "#ffffff",
+                            }}
+                          />
+                        </div>
+                        {newStockEntry.colorQuantities.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeColorQuantityEntry(index)}
+                            disabled={isSubmitting}
+                            style={{
+                              padding: "0.5rem",
+                              border: "1px solid #dc2626",
+                              borderRadius: "0.375rem",
+                              backgroundColor: "#fee2e2",
+                              color: "#dc2626",
+                              cursor: "pointer",
+                              fontSize: "1rem",
+                              width: "40px",
+                              height: "40px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              marginTop: "1.5rem",
+                            }}
+                            title="Remove entry"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.75rem",
+                        marginTop: "0.5rem",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={addColorQuantityEntry}
+                        disabled={isSubmitting}
+                        style={{
+                          padding: "0.5rem 1rem",
+                          border: "1px solid #10b981",
+                          borderRadius: "0.375rem",
+                          backgroundColor: "#d1fae5",
+                          color: "#10b981",
+                          cursor: "pointer",
+                          fontSize: "0.9rem",
+                          fontWeight: "500",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        <span style={{ fontSize: "1.2rem" }}>+</span>
+                        <span>Add More Color & Quantity</span>
+                      </button>
+                      {colorQuantityError && (
+                        <span
+                          style={{
+                            color: "#dc2626",
+                            fontSize: "0.875rem",
+                            fontWeight: "500",
+                            whiteSpace: "nowrap",
                     }}
-                  />
+                        >
+                          {colorQuantityError}
+                        </span>
+                      )}
+                    </div>
                 </div>
 
-                <div>
+                  {/* Submit buttons for color tracking mode */}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "1rem",
+                      justifyContent: "flex-end",
+                      marginTop: "1.5rem",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewStockEntry({
+                          purchasePrice: "",
+                          purchaseDate: formatDate(new Date()),
+                          colorQuantities: [{ color: "", quantity: "", minStockLevel: "" }],
+                          quantity: "",
+                        });
+                        setFormError("");
+                        setFormWarning("");
+                        setColorQuantityError("");
+                      }}
+                      disabled={isSubmitting}
+                      style={{
+                        padding: "0.75rem 1.5rem",
+                        backgroundColor: "#6b7280",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "0.375rem",
+                        cursor: isSubmitting ? "not-allowed" : "pointer",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                      }}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      style={{
+                        padding: "0.75rem 1.5rem",
+                        backgroundColor: isSubmitting ? "#9ca3af" : "#3b82f6",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "0.375rem",
+                        cursor: isSubmitting ? "not-allowed" : "pointer",
+                        fontSize: "0.875rem",
+                        fontWeight: "500",
+                      }}
+                    >
+                      {isSubmitting ? "Adding..." : "Add Stock Entry"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Non-color tracking mode: Purchase Date, Purchase Price, Quantity */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, 1fr)",
+                      gap: "1rem",
+                      marginBottom: "1.5rem",
+                    }}
+                  >
+                    <div style={{ position: "relative" }}>
                   <label
                     style={{
                       display: "block",
@@ -1694,22 +2976,17 @@ function AddMoreStock() {
                   >
                     Purchase Date *
                   </label>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "0.5rem",
-                    }}
-                  >
                     <input
                       type="text"
                       name="purchaseDate"
                       value={newStockEntry.purchaseDate}
                       onChange={handleInputChange}
-                      placeholder="dd/mm/yyyy"
+                        onFocus={() => setShowDatePicker(true)}
+                        placeholder="DD/MM/YYYY"
                       required
                       disabled={isSubmitting}
                       style={{
-                        flex: 1,
+                          width: "100%",
                         padding: "0.5rem",
                         border: preFilledFields.purchaseDate
                           ? "2px solid #3b82f6"
@@ -1728,61 +3005,22 @@ function AddMoreStock() {
                           : "none",
                       }}
                     />
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: "0.5rem",
-                        backgroundColor: "#f3f4f6",
-                        border: "1px solid #d1d5db",
-                        borderRadius: "0.375rem",
-                        cursor: "pointer",
-                        position: "relative",
-                      }}
-                      title="Calendar"
-                      onClick={toggleDatePicker}
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="#6b7280"
-                        strokeWidth="2"
-                      >
-                        <rect
-                          x="3"
-                          y="4"
-                          width="18"
-                          height="18"
-                          rx="2"
-                          ry="2"
-                        ></rect>
-                        <line x1="16" y1="2" x2="16" y2="6"></line>
-                        <line x1="8" y1="2" x2="8" y2="6"></line>
-                        <line x1="3" y1="10" x2="21" y2="10"></line>
-                      </svg>
-
                       {showDatePicker && (
                         <div
-                          id="date-picker-calendar"
+                          ref={datePickerRef}
                           style={{
                             position: "absolute",
                             top: "100%",
-                            right: "0",
-                            marginTop: "0.5rem",
+                            left: 0,
+                            zIndex: 1000,
                             backgroundColor: "white",
                             border: "1px solid #d1d5db",
                             borderRadius: "0.5rem",
-                            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
                             padding: "1rem",
-                            zIndex: 1000,
-                            minWidth: "280px",
+                            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                            marginTop: "0.25rem",
                           }}
-                          onClick={(e) => e.stopPropagation()}
                         >
-                          {/* Month Navigation Header */}
                           <div
                             style={{
                               display: "flex",
@@ -1792,174 +3030,111 @@ function AddMoreStock() {
                             }}
                           >
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                previousMonth();
-                              }}
+                              type="button"
+                              onClick={() =>
+                                setCurrentMonth(
+                                  new Date(
+                                    currentMonth.getFullYear(),
+                                    currentMonth.getMonth() - 1
+                                  )
+                                )
+                              }
                               style={{
                                 background: "none",
                                 border: "none",
                                 cursor: "pointer",
-                                padding: "0.25rem",
-                                borderRadius: "0.25rem",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor =
-                                  "#f3f4f6";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor =
-                                  "transparent";
+                                fontSize: "1.25rem",
                               }}
                             >
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="#6b7280"
-                                strokeWidth="2"
-                              >
-                                <polyline points="15 18 9 12 15 6"></polyline>
-                              </svg>
+                              ←
                             </button>
-
-                            <div
-                              style={{
-                                fontSize: "0.875rem",
-                                fontWeight: "600",
-                                color: "#374151",
-                              }}
-                            >
-                              {formatMonthName(currentMonth)}
+                            <div style={{ fontWeight: "600" }}>
+                              {currentMonth.toLocaleDateString("en-US", {
+                                month: "long",
+                                year: "numeric",
+                              })}
                             </div>
-
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                nextMonth();
-                              }}
+                              type="button"
+                              onClick={() =>
+                                setCurrentMonth(
+                                  new Date(
+                                    currentMonth.getFullYear(),
+                                    currentMonth.getMonth() + 1
+                                  )
+                                )
+                              }
                               style={{
                                 background: "none",
                                 border: "none",
                                 cursor: "pointer",
-                                padding: "0.25rem",
-                                borderRadius: "0.25rem",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor =
-                                  "#f3f4f6";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor =
-                                  "transparent";
+                                fontSize: "1.25rem",
                               }}
                             >
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="#6b7280"
-                                strokeWidth="2"
-                              >
-                                <polyline points="9 18 15 12 9 6"></polyline>
-                              </svg>
+                              →
                             </button>
                           </div>
-
                           <div
                             style={{
                               display: "grid",
                               gridTemplateColumns: "repeat(7, 1fr)",
                               gap: "0.25rem",
-                              marginBottom: "0.5rem",
                             }}
                           >
-                            {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(
-                              (day) => (
+                            {[
+                              "Sun",
+                              "Mon",
+                              "Tue",
+                              "Wed",
+                              "Thu",
+                              "Fri",
+                              "Sat",
+                            ].map((day) => (
                                 <div
                                   key={day}
                                   style={{
                                     textAlign: "center",
-                                    fontSize: "0.75rem",
                                     fontWeight: "600",
+                                  fontSize: "0.75rem",
                                     color: "#6b7280",
-                                    padding: "0.25rem",
+                                  padding: "0.5rem",
                                   }}
                                 >
                                   {day}
                                 </div>
-                              )
-                            )}
-                          </div>
-
-                          <div
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "repeat(7, 1fr)",
-                              gap: "0.25rem",
-                            }}
-                          >
-                            {Array.from({ length: 35 }, (_, i) => {
-                              const date = new Date(currentMonth);
-                              date.setDate(1);
-                              const firstDay = date.getDay();
-                              const daysInMonth = new Date(
-                                date.getFullYear(),
-                                date.getMonth() + 1,
-                                0
-                              ).getDate();
-
-                              const dayNumber = i - firstDay + 1;
-                              const isValidDay =
-                                dayNumber > 0 && dayNumber <= daysInMonth;
-
-                              if (!isValidDay) {
-                                return (
-                                  <div
-                                    key={i}
-                                    style={{ padding: "0.5rem" }}
-                                  ></div>
-                                );
-                              }
-
+                            ))}
+                            {Array.from({
+                              length: getFirstDayOfMonth(currentMonth),
+                            }).map((_, i) => (
+                              <div key={`empty-${i}`} />
+                            ))}
+                            {Array.from({
+                              length: getDaysInMonth(currentMonth),
+                            }).map((_, i) => {
+                              const dayNumber = i + 1;
                               const currentDate = new Date(
-                                date.getFullYear(),
-                                date.getMonth(),
+                                currentMonth.getFullYear(),
+                                currentMonth.getMonth(),
                                 dayNumber
                               );
-                              const currentDateString = `${String(
-                                dayNumber
-                              ).padStart(2, "0")}/${String(
-                                date.getMonth() + 1
-                              ).padStart(2, "0")}/${date.getFullYear()}`;
+                              const currentDateString = formatDate(currentDate);
                               const isSelected =
-                                currentDateString ===
-                                newStockEntry.purchaseDate;
+                                currentDateString === newStockEntry.purchaseDate;
                               const isToday =
-                                currentDateString === displayDate(new Date());
+                                currentDateString === formatDate(new Date());
                               const isFuture =
-                                currentDate > new Date().setHours(0, 0, 0, 0);
-
+                                currentDate >
+                                new Date().setHours(23, 59, 59, 999);
                               return (
                                 <div
                                   key={i}
                                   onClick={() =>
-                                    !isFuture && handleDateSelect(currentDate)
+                                    !isFuture && handleDateSelect(dayNumber)
                                   }
                                   style={{
                                     padding: "0.5rem",
                                     textAlign: "center",
-                                    cursor: isFuture
-                                      ? "not-allowed"
-                                      : "pointer",
+                                    cursor: isFuture ? "not-allowed" : "pointer",
                                     borderRadius: "0.25rem",
                                     backgroundColor: isSelected
                                       ? "#3b82f6"
@@ -2004,9 +3179,125 @@ function AddMoreStock() {
                         </div>
                       )}
                     </div>
+
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "0.5rem",
+                          color: "#374151",
+                          fontWeight: "500",
+                        }}
+                      >
+                        Purchase Price *
+                      </label>
+                      {!isPurchasePriceUnlocked ? (
+                        <div
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem",
+                            border: "2px solid #d1d5db",
+                            borderRadius: "0.375rem",
+                            backgroundColor: "#f9fafb",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "0.5rem",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease",
+                          }}
+                          onClick={() => setShowPurchasePriceDialog(true)}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = "#3b82f6";
+                            e.currentTarget.style.backgroundColor = "#eff6ff";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = "#d1d5db";
+                            e.currentTarget.style.backgroundColor = "#f9fafb";
+                          }}
+                        >
+                          <span style={{ fontSize: "1.25rem" }}>🔒</span>
+                          <span style={{ color: "#6b7280", fontSize: "0.875rem" }}>
+                            Click to unlock with security key
+                          </span>
                   </div>
+                      ) : (
+                        <input
+                          type="number"
+                          name="purchasePrice"
+                          value={newStockEntry.purchasePrice}
+                          onChange={handleInputChange}
+                          placeholder="Enter purchase price"
+                          min="0.01"
+                          step="0.01"
+                          required
+                          disabled={isSubmitting}
+                          onWheel={(e) => e.target.blur()}
+                          style={{
+                            width: "100%",
+                            padding: "0.5rem",
+                            border: preFilledFields.purchasePrice
+                              ? "2px solid #3b82f6"
+                              : "1px solid #d1d5db",
+                            borderRadius: "0.375rem",
+                            fontSize: "0.875rem",
+                            backgroundColor: preFilledFields.purchasePrice
+                              ? "#eff6ff"
+                              : "#ffffff",
+                            boxShadow: preFilledFields.purchasePrice
+                              ? "0 0 0 3px rgba(59, 130, 246, 0.1)"
+                              : "none",
+                            transition: "all 0.3s ease",
+                            animation: preFilledFields.purchasePrice
+                              ? "pulse 0.6s ease-in-out"
+                              : "none",
+                          }}
+                        />
+                      )}
                 </div>
               </div>
+
+                  {/* Quantity field for non-color tracking mode - same width as Purchase Date column */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, 1fr)",
+                      gap: "1rem",
+                      marginBottom: "1.5rem",
+                    }}
+                  >
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "0.5rem",
+                          color: "#374151",
+                          fontWeight: "500",
+                        }}
+                      >
+                        Quantity *
+                      </label>
+                      <input
+                        type="number"
+                        name="quantity"
+                        value={newStockEntry.quantity}
+                        onChange={handleInputChange}
+                        placeholder="Enter quantity"
+                        min="1"
+                        required
+                        disabled={isSubmitting}
+                        onWheel={(e) => e.target.blur()}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "0.375rem",
+                          fontSize: "0.875rem",
+                        }}
+                      />
+                    </div>
+                    <div />
+                  </div>
 
               <div
                 style={{
@@ -2057,6 +3348,8 @@ function AddMoreStock() {
                   {isSubmitting ? "Adding..." : "Add Stock Entry"}
                 </button>
               </div>
+                </>
+              )}
             </form>
           </div>
         )}
@@ -2090,6 +3383,7 @@ function AddMoreStock() {
             </div>
 
             <form
+              noValidate
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSaveEdit();
@@ -2213,6 +3507,37 @@ function AddMoreStock() {
                   >
                     Purchase Price
                   </label>
+                  {!isPurchasePriceUnlocked ? (
+                    <div
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem",
+                        border: "2px solid #d1d5db",
+                        borderRadius: "0.375rem",
+                        backgroundColor: "#f9fafb",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.5rem",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                      }}
+                      onClick={() => setShowPurchasePriceDialog(true)}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = "#3b82f6";
+                        e.currentTarget.style.backgroundColor = "#eff6ff";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = "#d1d5db";
+                        e.currentTarget.style.backgroundColor = "#f9fafb";
+                      }}
+                    >
+                      <span style={{ fontSize: "1.25rem" }}>🔒</span>
+                      <span style={{ color: "#6b7280", fontSize: "0.875rem" }}>
+                        Click to unlock with security key
+                      </span>
+                    </div>
+                  ) : (
                   <input
                     type="number"
                     value={editingEntry?.purchasePrice || ""}
@@ -2236,6 +3561,7 @@ function AddMoreStock() {
                     required
                     onWheel={(e) => e.target.blur()}
                   />
+                  )}
                 </div>
 
                 <div
@@ -2258,97 +3584,414 @@ function AddMoreStock() {
                       Color Quantities
                     </label>
 
-                    {/* Current Edit Entry Colors */}
+                    {/* Current Edit Entry Colors - Already Added */}
                     <div style={{ marginBottom: "1rem" }}>
                       {editEntryColors.length > 0 ? (
                         <div
                           style={{
                             display: "flex",
-                            flexWrap: "wrap",
+                            flexDirection: "column",
                             gap: "0.5rem",
                           }}
                         >
-                          {editEntryColors.map((cq, index) => (
-                            <span
+                          <div
+                            style={{
+                              fontSize: "0.75rem",
+                              color: "#6b7280",
+                              fontWeight: "500",
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            Current Colors:
+                          </div>
+                          {editEntryColors.map((cq, index) => {
+                            const rawColor = String(cq.color || "");
+                            const normalizedColor = rawColor.toLowerCase().trim();
+
+                            // Use colorOptions only for a friendly label
+                            const labelOption = colorOptions.find(
+                              (c) =>
+                                c.value === normalizedColor ||
+                                c.label.toLowerCase() === normalizedColor
+                            );
+
+                            const displayColor = labelOption ? labelOption.label : rawColor;
+                            return (
+                              <div
                               key={index}
                               style={{
-                                backgroundColor: "#10b981",
-                                color: "white",
-                                padding: "0.25rem 0.5rem",
-                                borderRadius: "0.25rem",
-                                fontSize: "0.875rem",
                                 display: "flex",
                                 alignItems: "center",
+                                  gap: "0.75rem",
+                                  padding: "0.5rem",
+                                  backgroundColor: "#f3f4f6",
+                                  border: "1px solid #e5e7eb",
+                                  borderRadius: "0.375rem",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: "24px",
+                                    height: "24px",
+                                    borderRadius: "50%",
+                                    position: "relative",
+                                    overflow: "hidden",
+                                    flexShrink: 0,
+                                    border:
+                                      normalizedColor === "white" &&
+                                      normalizedColor !== "white-black"
+                                        ? "1px solid #d1d5db"
+                                        : "none",
+                                  }}
+                                >
+                                  {normalizedColor === "white-black" ? (
+                                    <>
+                                      <div
+                                        style={{
+                                          position: "absolute",
+                                          left: 0,
+                                          top: 0,
+                                          width: "50%",
+                                          height: "100%",
+                                          backgroundColor: "#FFFFFF",
+                                        }}
+                                      />
+                                      <div
+                                        style={{
+                                          position: "absolute",
+                                          right: 0,
+                                          top: 0,
+                                          width: "50%",
+                                          height: "100%",
+                                          backgroundColor: "#000000",
+                                        }}
+                                      />
+                                    </>
+                                  ) : (
+                                    <div
+                                      style={{
+                                        width: "100%",
+                                        height: "100%",
+                                        // For all non-gradient colors, rely on getColourDisplay
+                                        backgroundColor: getColourDisplay(
+                                          normalizedColor
+                                        ),
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                                <span
+                                  style={{
+                                    flex: 1,
+                                    color: "#374151",
+                                    fontWeight: "500",
+                                    fontSize: "0.875rem",
+                                  }}
+                                >
+                                  {displayColor} - Quantity: {cq.quantity}
+                                  {cq.minStockLevel > 0 && (
+                                    <span style={{ color: "#6b7280", marginLeft: "0.5rem" }}>
+                                      (Min: {cq.minStockLevel})
+                                    </span>
+                                  )}
+                                  {cq.purchasePrice > 0 && (
+                                    <span style={{ color: "#6b7280", marginLeft: "0.5rem" }}>
+                                      {isPurchasePriceUnlocked ? (
+                                        <span>
+                                          (₹{cq.purchasePrice.toLocaleString("en-IN", {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2,
+                                          })})
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShowPurchasePriceDialog(true);
+                                          }}
+                                          style={{
+                                            cursor: "pointer",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
                                 gap: "0.25rem",
-                              }}
-                            >
-                              {cq.color}: {cq.quantity}
+                                            backgroundColor: "#fee2e2",
+                                            border: "1px solid #fecaca",
+                                            borderRadius: "0.25rem",
+                                            padding: "0.125rem 0.375rem",
+                                            fontSize: "0.75rem",
+                                            color: "#dc2626",
+                                            fontWeight: "500",
+                                          }}
+                                          title="Click to unlock with security key"
+                                          onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = "#fecaca";
+                                          }}
+                                          onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = "#fee2e2";
+                                          }}
+                                        >
+                                          🔒
+                                        </button>
+                                      )}
+                                    </span>
+                                  )}
+                                </span>
                               <button
                                 type="button"
                                 onClick={() => removeEditEntryColor(cq.color)}
                                 style={{
-                                  backgroundColor: "#10b981",
-                                  color: "white",
-                                  border: "none",
+                                    backgroundColor: "#fee2e2",
+                                    color: "#dc2626",
+                                    border: "1px solid #fecaca",
                                   borderRadius: "0.25rem",
                                   cursor: "pointer",
-                                  padding: "0.125rem 0.375rem",
+                                    padding: "0.25rem 0.5rem",
                                   fontSize: "0.875rem",
-                                  fontWeight: "bold",
-                                  minWidth: "1.5rem",
-                                  height: "1.5rem",
+                                    fontWeight: "500",
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
                                   transition: "background-color 0.2s",
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.target.style.backgroundColor = "#059669";
+                                    e.currentTarget.style.backgroundColor = "#fecaca";
                                 }}
                                 onMouseLeave={(e) => {
-                                  e.target.style.backgroundColor = "#10b981";
+                                    e.currentTarget.style.backgroundColor = "#fee2e2";
                                 }}
+                                  title="Remove color"
                               >
                                 ×
                               </button>
-                            </span>
-                          ))}
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
-                        <p style={{ color: "#6b7280", fontStyle: "italic" }}>
-                          No color quantities added
+                        <p style={{ color: "#6b7280", fontStyle: "italic", fontSize: "0.875rem" }}>
+                          No colors added yet. Add colors below.
                         </p>
                       )}
                     </div>
 
                     {/* Add Color Quantity */}
-                    <div>
-                      <div
+                    <div style={{ marginTop: "1rem" }}>
+                      <label
                         style={{
-                          display: "flex",
-                          gap: "0.5rem",
-                          alignItems: "flex-end",
+                          display: "block",
+                          marginBottom: "0.5rem",
+                          fontSize: "0.875rem",
+                          fontWeight: "500",
+                          color: "#374151",
                         }}
                       >
-                        <div style={{ flex: 1 }}>
-                          <input
-                            type="text"
+                        Add New Color, Quantity & Min Stock Level
+                      </label>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "2fr 1fr 1fr auto",
+                          gap: "0.5rem",
+                          alignItems: "flex-start",
+                        }}
+                      >
+                    <div>
+                          <label
+                            style={{
+                              fontSize: "0.75rem",
+                              marginBottom: "0.25rem",
+                              display: "block",
+                              color: "#6b7280",
+                            }}
+                          >
+                            Color
+                          </label>
+                          <select
                             value={newEditColor}
-                            onChange={(e) => setNewEditColor(e.target.value)}
-                            placeholder="Enter color name"
-                            onKeyPress={(e) =>
-                              e.key === "Enter" && addEditEntryColor()
-                            }
+                            onChange={(e) => handleNewEditColorChange(e.target.value)}
                             style={{
                               width: "100%",
                               padding: "0.5rem",
                               border: "1px solid #d1d5db",
                               borderRadius: "0.375rem",
+                              fontSize: "0.875rem",
+                              backgroundColor: "#ffffff",
+                            }}
+                          >
+                            <option value="">Select color</option>
+                            {colorOptions.map((color) => {
+                              // Check if this color is already in editEntryColors
+                              // Compare both by value and by label (case-insensitive)
+                              const isAlreadySelected = editEntryColors.some(
+                                (cq) => {
+                                  const storedColor = (cq.color || "").toLowerCase();
+                                  const optionValue = color.value.toLowerCase();
+                                  const optionLabel = color.label.toLowerCase();
+                                  return storedColor === optionValue || storedColor === optionLabel;
+                                }
+                              );
+                              return (
+                                <option
+                                  key={color.value}
+                                  value={color.value}
+                                  disabled={isAlreadySelected}
+                                >
+                                  {color.label}{" "}
+                                  {isAlreadySelected ? "(already added)" : ""}
+                                </option>
+                              );
+                            })}
+                            <option
+                              value="other"
+                              disabled={false}
+                            >
+                              Other (specify)
+                            </option>
+                          </select>
+                          {/* Color Preview */}
+                      <div
+                        style={{
+                              width: "100%",
+                              height: "40px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "0.375rem",
+                          display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "12px",
+                              position: "relative",
+                              overflow: "hidden",
+                              backgroundColor: "#f5f5f5",
+                              marginTop: "0.5rem",
+                            }}
+                          >
+                            {newEditColor === "white-black" ? (
+                              <>
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    left: 0,
+                                    top: 0,
+                                    width: "50%",
+                                    height: "100%",
+                                    backgroundColor: "#FFFFFF",
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    right: 0,
+                                    top: 0,
+                                    width: "50%",
+                                    height: "100%",
+                                    backgroundColor: "#000000",
+                                  }}
+                                />
+                                <span
+                                  style={{
+                                    position: "relative",
+                                    zIndex: 1,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    width: "100%",
+                                    height: "100%",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      position: "absolute",
+                                      left: "25%",
+                                      color: "#000",
+                                      fontWeight: "bold",
+                                      fontSize: "14px",
+                                    }}
+                                  >
+                                    W
+                                  </span>
+                                  <span
+                                    style={{
+                                      position: "absolute",
+                                      right: "25%",
+                                      color: "#fff",
+                                      fontWeight: "bold",
+                                      fontSize: "14px",
+                        }}
+                      >
+                                    B
+                                  </span>
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    left: 0,
+                                    top: 0,
+                                    width: "100%",
+                                    height: "100%",
+                                    backgroundColor:
+                                      newEditColor === "other" || !newEditColor
+                                        ? "#f5f5f5"
+                                        : getColourDisplay(newEditColor),
+                                  }}
+                                />
+                                <span
+                                  style={{
+                                    position: "relative",
+                                    zIndex: 1,
+                                    color:
+                                      newEditColor === "white" ||
+                                      newEditColor === "yellow"
+                                        ? "#000"
+                                        : newEditColor && newEditColor !== "other"
+                                        ? "#fff"
+                                        : "#666",
+                                  }}
+                                >
+                                  {newEditColor && newEditColor !== "other"
+                                    ? colorOptions.find(
+                                        (c) => c.value === newEditColor
+                                      )?.label
+                                    : newEditColor === "other"
+                                    ? "Custom"
+                                    : "No color"}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                          {newEditColor === "other" && (
+                          <input
+                            type="text"
+                              placeholder="Enter custom color name"
+                              value={newEditColorCustom}
+                              onChange={(e) => setNewEditColorCustom(e.target.value)}
+                            style={{
+                              width: "100%",
+                              padding: "0.5rem",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "0.375rem",
+                                fontSize: "0.875rem",
+                                marginTop: "0.5rem",
                               backgroundColor: "#ffffff",
                             }}
                           />
+                          )}
                         </div>
-                        <div style={{ flex: 1 }}>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: "0.75rem",
+                              marginBottom: "0.25rem",
+                              display: "block",
+                              color: "#6b7280",
+                            }}
+                          >
+                            Quantity
+                          </label>
                           <input
                             type="number"
                             value={newEditColorQuantity}
@@ -2370,16 +4013,26 @@ function AddMoreStock() {
                             }}
                           />
                         </div>
-                        <div style={{ flex: 1 }}>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: "0.75rem",
+                              marginBottom: "0.25rem",
+                              display: "block",
+                              color: "#6b7280",
+                            }}
+                          >
+                            Min Stock *
+                          </label>
                           <input
                             type="number"
-                            value={newEditColorPurchasePrice}
-                            onChange={(e) =>
-                              setNewEditColorPurchasePrice(e.target.value)
-                            }
-                            placeholder="Purchase Price"
+                            value={newEditColorMinStockLevel}
+                            onChange={(e) => {
+                              setNewEditColorMinStockLevel(e.target.value);
+                              setIsNewEditMinStockAuto(false);
+                            }}
+                            placeholder="Min level"
                             min="0"
-                            step="0.01"
                             onKeyPress={(e) =>
                               e.key === "Enter" && addEditEntryColor()
                             }
@@ -2392,25 +4045,65 @@ function AddMoreStock() {
                               backgroundColor: "#ffffff",
                             }}
                           />
+                          {isNewEditMinStockAuto &&
+                            String(newEditColorMinStockLevel || "").trim() !== "" && (
+                              <div
+                                style={{
+                                  marginTop: "0.35rem",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.35rem",
+                                  padding: "0.15rem 0.5rem",
+                                  borderRadius: "999px",
+                                  backgroundColor: "#fef3c7",
+                                  border: "1px solid #facc15",
+                                  fontSize: "0.7rem",
+                                  fontWeight: 600,
+                                  color: "#92400e",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.04em",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: "6px",
+                                    height: "6px",
+                                    borderRadius: "999px",
+                                    backgroundColor: "#f97316",
+                                  }}
+                                />
+                                default min. stock quantity
                         </div>
+                            )}
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "flex-start",
+                          }}
+                        >
+                          <div style={{ height: "21px" }}></div>
                         <button
                           type="button"
                           onClick={addEditEntryColor}
                           disabled={
                             !newEditColor.trim() ||
                             !newEditColorQuantity.trim() ||
-                            !newEditColorPurchasePrice.trim() ||
-                            parseInt(newEditColorQuantity) < 0 ||
-                            parseFloat(newEditColorPurchasePrice) < 0
+                              !newEditColorMinStockLevel.trim() ||
+                              parseInt(newEditColorQuantity) <= 0 ||
+                              parseInt(newEditColorMinStockLevel) < 0 ||
+                              (newEditColor === "other" && !newEditColorCustom.trim())
                           }
                           style={{
                             padding: "0.5rem 1rem",
                             backgroundColor:
                               newEditColor.trim() &&
                               newEditColorQuantity.trim() &&
-                              newEditColorPurchasePrice.trim() &&
-                              parseInt(newEditColorQuantity) >= 0 &&
-                              parseFloat(newEditColorPurchasePrice) >= 0
+                                newEditColorMinStockLevel.trim() &&
+                                parseInt(newEditColorQuantity) > 0 &&
+                                parseInt(newEditColorMinStockLevel) >= 0 &&
+                                (newEditColor !== "other" || newEditColorCustom.trim())
                                 ? "#10b981"
                                 : "#9ca3af",
                             color: "white",
@@ -2419,15 +4112,20 @@ function AddMoreStock() {
                             cursor:
                               newEditColor.trim() &&
                               newEditColorQuantity.trim() &&
-                              newEditColorPurchasePrice.trim() &&
-                              parseInt(newEditColorQuantity) >= 0 &&
-                              parseFloat(newEditColorPurchasePrice) >= 0
+                                newEditColorMinStockLevel.trim() &&
+                                parseInt(newEditColorQuantity) > 0 &&
+                                parseInt(newEditColorMinStockLevel) >= 0 &&
+                                (newEditColor !== "other" || newEditColorCustom.trim())
                                 ? "pointer"
                                 : "not-allowed",
+                              fontSize: "0.875rem",
+                              fontWeight: "500",
+                              whiteSpace: "nowrap",
                           }}
                         >
                           Add
                         </button>
+                        </div>
                       </div>
                       <small
                         style={{
@@ -2440,7 +4138,9 @@ function AddMoreStock() {
                         Add color-specific quantities for this stock entry
                       </small>
                       {((newEditColor || "").trim() ||
-                        (newEditColorQuantity || "").trim()) && (
+                        (newEditColorCustom || "").trim() ||
+                        (newEditColorQuantity || "").trim() ||
+                        (newEditColorMinStockLevel || "").trim()) && (
                         <div
                           style={{
                             marginTop: "0.5rem",
@@ -2910,13 +4610,22 @@ function AddMoreStock() {
                             {group.date || "No Date"}
                             </div>
                             <button
-                              onClick={() =>
-                                handlePreFillForm(
-                                  group.date,
-                                  purchasePrice,
-                                  `add-btn-${groupIndex}`
-                                )
-                              }
+                              id={`edit-btn-${groupIndex}`}
+                              onClick={() => {
+                                setClickedButtonId(`edit-btn-${groupIndex}`);
+                                // Create entry object from group data
+                                const entry = {
+                                  purchaseDate: group.date || formatDate(new Date()),
+                                  purchasePrice: purchasePrice || 0,
+                                  colorQuantities: group.colors.map(cq => ({
+                                    color: cq.color || "",
+                                    quantity: cq.quantity || "",
+                                    minStockLevel: cq.minStockLevel || "",
+                                    customColor: cq.customColor || "",
+                                  })),
+                                };
+                                handleEditEntry(groupIndex, entry);
+                              }}
                               style={{
                                 display: "flex",
                                 alignItems: "center",
@@ -2931,27 +4640,27 @@ function AddMoreStock() {
                                 cursor: "pointer",
                                 transition: "all 0.2s ease",
                                 transform:
-                                  clickedButtonId === `add-btn-${groupIndex}`
+                                  clickedButtonId === `edit-btn-${groupIndex}`
                                     ? "scale(0.95)"
                                     : "scale(1)",
                                 boxShadow:
-                                  clickedButtonId === `add-btn-${groupIndex}`
+                                  clickedButtonId === `edit-btn-${groupIndex}`
                                     ? "0 2px 8px rgba(59, 130, 246, 0.4)"
                                     : "0 1px 3px rgba(0, 0, 0, 0.1)",
                               }}
                               onMouseEnter={(e) => {
-                                if (clickedButtonId !== `add-btn-${groupIndex}`) {
+                                if (clickedButtonId !== `edit-btn-${groupIndex}`) {
                                   e.currentTarget.style.backgroundColor = "#2563eb";
                                   e.currentTarget.style.transform = "scale(1.05)";
                                 }
                               }}
                               onMouseLeave={(e) => {
-                                if (clickedButtonId !== `add-btn-${groupIndex}`) {
+                                if (clickedButtonId !== `edit-btn-${groupIndex}`) {
                                   e.currentTarget.style.backgroundColor = "#3b82f6";
                                   e.currentTarget.style.transform = "scale(1)";
                                 }
                               }}
-                              title="Add color with same date and purchase price"
+                              title="Edit this stock entry"
                             >
                               <svg
                                 width="14"
@@ -2963,10 +4672,10 @@ function AddMoreStock() {
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
                               >
-                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                               </svg>
-                              Add
+                              Edit
                             </button>
                           </div>
                           <div
@@ -3350,8 +5059,39 @@ function AddMoreStock() {
                                           fontSize: "0.875rem",
                                         }}
                                       >
-                                        Purchase Price *
+                                        Purchase Price
                                       </label>
+                                      {!isPurchasePriceUnlocked ? (
+                                        <div
+                                          style={{
+                                            width: "100%",
+                                            padding: "0.75rem",
+                                            border: "2px solid #d1d5db",
+                                            borderRadius: "0.375rem",
+                                            backgroundColor: "#f9fafb",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            gap: "0.5rem",
+                                            cursor: "pointer",
+                                            transition: "all 0.2s ease",
+                                          }}
+                                          onClick={() => setShowPurchasePriceDialog(true)}
+                                          onMouseEnter={(e) => {
+                                            e.currentTarget.style.borderColor = "#3b82f6";
+                                            e.currentTarget.style.backgroundColor = "#eff6ff";
+                                          }}
+                                          onMouseLeave={(e) => {
+                                            e.currentTarget.style.borderColor = "#d1d5db";
+                                            e.currentTarget.style.backgroundColor = "#f9fafb";
+                                          }}
+                                        >
+                                          <span style={{ fontSize: "1.25rem" }}>🔒</span>
+                                          <span style={{ color: "#6b7280", fontSize: "0.875rem" }}>
+                                            Click to unlock with security key
+                                          </span>
+                                        </div>
+                                      ) : (
                                       <input
                                         type="number"
                                         value={
@@ -3366,14 +5106,17 @@ function AddMoreStock() {
                                         required
                                         min="0"
                                         step="0.01"
+                                          onWheel={(e) => e.target.blur()}
                                         style={{
                                           width: "100%",
                                           padding: "0.5rem",
                                           border: "1px solid #d1d5db",
                                           borderRadius: "0.375rem",
                                           fontSize: "0.875rem",
+                                            backgroundColor: "#ffffff",
                                         }}
                                       />
+                                      )}
                                     </div>
                                     <div>
                                       <label
@@ -3485,10 +5228,46 @@ function AddMoreStock() {
                                       color: "#059669",
                                     }}
                                   >
-                                    $
+                                    {isPurchasePriceUnlocked ? (
+                                      <>
+                                        ₹
                                     {parseFloat(
                                       activeColor.purchasePrice || 0
-                                    ).toFixed(2)}
+                                        ).toLocaleString("en-IN", {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        })}
+                                      </>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowPurchasePriceDialog(true)}
+                                        style={{
+                                          cursor: "pointer",
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          gap: "0.5rem",
+                                          backgroundColor: "#fee2e2",
+                                          border: "1px solid #fecaca",
+                                          borderRadius: "0.375rem",
+                                          padding: "0.5rem 1rem",
+                                          fontSize: "0.875rem",
+                                          color: "#dc2626",
+                                          fontWeight: "500",
+                                          transition: "background-color 0.2s",
+                                        }}
+                                        title="Click to unlock with security key"
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.backgroundColor = "#fecaca";
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.backgroundColor = "#fee2e2";
+                                        }}
+                                      >
+                                        🔒 Click to unlock
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                                 {activeColor.minStockLevel !== undefined &&
@@ -3522,12 +5301,49 @@ function AddMoreStock() {
                                       color: "#059669",
                                     }}
                                   >
+                                    {isPurchasePriceUnlocked ? (
+                                      <>
+                                        ₹
                                     {(
                                       parseFloat(activeColor.quantity || 0) *
                                         parseFloat(
                                           activeColor.purchasePrice || 0
                                         )
-                                    ).toFixed(2)}
+                                        ).toLocaleString("en-IN", {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        })}
+                                      </>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowPurchasePriceDialog(true)}
+                                        style={{
+                                          cursor: "pointer",
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          gap: "0.5rem",
+                                          backgroundColor: "#fee2e2",
+                                          border: "1px solid #fecaca",
+                                          borderRadius: "0.375rem",
+                                          padding: "0.5rem 1rem",
+                                          fontSize: "0.875rem",
+                                          color: "#dc2626",
+                                          fontWeight: "500",
+                                          transition: "background-color 0.2s",
+                                        }}
+                                        title="Click to unlock with security key"
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.backgroundColor = "#fecaca";
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.backgroundColor = "#fee2e2";
+                                        }}
+                                      >
+                                        🔒 Click to unlock
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -3950,6 +5766,37 @@ function AddMoreStock() {
                     >
                       Purchase Price
                     </div>
+                    {!isPurchasePriceUnlocked ? (
+                      <div
+                        style={{
+                          width: "100%",
+                          padding: "0.75rem",
+                          border: "2px solid #d1d5db",
+                          borderRadius: "0.375rem",
+                          backgroundColor: "#f9fafb",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.5rem",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                        }}
+                        onClick={() => setShowPurchasePriceDialog(true)}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = "#3b82f6";
+                          e.currentTarget.style.backgroundColor = "#eff6ff";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = "#d1d5db";
+                          e.currentTarget.style.backgroundColor = "#f9fafb";
+                        }}
+                      >
+                        <span style={{ fontSize: "1.25rem" }}>🔒</span>
+                        <span style={{ color: "#6b7280", fontSize: "0.875rem" }}>
+                          Click to unlock
+                        </span>
+                      </div>
+                    ) : (
                     <div
                       style={{
                         fontSize: "1.25rem",
@@ -3960,8 +5807,18 @@ function AddMoreStock() {
                         gap: "0.25rem",
                       }}
                     >
-                      {entry.purchasePrice}
+                        {parseFloat(entry.purchasePrice || 0) > 0
+                          ? "₹" +
+                            parseFloat(entry.purchasePrice || 0).toLocaleString(
+                              "en-IN",
+                              {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              }
+                            )
+                          : "0"}
                     </div>
+                    )}
                   </div>
 
                   <div>
@@ -4159,6 +6016,8 @@ function AddMoreStock() {
                       lineHeight: "1",
                     }}
                   >
+                    {isPurchasePriceUnlocked ? (
+                      <>
                     ₹
                     {spare[stockField]
                       .reduce(
@@ -4169,6 +6028,37 @@ function AddMoreStock() {
                         0
                       )
                       .toFixed(2)}
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowPurchasePriceDialog(true)}
+                        style={{
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.5rem",
+                          backgroundColor: "#fee2e2",
+                          border: "1px solid #fecaca",
+                          borderRadius: "0.5rem",
+                          padding: "0.75rem 1.5rem",
+                          fontSize: "1.25rem",
+                          color: "#dc2626",
+                          fontWeight: "600",
+                          transition: "background-color 0.2s",
+                        }}
+                        title="Click to unlock with security key"
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = "#fecaca";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = "#fee2e2";
+                        }}
+                      >
+                        🔒 Click to unlock
+                      </button>
+                    )}
                   </div>
                   <div
                     style={{
@@ -4325,6 +6215,8 @@ function AddMoreStock() {
                       lineHeight: "1",
                     }}
                   >
+                    {isPurchasePriceUnlocked ? (
+                      <>
                     ₹
                     {spare.colorQuantity
                       .reduce(
@@ -4335,6 +6227,37 @@ function AddMoreStock() {
                         0
                       )
                       .toFixed(2)}
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowPurchasePriceDialog(true)}
+                        style={{
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.5rem",
+                          backgroundColor: "#fee2e2",
+                          border: "1px solid #fecaca",
+                          borderRadius: "0.5rem",
+                          padding: "0.75rem 1.5rem",
+                          fontSize: "1.25rem",
+                          color: "#dc2626",
+                          fontWeight: "600",
+                          transition: "background-color 0.2s",
+                        }}
+                        title="Click to unlock with security key"
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = "#fecaca";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = "#fee2e2";
+                        }}
+                      >
+                        🔒 Click to unlock
+                      </button>
+                    )}
                   </div>
                   <div
                     style={{
@@ -4350,7 +6273,417 @@ function AddMoreStock() {
             </div>
           )}
         </div>
+
+      {/* Purchase Price Security Key Dialog */}
+      {showPurchasePriceDialog && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowPurchasePriceDialog(false);
+              setPurchasePriceSecurityKey("");
+              setPurchasePriceDialogError("");
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "2rem",
+              borderRadius: "8px",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.15)",
+              maxWidth: "400px",
+              width: "90%",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3
+              style={{
+                marginBottom: "1rem",
+                color: "#1f2937",
+                fontSize: "1.25rem",
+                fontWeight: "600",
+              }}
+            >
+              🔒 Unlock Purchase Price
+            </h3>
+            <p
+              style={{
+                marginBottom: "1.5rem",
+                color: "#6b7280",
+                fontSize: "0.875rem",
+                lineHeight: "1.5",
+              }}
+            >
+              Enter the security key to unlock the purchase price field.
+            </p>
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  color: "#374151",
+                  fontWeight: "500",
+                  fontSize: "0.875rem",
+                }}
+              >
+                Security Key
+              </label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showPurchasePriceKey ? "text" : "password"}
+                  value={purchasePriceSecurityKey}
+                  onChange={(e) => {
+                    setPurchasePriceSecurityKey(e.target.value);
+                    setPurchasePriceDialogError("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleUnlockPurchasePrice();
+                    } else if (e.key === "Escape") {
+                      setShowPurchasePriceDialog(false);
+                      setPurchasePriceSecurityKey("");
+                      setPurchasePriceDialogError("");
+                    }
+                  }}
+                  placeholder="Enter security key"
+                  autoFocus
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem 2.5rem 0.75rem 0.75rem",
+                    border: purchasePriceDialogError
+                      ? "2px solid #dc2626"
+                      : "1px solid #d1d5db",
+                    borderRadius: "0.375rem",
+                    fontSize: "0.875rem",
+                    outline: "none",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowPurchasePriceKey((prevVisible) => !prevVisible)
+                  }
+                  title={showPurchasePriceKey ? "Hide key" : "Show key"}
+                  style={{
+                    position: "absolute",
+                    right: "0.5rem",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#6b7280",
+                    padding: "0.25rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "4px",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.06)";
+                    e.currentTarget.style.color = "#374151";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.color = "#6b7280";
+                  }}
+                >
+                  {showPurchasePriceKey ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              {purchasePriceDialogError && (
+                <div
+                  style={{
+                    marginTop: "0.5rem",
+                    color: "#dc2626",
+                    fontSize: "0.75rem",
+                  }}
+                >
+                  {purchasePriceDialogError}
       </div>
+              )}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.75rem",
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPurchasePriceDialog(false);
+                  setPurchasePriceSecurityKey("");
+                  setPurchasePriceDialogError("");
+                }}
+                style={{
+                  padding: "0.75rem 1.5rem",
+                  backgroundColor: "#f3f4f6",
+                  color: "#374151",
+                  border: "none",
+                  borderRadius: "0.375rem",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleUnlockPurchasePrice}
+                style={{
+                  padding: "0.75rem 1.5rem",
+                  backgroundColor: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "0.375rem",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                }}
+              >
+                Unlock
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ask user whether to enter purchase price now or later */}
+      {showPurchasePriceDecisionDialog && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowPurchasePriceDecisionDialog(false);
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "1.75rem",
+              borderRadius: "8px",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.15)",
+              maxWidth: "420px",
+              width: "90%",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3
+              style={{
+                marginBottom: "0.75rem",
+                color: "#1f2937",
+                fontSize: "1.1rem",
+                fontWeight: "600",
+              }}
+            >
+              Purchase price not entered
+            </h3>
+            <p
+              style={{
+                marginBottom: "1.25rem",
+                color: "#4b5563",
+                fontSize: "0.9rem",
+                lineHeight: "1.5",
+              }}
+            >
+              Do you want to enter the purchase price now or later?
+            </p>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.75rem",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  // Close dialog and show security key unlock to enter purchase price now
+                  setShowPurchasePriceDecisionDialog(false);
+                  setShowPurchasePriceDialog(true);
+                }}
+                style={{
+                  padding: "0.5rem 1rem",
+                  backgroundColor: "#f3f4f6",
+                  color: "#374151",
+                  border: "none",
+                  borderRadius: "0.375rem",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                }}
+              >
+                Enter Now
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowPurchasePriceDecisionDialog(false);
+                  // Proceed with submission allowing missing purchase price
+                  await submitStockEntry(true);
+                }}
+                style={{
+                  padding: "0.5rem 1rem",
+                  backgroundColor: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "0.375rem",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                }}
+              >
+                Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Min Stock Level Decision Dialog */}
+      {showMinStockLevelDialog && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              // Cancel - set color but don't use existing min stock level
+              handleMinStockLevelChoice(false);
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "1.75rem",
+              borderRadius: "8px",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.15)",
+              maxWidth: "420px",
+              width: "90%",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3
+              style={{
+                marginBottom: "0.75rem",
+                color: "#1f2937",
+                fontSize: "1.1rem",
+                fontWeight: "600",
+              }}
+            >
+              Color already exists
+            </h3>
+            <p
+              style={{
+                marginBottom: "1rem",
+                color: "#4b5563",
+                fontSize: "0.9rem",
+                lineHeight: "1.5",
+              }}
+            >
+              This color already exists in another stock entry with a min stock level of{" "}
+              <strong>{existingMinStockLevel}</strong>.
+            </p>
+            <p
+              style={{
+                marginBottom: "1.25rem",
+                color: "#4b5563",
+                fontSize: "0.9rem",
+                lineHeight: "1.5",
+              }}
+            >
+              Do you want to use the same min stock level ({existingMinStockLevel}) or enter a new one?
+            </p>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.75rem",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => handleMinStockLevelChoice(false)}
+                style={{
+                  padding: "0.5rem 1rem",
+                  backgroundColor: "#f3f4f6",
+                  color: "#374151",
+                  border: "none",
+                  borderRadius: "0.375rem",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                }}
+              >
+                Enter New
+              </button>
+              <button
+                type="button"
+                onClick={() => handleMinStockLevelChoice(true)}
+                style={{
+                  padding: "0.5rem 1rem",
+                  backgroundColor: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "0.375rem",
+                  cursor: "pointer",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                }}
+              >
+                Use Existing ({existingMinStockLevel})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

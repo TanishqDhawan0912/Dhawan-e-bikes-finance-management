@@ -7,122 +7,184 @@ const spareSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    description: {
-      type: String,
-      trim: true,
-    },
-    sku: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-    },
-    category: {
-      type: String,
-      required: true,
-      enum: [
-        "engine",
-        "electrical",
-        "suspension",
-        "brakes",
-        "interior",
-        "exterior",
-        "other",
-      ],
-    },
     quantity: {
       type: Number,
       required: true,
       min: 0,
       default: 0,
     },
-    costPrice: {
+    minStockLevel: {
       type: Number,
-      required: true,
+      required: false,
       min: 0,
+      default: 0,
     },
     sellingPrice: {
       type: Number,
       required: true,
       min: 0,
     },
-    minStockLevel: {
-      type: Number,
-      default: 5,
-      min: 0,
-    },
-    supplier: {
-      name: String,
-      contact: String,
-      email: String,
-    },
-    lastRestocked: {
-      type: Date,
-      default: null,
-    },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-    location: {
-      aisle: String,
-      shelf: String,
-      bin: String,
-    },
-    notes: {
+    supplierName: {
       type: String,
+      required: false,
+      trim: true,
     },
+    colorQuantity: [
+      {
+        color: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        quantity: {
+          type: Number,
+          required: true,
+          min: 0,
+          default: 0,
+        },
+        minStockLevel: {
+          type: Number,
+          required: true,
+          min: 0,
+          default: 0,
+        },
+        purchasePrice: {
+          type: Number,
+          required: true,
+          min: 0,
+          default: 0,
+        },
+        purchaseDate: {
+          type: String,
+          required: false,
+          default: "",
+        },
+      },
+    ],
+    hasColors: {
+      type: Boolean,
+      default: false,
+    },
+    models: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+    stockEntries: [
+      {
+        quantity: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
+        purchasePrice: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
+        purchaseDate: {
+          type: String,
+          required: true,
+        },
+        color: {
+          type: String,
+          required: false,
+          trim: true,
+        },
+      },
+    ],
   },
   {
     timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
+    versionKey: false,
   }
 );
 
-// Virtual for profit calculation
-spareSchema.virtual("profitPerUnit").get(function () {
-  return this.sellingPrice - this.costPrice;
-});
-
-// Virtual for inventory value
-spareSchema.virtual("inventoryValue").get(function () {
-  return this.quantity * this.costPrice;
-});
-
-// Check if stock is low
-spareSchema.virtual("isLowStock").get(function () {
-  return this.quantity <= this.minStockLevel;
-});
-
-// Method to update stock
-spareSchema.methods.updateStock = async function (quantity, type = "in") {
-  if (type === "in") {
-    this.quantity += quantity;
-  } else if (type === "out") {
-    if (this.quantity < quantity) {
-      throw new Error("Insufficient stock");
-    }
-    this.quantity -= quantity;
+// Virtual field to calculate total quantity from stockEntries
+spareSchema.virtual("totalQuantity").get(function () {
+  if (!this.stockEntries || this.stockEntries.length === 0) {
+    return 0;
   }
+  return this.stockEntries.reduce(
+    (total, entry) => total + (entry.quantity || 0),
+    0
+  );
+});
 
-  if (type === "in") {
-    this.lastRestocked = Date.now();
+// Pre-save hook to update quantity field based on stockEntries or colorQuantity
+spareSchema.pre("save", function (next) {
+  // If colorQuantity has values, calculate quantity from colors
+  if (this.colorQuantity && this.colorQuantity.length > 0) {
+    this.quantity = this.colorQuantity.reduce(
+      (total, cq) => total + (cq.quantity || 0),
+      0
+    );
   }
-
-  return this.save();
-};
-
-// Generate SKU before saving
-spareSchema.pre("save", async function (next) {
-  if (!this.sku) {
-    const categoryCode = this.category.substring(0, 3).toUpperCase();
-    const count = await this.constructor.countDocuments({
-      category: this.category,
-    });
-    this.sku = `${categoryCode}-${String(count + 1).padStart(4, "0")}`;
+  // If quantity is explicitly set (not 0), use it as-is (for manual entries)
+  else if (this.quantity !== undefined && this.quantity !== 0) {
+    // Keep the manually set quantity - don't override it
+    console.log("Keeping manually set quantity:", this.quantity);
+  }
+  // Otherwise, calculate from stockEntries (original behavior)
+  else if (this.stockEntries && this.stockEntries.length > 0) {
+    this.quantity = this.stockEntries.reduce(
+      (total, entry) => total + (entry.quantity || 0),
+      0
+    );
+  } else {
+    this.quantity = 0;
   }
   next();
 });
+
+// Pre-update hook to recalculate quantity when stockEntries or colorQuantity are modified
+spareSchema.pre(
+  ["findOneAndUpdate", "updateOne", "updateMany"],
+  function (next) {
+    const update = this.getUpdate();
+
+    // If colorQuantity is being updated, calculate quantity from colors
+    if (update.colorQuantity) {
+      if (
+        Array.isArray(update.colorQuantity) &&
+        update.colorQuantity.length > 0
+      ) {
+        const totalQuantity = update.colorQuantity.reduce(
+          (total, cq) => total + (cq.quantity || 0),
+          0
+        );
+        update.quantity = totalQuantity;
+      } else {
+        update.quantity = 0;
+      }
+    }
+    // If quantity is explicitly being updated, use it as-is (for manual entries)
+    else if (update.quantity !== undefined && update.quantity !== 0) {
+      // Keep the manually set quantity - don't override it
+      console.log("Keeping manually set quantity in update:", update.quantity);
+    }
+    // Otherwise, use original stockEntries logic
+    else if (update.stockEntries) {
+      if (
+        Array.isArray(update.stockEntries) &&
+        update.stockEntries.length > 0
+      ) {
+        const totalQuantity = update.stockEntries.reduce(
+          (total, entry) => total + (entry.quantity || 0),
+          0
+        );
+        update.quantity = totalQuantity;
+      } else {
+        update.quantity = 0;
+      }
+    }
+    next();
+  }
+);
+
+// Ensure virtual fields are included in JSON output
+spareSchema.set("toJSON", { virtuals: true });
+spareSchema.set("toObject", { virtuals: true });
 
 module.exports = mongoose.model("Spare", spareSchema);

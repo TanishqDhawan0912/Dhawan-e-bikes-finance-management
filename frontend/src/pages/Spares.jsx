@@ -10,6 +10,7 @@ import SparesSidebar from "../components/SparesSidebar";
 import AddSpare from "./spares/AddSpare";
 import EditSpare from "./spares/EditSpare";
 import AllSpares from "./spares/AllSpares";
+import AddMoreStock from "./spares/AddMoreStock";
 
 const WelcomeMessage = () => (
   <div className="welcome-message">
@@ -55,9 +56,13 @@ export default function Spares() {
   }
 
   const getPageTitle = () => {
-    if (location.pathname.endsWith("add")) return "Add New Spare";
-    if (location.pathname.endsWith("edit")) return "Edit Spare";
-    if (location.pathname.endsWith("all")) return "All Spares";
+    const path = location.pathname;
+
+    // More specific path matching
+    if (path.includes("/spares/add-more")) return "Add More Stock";
+    if (path.includes("/spares/add")) return "Add Spares Here";
+    if (path.includes("/spares/edit")) return "Edit Spares Here";
+    if (path.includes("/spares/all")) return "All Spares";
     return "Spares";
   };
 
@@ -87,6 +92,7 @@ export default function Spares() {
             <Route path="add" element={<AddSpare />} />
             <Route path="edit/:id" element={<EditSpare />} />
             <Route path="all" element={<AllSpares />} />
+            <Route path="add-more/:id" element={<AddMoreStock />} />
             <Route index element={<Navigate to="add" replace />} />
             <Route path="*" element={<Navigate to="add" replace />} />
           </Routes>

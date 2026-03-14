@@ -1,10 +1,13 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 
-export default function ModelsSidebar() {
-  const location = useLocation();
+export default function ModelsSidebar({ showBottomHome }) {
+  const navigate = useNavigate();
 
   return (
-    <div className="sidebar">
+    <div
+      className="sidebar"
+      style={{ display: "flex", flexDirection: "column", height: "100%" }}
+    >
       <div className="sidebar-header">
         <h3>Models Management</h3>
       </div>
@@ -30,7 +33,48 @@ export default function ModelsSidebar() {
           <span className="icon">📋</span>
           All Models
         </NavLink>
+        <NavLink
+          to="/models/old-scooties"
+          className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+        >
+          <span className="icon">🛵</span>
+          Old Scooties
+        </NavLink>
       </nav>
+      {showBottomHome && (
+        <button
+          className="nav-link"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "1px solid #d1d5db",
+            background: "#f9fafb",
+            cursor: "pointer",
+            width: "56px",
+            height: "56px",
+            borderRadius: "9999px",
+            marginTop: "auto",
+            marginBottom: "1.25rem",
+            alignSelf: "center",
+            color: "#111827",
+          }}
+          onClick={() => navigate("/")}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "#eef2ff";
+            e.currentTarget.style.borderColor = "#6366f1";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "#f9fafb";
+            e.currentTarget.style.borderColor = "#d1d5db";
+          }}
+          title="Back to Home"
+        >
+          <span className="icon" style={{ fontSize: "1rem", opacity: 0.9 }}>
+            🏠
+          </span>
+        </button>
+      )}
     </div>
   );
 }

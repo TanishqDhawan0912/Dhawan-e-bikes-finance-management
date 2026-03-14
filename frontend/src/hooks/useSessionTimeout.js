@@ -11,8 +11,118 @@ export const useSessionTimeout = () => {
   // Handle automatic logout
   const handleAutoLogout = useCallback(() => {
     sessionStorage.removeItem("adminAuth");
+    // Proactively clear any pending timers to avoid lingering callbacks
+    if (window.sessionTimeout) {
+      clearTimeout(window.sessionTimeout);
+      window.sessionTimeout = null;
+    }
+    if (window.warningTimeout) {
+      clearTimeout(window.warningTimeout);
+      window.warningTimeout = null;
+    }
     alert("Your session has expired due to inactivity. Please log in again.");
-    window.location.reload(); // Refresh page to ensure clean state
+    // Navigate instead of full reload to avoid browser hang/popups
+    navigate("/admin-login", { replace: true });
+  }, [navigate]);
+
+  const showAdminLeavePrompt = useCallback((onStayLoggedIn, onLogout) => {
+    const backdrop = document.createElement("div");
+    backdrop.style.cssText = `
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 11000;
+    `;
+
+    const dialog = document.createElement("div");
+    dialog.style.cssText = `
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 1.75rem 2rem;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.25),
+        0 10px 10px -5px rgba(15, 23, 42, 0.2);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+    `;
+
+    dialog.innerHTML = `
+      <div style="margin-bottom: 1.25rem;">
+        <h2 style="margin: 0 0 0.5rem 0; font-size: 1.25rem; font-weight: 600; color: #111827;">
+          Leaving admin section
+        </h2>
+        <p style="margin: 0; font-size: 0.9rem; line-height: 1.5; color: #4b5563;">
+          You are trying to move out of the admin section. Choose whether you want to
+          stay logged in as admin or logout and continue.
+        </p>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem;">
+        <button id="adminStayLoggedIn" style="
+          padding: 0.55rem 1.1rem;
+          border-radius: 9999px;
+          border: 1px solid #d1d5db;
+          background: #ffffff;
+          color: #111827;
+          font-size: 0.9rem;
+          font-weight: 500;
+          cursor: pointer;
+        ">
+          Stay logged in
+        </button>
+        <button id="adminLogout" style="
+          padding: 0.55rem 1.2rem;
+          border-radius: 9999px;
+          border: none;
+          background: #dc2626;
+          color: #ffffff;
+          font-size: 0.9rem;
+          font-weight: 500;
+          cursor: pointer;
+          box-shadow: 0 10px 15px -3px rgba(220, 38, 38, 0.35);
+        ">
+          Logout as admin
+        </button>
+      </div>
+    `;
+
+    const cleanup = () => {
+      if (backdrop.parentNode) {
+        backdrop.parentNode.removeChild(backdrop);
+      }
+    };
+
+    backdrop.addEventListener("click", (event) => {
+      if (event.target === backdrop) {
+        cleanup();
+        if (typeof onStayLoggedIn === "function") {
+          onStayLoggedIn();
+        }
+      }
+    });
+
+    const stayButton = dialog.querySelector("#adminStayLoggedIn");
+    const logoutButton = dialog.querySelector("#adminLogout");
+
+    stayButton.addEventListener("click", () => {
+      cleanup();
+      if (typeof onStayLoggedIn === "function") {
+        onStayLoggedIn();
+      }
+    });
+
+    logoutButton.addEventListener("click", () => {
+      cleanup();
+      if (typeof onLogout === "function") {
+        onLogout();
+      }
+    });
+
+    backdrop.appendChild(dialog);
+    document.body.appendChild(backdrop);
   }, []);
 
   // Reset session timeout on user activity
@@ -137,7 +247,7 @@ export const useSessionTimeout = () => {
     // Check if user is authenticated as admin
     const isAdminAuth = sessionStorage.getItem("adminAuth");
     if (!isAdminAuth) {
-      return; // Don't setup timeout if not admin 
+      return; // Don't setup timeout if not admin
     }
 
     // Initial session timeout setup
@@ -176,5 +286,5 @@ export const useSessionTimeout = () => {
     };
   }, [resetSessionTimeout]);
 
-  return { resetSessionTimeout };
+  return { resetSessionTimeout, showAdminLeavePrompt };
 };

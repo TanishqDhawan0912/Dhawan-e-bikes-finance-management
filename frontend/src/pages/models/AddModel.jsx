@@ -1,11 +1,197 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getTodayFormatted, formatDate } from "../../utils/dateUtils";
 import { useSessionTimeout } from "../../hooks/useSessionTimeout";
 
+// Separate component for portal suggestions to avoid Babel parser issues
+// Separate component for portal suggestions to avoid Babel parser issues
+function SuggestionsPortal({
+  suggestions,
+  selectedIndex,
+  onSelect,
+  position,
+  inputName,
+}) {
+  if (!position) return null;
+
+  const style = {
+    position: "fixed",
+    top: position.bottom + 6,
+    left: position.left,
+    width: position.width,
+    background: "white",
+    border: "1px solid #e5e7eb",
+    borderRadius: 12,
+    zIndex: 10000,
+    boxShadow: "0 10px 25px rgba(0,0,0,0.1), 0 4px 10px rgba(0,0,0,0.05)",
+    maxHeight: 280,
+    overflowY: "auto",
+    animation: "slideDown 0.2s ease-out",
+  };
+
+  return (
+    <div style={style}>
+      {suggestions.map((suggestion, idx) => (
+        <div
+          key={`${inputName}-${
+            suggestion.loading ? "loading" : suggestion
+          }-${idx}`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            if (!suggestion.loading) {
+              onSelect(suggestion);
+            }
+          }}
+          style={{
+            padding: "0.75rem 1rem",
+            cursor: suggestion.loading ? "default" : "pointer",
+            backgroundColor:
+              idx === selectedIndex && !suggestion.loading
+                ? "#3b82f6"
+                : "white",
+            borderBottom:
+              idx !== suggestions.length - 1 ? "1px solid #f1f5f9" : "none",
+            transition: "all 0.15s ease",
+            transform:
+              idx === selectedIndex && !suggestion.loading
+                ? "translateX(4px)"
+                : "translateX(0)",
+          }}
+          onMouseEnter={(e) => {
+            if (!suggestion.loading) {
+              e.currentTarget.style.backgroundColor =
+                idx === selectedIndex ? "#3b82f6" : "#f8fafc";
+              e.currentTarget.style.transform = "translateX(2px)";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!suggestion.loading) {
+              e.currentTarget.style.backgroundColor =
+                idx === selectedIndex ? "#3b82f6" : "white";
+              e.currentTarget.style.transform = "translateX(0)";
+            }
+          }}
+        >
+          <div
+            style={{
+              fontWeight:
+                idx === selectedIndex && !suggestion.loading ? 600 : 500,
+              color:
+                idx === selectedIndex && !suggestion.loading
+                  ? "white"
+                  : "#1f2937",
+              fontSize: "0.875rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              width: "100%",
+            }}
+          >
+            {suggestion.loading ? (
+              <>
+                <div
+                  style={{
+                    width: "16px",
+                    height: "16px",
+                    border: "2px solid #e5e7eb",
+                    borderTop: "2px solid #3b82f6",
+                    borderRadius: "50%",
+                    animation: "spin 1s linear infinite",
+                  }}
+                ></div>
+                Loading suggestions...
+              </>
+            ) : (
+              <>
+                {idx === selectedIndex ? (
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                ) : (
+                  <div
+                    style={{
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "50%",
+                      backgroundColor: "#3b82f6",
+                      flexShrink: 0,
+                    }}
+                  ></div>
+                )}
+                <span>{suggestion}</span>
+                {inputName && (
+                  <span
+                    style={{
+                      marginLeft: "auto",
+                      padding: "0.25rem 0.5rem",
+                      backgroundColor:
+                        idx === selectedIndex && !suggestion.loading
+                          ? "rgba(255, 255, 255, 0.2)"
+                          : "#f1f5f9",
+                      color:
+                        idx === selectedIndex && !suggestion.loading
+                          ? "white"
+                          : "#6b7280",
+                      borderRadius: "0.375rem",
+                      fontSize: "0.75rem",
+                      fontWeight: "500",
+                    }}
+                  >
+                    {inputName === "modelName"
+                      ? "Model"
+                      : inputName === "company"
+                      ? "Company"
+                      : inputName === "name"
+                      ? "Spare"
+                      : inputName === "modelSearch"
+                      ? "Model"
+                      : inputName === "supplierName"
+                      ? "Supplier"
+                      : inputName}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+      <style jsx>{`
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes spin {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function AddModel() {
   const navigate = useNavigate();
   const suggestionsRef = useRef(null);
+  const modelNameInputRef = useRef(null);
+  const companyInputRef = useRef(null);
   const [searchParams] = useSearchParams();
   const isAdminAdd = searchParams.get("admin") === "true";
   const modelId = searchParams.get("modelId"); // Get modelId from URL params
@@ -25,15 +211,25 @@ export default function AddModel() {
     company: "",
     colour: "",
     quantity: "",
+    sellingPrice: "",
+    batteriesPerSet: 5, // Default to 5 batteries
+    description: [], // Array of tags
+    colorQuantities: [{ color: "", quantity: "" }], // Array of color-quantity pairs
     purchasedInWarranty: false,
     purchaseDate: getTodayFormatted(), // Default to today's date in dd/mm/yyyy format
   });
 
+  // State for tag input
+  const [tagInput, setTagInput] = useState("");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [colorQuantityError, setColorQuantityError] = useState("");
   const [modelSuggestions, setModelSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionPosition, setSuggestionPosition] = useState(null);
+  const [companyPosition, setCompanyPosition] = useState(null);
   // Model name search state (your way - store search string on every change)
   const [modelSearchString, setModelSearchString] = useState("");
   // Company suggestions state
@@ -43,6 +239,62 @@ export default function AddModel() {
     useState(false);
   const [showPurchasePriceDialog, setShowPurchasePriceDialog] = useState(false);
   const [autoAppliedPrice, setAutoAppliedPrice] = useState(null);
+
+  // Check for existing purchase price for models with same details
+  const checkExistingPurchasePrice = useCallback(async (currentFormData) => {
+    if (
+      !currentFormData.modelName ||
+      !currentFormData.company ||
+      !currentFormData.purchaseDate
+    ) {
+      setAutoAppliedPrice(null);
+      return;
+    }
+
+    try {
+      const checkUrl = `http://localhost:5000/api/models/check-purchase-price?modelName=${encodeURIComponent(
+        currentFormData.modelName
+      )}&company=${encodeURIComponent(
+        currentFormData.company
+      )}&purchaseDate=${encodeURIComponent(
+        parseDate(currentFormData.purchaseDate)
+      )}&purchasedInWarranty=${encodeURIComponent(
+        currentFormData.purchasedInWarranty
+      )}`;
+
+      const response = await fetch(checkUrl);
+
+      if (!response.ok) {
+        console.error("Failed to check purchase price");
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.hasPrice && data.purchasePrice) {
+        setAutoAppliedPrice(data.purchasePrice);
+        setReferenceModel(
+          data.referenceModel ? { ...data.referenceModel } : null
+        );
+        console.log(`Auto-applied purchase price: ${data.purchasePrice}`);
+        console.log(
+          `Reference model: ${data.referenceModel?.modelName} ${
+            data.referenceModel?.company
+          } (${data.referenceModel?.colour}) - Warranty: ${
+            data.referenceModel?.purchasedInWarranty
+              ? "In Warranty"
+              : "Out of Warranty"
+          }`
+        );
+      } else {
+        setAutoAppliedPrice(null);
+        setReferenceModel(null);
+      }
+    } catch (err) {
+      console.error("Error checking purchase price:", err);
+      setAutoAppliedPrice(null);
+    }
+  }, []);
 
   // Effect to fetch model data when adding color variant
   useEffect(() => {
@@ -60,16 +312,27 @@ export default function AddModel() {
           }
 
           // Pre-fill form with existing model data
-          setFormData({
+          // For color variants, always start with today's date so new stock entries
+          // default to now rather than the original model's date.
+          const initialData = {
             modelName: data.data.modelName,
             company: data.data.company,
             colour: "",
             quantity: "",
+            sellingPrice: data.data.sellingPrice || "",
+            batteriesPerSet: data.data.batteriesPerSet || 5,
+            description: data.data.description || [],
+            colorQuantities: data.data.colorQuantities && data.data.colorQuantities.length > 0
+              ? data.data.colorQuantities
+              : [{ color: "", quantity: "" }],
             purchasedInWarranty: data.data.purchasedInWarranty || false,
-            purchaseDate: data.data.purchaseDate
-              ? formatDate(data.data.purchaseDate)
-              : getTodayFormatted(),
-          });
+            purchaseDate: getTodayFormatted(),
+          };
+
+          setFormData(initialData);
+
+          // Check for existing purchase price with the pre-filled data
+          checkExistingPurchasePrice(initialData);
 
           setError("");
         } catch (err) {
@@ -79,13 +342,24 @@ export default function AddModel() {
 
       fetchModelData();
     }
-  }, [modelId]);
+  }, [modelId, checkExistingPurchasePrice]);
   const [referenceModel, setReferenceModel] = useState(null);
   const suggestionTimeoutRef = useRef(null);
   const companySuggestionTimeoutRef = useRef(null);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [selectedCompanySuggestionIndex, setSelectedCompanySuggestionIndex] =
     useState(-1);
+
+  // Re-check auto price whenever key purchase identifiers change
+  useEffect(() => {
+    checkExistingPurchasePrice(formData);
+  }, [
+    formData.modelName,
+    formData.company,
+    formData.purchaseDate,
+    formData.purchasedInWarranty,
+    checkExistingPurchasePrice,
+  ]);
 
   // Predefined color options with hex values
   const colorOptions = useMemo(
@@ -110,6 +384,8 @@ export default function AddModel() {
   );
 
   // Date validation and parsing functions
+  const isDateDisabled = isSubmitting || shouldLockAdditionalFields;
+
   const validateDateFormat = (dateString) => {
     const regex = /^\d{2}\/\d{2}\/\d{4}$/;
     if (!regex.test(dateString)) return false;
@@ -163,6 +439,82 @@ export default function AddModel() {
         purchaseDate: getTodayFormatted(),
       }));
     }
+  };
+
+  // Handle tag input
+  const handleTagInputChange = (e) => {
+    setTagInput(e.target.value);
+  };
+
+  const handleTagKeyDown = (e) => {
+    if (e.key === "Enter" && tagInput.trim()) {
+      e.preventDefault();
+      const newTag = tagInput.trim();
+      if (!formData.description.includes(newTag)) {
+        setFormData((prev) => ({
+          ...prev,
+          description: [...prev.description, newTag],
+        }));
+      }
+      setTagInput("");
+    } else if (e.key === "Backspace" && !tagInput && formData.description.length > 0) {
+      // Remove last tag if input is empty and backspace is pressed
+      setFormData((prev) => ({
+        ...prev,
+        description: prev.description.slice(0, -1),
+      }));
+    }
+  };
+
+  const removeTag = (tagToRemove) => {
+    setFormData((prev) => ({
+      ...prev,
+      description: prev.description.filter((tag) => tag !== tagToRemove),
+    }));
+  };
+
+  // Handle color-quantity entries
+  const addColorQuantityEntry = () => {
+    // Check if the last entry has both color and quantity filled
+    const lastEntry = formData.colorQuantities[formData.colorQuantities.length - 1];
+    if (!lastEntry.color || !lastEntry.quantity || lastEntry.quantity === "" || parseInt(lastEntry.quantity) <= 0) {
+      setColorQuantityError("Please fill both color and quantity before adding a new entry");
+      setTimeout(() => setColorQuantityError(""), 3000);
+      return;
+    }
+    setColorQuantityError("");
+    setFormData((prev) => ({
+      ...prev,
+      colorQuantities: [...prev.colorQuantities, { color: "", quantity: "" }],
+    }));
+  };
+
+  const removeColorQuantityEntry = (index) => {
+    if (formData.colorQuantities.length > 1) {
+      setFormData((prev) => ({
+        ...prev,
+        colorQuantities: prev.colorQuantities.filter((_, i) => i !== index),
+      }));
+    }
+  };
+
+  const handleColorQuantityChange = (index, field, value) => {
+    setFormData((prev) => {
+      const updated = [...prev.colorQuantities];
+      updated[index] = {
+        ...updated[index],
+        [field]: value,
+      };
+      // Clear error if both fields are now filled for the last entry
+      const lastIndex = updated.length - 1;
+      if (index === lastIndex && updated[lastIndex].color && updated[lastIndex].quantity && parseInt(updated[lastIndex].quantity) > 0) {
+        setColorQuantityError("");
+      }
+      return {
+        ...prev,
+        colorQuantities: updated,
+      };
+    });
   };
 
   const handleInputChange = (e) => {
@@ -295,6 +647,7 @@ export default function AddModel() {
           setCompanySuggestions([]);
           setShowCompanySuggestions(false);
           setCompanySuggestionsLoading(false);
+          setCompanyPosition(null);
           console.log("CLEARING - Second clear completed");
         }, 50);
         return;
@@ -367,11 +720,25 @@ export default function AddModel() {
       console.log("Search term empty, clearing suggestions");
       setModelSuggestions([]);
       setShowSuggestions(false);
+      setSuggestionPosition(null);
       return;
     }
 
-    const startTime = Date.now();
-    setSuggestionsLoading(true);
+    // Set position immediately before showing loading
+    if (modelNameInputRef.current) {
+      const rect = modelNameInputRef.current.getBoundingClientRect();
+      setSuggestionPosition({
+        bottom: rect.bottom,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+
+    setShowSuggestions(true);
+    setModelSuggestions([{ loading: true }]); // Show loading indicator
+
+    // Add a small delay to ensure loading state is visible
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     try {
       console.log("Making API call to suggestions endpoint");
@@ -402,53 +769,21 @@ export default function AddModel() {
         console.error("Invalid response format:", data);
         setModelSuggestions([]);
         setShowSuggestions(false);
+        setSuggestionPosition(null);
         return;
       }
 
       const uniqueSuggestions = [...new Set(data.suggestions || [])]; // Remove duplicates
       console.log("Unique suggestions:", uniqueSuggestions);
 
-      // Calculate remaining time to ensure minimum 500ms loading
-      const elapsedTime = Date.now() - startTime;
-      const remainingTime = Math.max(0, 500 - elapsedTime);
-
-      console.log(
-        `Elapsed time: ${elapsedTime}ms, Remaining time: ${remainingTime}ms`
-      );
-
-      // Wait for remaining time to ensure minimum loading time
-      if (remainingTime > 0) {
-        console.log("Waiting for minimum loading time...");
-        await new Promise((resolve) => setTimeout(resolve, remainingTime));
-      }
-
       setModelSuggestions(uniqueSuggestions.slice(0, 4)); // Limit to 4 suggestions
-
-      // Only show suggestions if we have results
-      if (uniqueSuggestions.length > 0) {
-        setShowSuggestions(true);
-        console.log("Showing suggestions");
-      } else {
-        setShowSuggestions(false);
-        console.log("No suggestions to show");
-      }
+      setShowSuggestions(uniqueSuggestions.length > 0);
     } catch (error) {
       console.error("Error fetching model suggestions:", error);
       console.error("Full error details:", error.message);
       setModelSuggestions([]);
       setShowSuggestions(false);
-      setSuggestionsLoading(false);
-    } finally {
-      // Ensure loading shows for at least 500ms even on error
-      const elapsedTime = Date.now() - startTime;
-      const remainingTime = Math.max(0, 500 - elapsedTime);
-
-      if (remainingTime > 0) {
-        await new Promise((resolve) => setTimeout(resolve, remainingTime));
-      }
-
-      setSuggestionsLoading(false);
-      console.log("Suggestions loading finished");
+      setSuggestionPosition(null);
     }
   };
 
@@ -461,11 +796,26 @@ export default function AddModel() {
       console.log("Search term empty, clearing company suggestions");
       setCompanySuggestions([]);
       setShowCompanySuggestions(false);
+      setSelectedCompanySuggestionIndex(-1);
+      setCompanyPosition(null);
       return;
     }
 
-    const startTime = Date.now();
-    setCompanySuggestionsLoading(true);
+    // Set position immediately before showing loading
+    if (companyInputRef.current) {
+      const rect = companyInputRef.current.getBoundingClientRect();
+      setCompanyPosition({
+        bottom: rect.bottom,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+
+    setShowCompanySuggestions(true);
+    setCompanySuggestions([{ loading: true }]); // Show loading indicator
+
+    // Add a small delay to ensure loading state is visible
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     try {
       console.log(
@@ -499,6 +849,8 @@ export default function AddModel() {
         console.error("Invalid company response format:", data);
         setCompanySuggestions([]);
         setShowCompanySuggestions(false);
+        setSelectedCompanySuggestionIndex(-1);
+        setCompanyPosition(null);
         return;
       }
 
@@ -508,67 +860,48 @@ export default function AddModel() {
       console.log("BULLETPROOF - Received companies from backend:", companies);
       console.log("BULLETPROOF - Total companies:", companies.length);
 
-      // The bulletproof backend already returns sorted companies directly
-      // No need for additional frontend sorting
-      console.log("BULLETPROOF - Using backend-sorted companies:", companies);
-
-      console.log("BULLETPROOF - Final companies to display:", companies);
-      console.log("BULLETPROOF - Search term was:", searchTerm);
-
-      // Calculate remaining time to ensure minimum 500ms loading for companies
-      const elapsedTime = Date.now() - startTime;
-      const remainingTime = Math.max(0, 500 - elapsedTime);
-
-      console.log(
-        `BULLETPROOF - Company search - Elapsed time: ${elapsedTime}ms, Remaining time: ${remainingTime}ms`
-      );
-
-      // Wait for remaining time to ensure minimum loading time
-      if (remainingTime > 0) {
-        console.log(
-          "BULLETPROOF - Waiting for minimum company loading time..."
-        );
-        await new Promise((resolve) => setTimeout(resolve, remainingTime));
-      }
-
       setCompanySuggestions(companies.slice(0, 4)); // Limit to 4 suggestions
-
-      // Only show suggestions if we have results
-      if (companies.length > 0) {
-        setShowCompanySuggestions(true);
-        console.log("Showing company suggestions");
-      } else {
-        setShowCompanySuggestions(false);
-        console.log("No company suggestions to show");
-      }
+      setShowCompanySuggestions(companies.length > 0);
     } catch (error) {
       console.error("Error fetching company suggestions:", error);
       console.error("Full error details:", error.message);
       setCompanySuggestions([]);
       setShowCompanySuggestions(false);
-      setCompanySuggestionsLoading(false);
-    } finally {
-      setCompanySuggestionsLoading(false);
-      console.log("Company suggestions loading finished");
+      setSelectedCompanySuggestionIndex(-1);
+      setCompanyPosition(null);
     }
   };
 
   // Hide suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
+      // Handle model name suggestions
       if (
-        suggestionsRef.current &&
-        !suggestionsRef.current.contains(event.target)
+        modelNameInputRef.current &&
+        !modelNameInputRef.current.contains(event.target) &&
+        !event.target.closest('[data-suggestion-portal]')
       ) {
-        // Only hide if not clicking on the input field itself
+        // Only hide if not clicking on the input field itself or suggestion portal
         if (event.target.name !== "modelName") {
           setShowSuggestions(false);
+          setModelSuggestions([]);
+          setSuggestionPosition(null);
+          setSelectedSuggestionIndex(-1);
         }
       }
 
-      // Hide company suggestions when clicking outside
+      // Handle company suggestions
+      if (
+        companyInputRef.current &&
+        !companyInputRef.current.contains(event.target) &&
+        !event.target.closest('[data-suggestion-portal]')
+      ) {
       if (event.target.name !== "company") {
         setShowCompanySuggestions(false);
+          setCompanySuggestions([]);
+          setSelectedCompanySuggestionIndex(-1);
+          setCompanyPosition(null);
+        }
       }
     };
 
@@ -580,16 +913,25 @@ export default function AddModel() {
 
   // Handle suggestion selection
   const handleSuggestionSelect = (suggestion) => {
+    // Don't select if it's a loading indicator
+    if (suggestion && typeof suggestion === 'object' && suggestion.loading) {
+      return;
+    }
+    
     setFormData((prev) => ({
       ...prev,
-      modelName: suggestion,
+      modelName: suggestion || "",
     }));
     setShowSuggestions(false);
     setModelSuggestions([]);
     setSelectedSuggestionIndex(-1);
+    setSuggestionPosition(null);
   };
 
   const handleCompanySuggestionSelect = (company) => {
+    if (company && typeof company === 'object' && company.loading) {
+      return; // Don't select loading items
+    }
     setFormData((prev) => ({
       ...prev,
       company,
@@ -597,76 +939,18 @@ export default function AddModel() {
     setShowCompanySuggestions(false);
     setCompanySuggestions([]);
     setSelectedCompanySuggestionIndex(-1);
-  };
-
-  // Check for existing purchase price for models with same details
-  const checkExistingPurchasePrice = async (currentFormData) => {
-    if (
-      !currentFormData.modelName ||
-      !currentFormData.company ||
-      !currentFormData.purchaseDate
-    ) {
-      setAutoAppliedPrice(null);
-      return;
-    }
-
-    try {
-      const checkUrl = `http://localhost:5000/api/models/check-purchase-price?modelName=${encodeURIComponent(
-        currentFormData.modelName
-      )}&company=${encodeURIComponent(
-        currentFormData.company
-      )}&purchaseDate=${encodeURIComponent(
-        parseDate(currentFormData.purchaseDate)
-      )}&purchasedInWarranty=${encodeURIComponent(
-        currentFormData.purchasedInWarranty
-      )}`;
-
-      const response = await fetch(checkUrl);
-
-      if (!response.ok) {
-        console.error("Failed to check purchase price");
-        return;
-      }
-
-      const data = await response.json();
-
-      if (data.hasPrice && data.purchasePrice) {
-        setAutoAppliedPrice(data.purchasePrice);
-        setReferenceModel(
-          data.referenceModel ? { ...data.referenceModel } : null
-        );
-        console.log(`Auto-applied purchase price: ${data.purchasePrice}`);
-        console.log(
-          `Reference model: ${data.referenceModel?.modelName} ${
-            data.referenceModel?.company
-          } (${data.referenceModel?.colour}) - Warranty: ${
-            data.referenceModel?.purchasedInWarranty
-              ? "In Warranty"
-              : "Out of Warranty"
-          }`
-        );
-      } else {
-        setAutoAppliedPrice(null);
-        setReferenceModel(null);
-      }
-    } catch (err) {
-      console.error("Error checking purchase price:", err);
-      setAutoAppliedPrice(null);
-    }
+    setCompanyPosition(null);
   };
 
   // Check for duplicate model with same details
   const checkDuplicateModel = async () => {
     try {
-      const colour =
-        formData.colour === "other" ? formData.customColour : formData.colour;
-
+      // Duplicate check only considers model name, company, and warranty status
       console.log("=== DUPLICATE CHECK START ===");
       console.log("Checking duplicate for:", {
         modelName: formData.modelName,
         company: formData.company,
-        colour: colour,
-        purchaseDate: formData.purchaseDate,
+        purchasedInWarranty: formData.purchasedInWarranty,
       });
 
       // First test if backend is accessible
@@ -682,13 +966,11 @@ export default function AddModel() {
         return { exists: false }; // Allow creation if backend is down
       }
 
-      // Build the duplicate check URL
+      // Build the duplicate check URL (only checks model name, company, and warranty)
       const checkUrl = `http://localhost:5000/api/models/check-duplicate?modelName=${encodeURIComponent(
         formData.modelName
       )}&company=${encodeURIComponent(
         formData.company
-      )}&colour=${encodeURIComponent(colour)}&purchaseDate=${encodeURIComponent(
-        parseDate(formData.purchaseDate)
       )}&purchasedInWarranty=${encodeURIComponent(
         formData.purchasedInWarranty
       )}`;
@@ -697,8 +979,6 @@ export default function AddModel() {
       console.log("URL parameters:");
       console.log("- modelName:", formData.modelName);
       console.log("- company:", formData.company);
-      console.log("- colour:", colour);
-      console.log("- purchaseDate:", formData.purchaseDate);
       console.log("- purchasedInWarranty:", formData.purchasedInWarranty);
 
       const response = await fetch(checkUrl);
@@ -733,11 +1013,9 @@ export default function AddModel() {
             formData.modelName
           }, Company: ${
             formData.company
-          }, Colour: ${colour}, Purchase Date: ${new Date(
-            data.model.purchaseDate
-          ).toLocaleDateString()}, Warranty Status: ${
+          }, Warranty Status: ${
             data.model.purchasedInWarranty ? "In Warranty" : "Out of Warranty"
-          }) already exists. Each combination of name, company, colour, purchase date, and warranty status should be unique.`,
+          }) already exists. Each combination of name, company, and warranty status should be unique.`,
           existingModel: data.model,
         };
       }
@@ -758,21 +1036,17 @@ export default function AddModel() {
     setError("");
 
     // Validate required fields
-    if (!formData.modelName || !formData.company || !formData.quantity) {
-      setError("Model name, company, and quantity are required");
+    if (!formData.modelName || !formData.company || !formData.sellingPrice) {
+      setError("Model name, company, and selling price are required");
       return;
     }
 
-    // Validate color selection
-    if (!formData.colour) {
-      setError("Please select a colour");
+    if (parseFloat(formData.sellingPrice) <= 0) {
+      setError("Selling price must be greater than 0");
       return;
     }
 
-    if (formData.colour === "other" && !formData.customColour) {
-      setError("Please enter a custom colour name");
-      return;
-    }
+    // Color validation removed - color is optional when creating new models
 
     // Check for duplicate model with same details
     const duplicateCheck = await checkDuplicateModel();
@@ -792,15 +1066,21 @@ export default function AddModel() {
         body: JSON.stringify({
           modelName: formData.modelName,
           company: formData.company,
-          colour:
-            formData.colour === "other"
-              ? formData.customColour
-              : formData.colour,
-          quantity: parseInt(formData.quantity),
+          colour: formData.colour || "", // Color is optional, default to empty string
+          quantity: 0, // Quantity will be managed through stock entries
+          sellingPrice: parseFloat(formData.sellingPrice),
+          batteriesPerSet: parseInt(formData.batteriesPerSet) || 5,
+          description: formData.description || [],
+          colorQuantities: formData.colorQuantities
+            .filter((entry) => entry.color && entry.quantity)
+            .map((entry) => ({
+              color: entry.color,
+              quantity: parseInt(entry.quantity) || 0,
+            })),
           purchasedInWarranty: formData.purchasedInWarranty,
           purchasePrice: autoAppliedPrice || 0, // Use auto-applied price if available
           purchaseDate: formData.purchaseDate
-            ? new Date(formData.purchaseDate)
+            ? new Date(parseDate(formData.purchaseDate))
             : new Date(),
         }),
       });
@@ -813,8 +1093,21 @@ export default function AddModel() {
 
       console.log("Model created successfully:", data);
 
-      // Show purchase price dialog instead of directly navigating
-      setShowPurchasePriceDialog(true);
+      // Navigate directly without showing purchase price dialog
+      // Navigate to appropriate page based on where we came from
+      if (isAddingColorVariant && isAdminAdd) {
+        // Admin color variant: go back to admin panel
+        navigate("/admin?section=models");
+      } else if (isAddingColorVariant) {
+        // Regular color variant: go back to All Models page
+        navigate("/models/all");
+      } else if (isAdminAdd) {
+        // Admin add model: go back to admin panel
+        navigate("/admin?section=models");
+      } else {
+        // Regular add model: go back to All Models page
+        navigate("/models/all");
+      }
     } catch (err) {
       console.error("Error creating model:", err);
       setError(err.message || "Error creating model. Please try again.");
@@ -855,7 +1148,7 @@ export default function AddModel() {
 
   return (
     <div className="model-container">
-      <h2>{isAddingColorVariant ? "Add Color Variant" : "Add New Model"}</h2>
+      <h2>{isAddingColorVariant ? "Add Color Variant" : "Add a Model"}</h2>
 
       {isAddingColorVariant && (
         <div
@@ -874,8 +1167,8 @@ export default function AddModel() {
           <br />
           <small>
             {shouldLockAdditionalFields
-              ? "Model name, company, purchase date, and warranty status are locked. You can edit color and quantity only."
-              : "Model name and company are locked. You can edit color, quantity, warranty, and purchase date."}
+              ? "Model name, company, purchase date, and warranty status are locked. You can edit color only."
+              : "Model name and company are locked. You can edit color, warranty, and purchase date."}
           </small>
         </div>
       )}
@@ -889,6 +1182,7 @@ export default function AddModel() {
               <label>Model Name *</label>
               <div style={{ position: "relative" }} ref={suggestionsRef}>
                 <input
+                  ref={modelNameInputRef}
                   type="text"
                   name="modelName"
                   value={formData.modelName}
@@ -933,150 +1227,45 @@ export default function AddModel() {
                         setSelectedSuggestionIndex(newIndex);
                       } else if (e.key === "Enter") {
                         e.preventDefault();
-                        // Select the highlighted suggestion
+                        // Select the highlighted suggestion (skip loading items)
                         if (selectedSuggestionIndex >= 0) {
-                          handleSuggestionSelect(
-                            modelSuggestions[selectedSuggestionIndex]
-                          );
+                          const selected = modelSuggestions[selectedSuggestionIndex];
+                          if (!(selected && typeof selected === 'object' && selected.loading)) {
+                            handleSuggestionSelect(selected);
+                          }
                         } else if (modelSuggestions.length > 0) {
-                          // If no suggestion is highlighted, select the first one
-                          handleSuggestionSelect(modelSuggestions[0]);
+                          // If no suggestion is highlighted, select the first non-loading one
+                          const firstNonLoading = modelSuggestions.find(
+                            s => !(s && typeof s === 'object' && s.loading)
+                          );
+                          if (firstNonLoading) {
+                            handleSuggestionSelect(firstNonLoading);
+                          }
                         }
                       } else if (e.key === "Escape") {
                         // Hide suggestions on Escape
                         setShowSuggestions(false);
+                        setModelSuggestions([]);
                         setSelectedSuggestionIndex(-1);
+                        setSuggestionPosition(null);
                       }
                     }
                   }}
                 />
 
-                {/* Suggestions Dropdown */}
-                {showSuggestions && modelSuggestions.length > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      right: 0,
-                      backgroundColor: "#ffffff",
-                      border: "2px solid #1a1a1a",
-                      borderTop: "2px solid #1a1a1a",
-                      height: "auto",
-                      maxHeight: "200px", // Height for 4 items (48px each + gaps)
-                      overflowY: "auto",
-                      zIndex: 1000,
-                      boxShadow: "0 8px 16px rgba(0,0,0,0.15)",
-                      borderRadius: "6px",
-                      marginTop: "2px",
-                    }}
-                  >
-                    {modelSuggestions.map((suggestion, index) => (
-                      <div
-                        key={index}
-                        onClick={() => handleSuggestionSelect(suggestion)}
-                        style={{
-                          padding: "8px 16px",
-                          cursor: "pointer",
-                          borderBottom:
-                            index < modelSuggestions.length - 1
-                              ? "1px solid #e8e8e8"
-                              : "none",
-                          backgroundColor:
-                            index === selectedSuggestionIndex
-                              ? "#f0f8ff"
-                              : "#ffffff",
-                          transition: "all 0.2s ease",
-                          fontSize: "14px",
-                          fontWeight:
-                            index === selectedSuggestionIndex ? "500" : "400",
-                          color: "#2c3e50",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "10px",
-                          margin: index === 0 ? "4px 4px 0 4px" : "0 4px",
-                          borderRadius:
-                            index === 0
-                              ? "4px 4px 0 0"
-                              : index === modelSuggestions.length - 1
-                              ? "0 0 4px 4px"
-                              : "0",
-                          borderLeft:
-                            index === selectedSuggestionIndex
-                              ? "3px solid #007bff"
-                              : "none",
-                          paddingLeft:
-                            index === selectedSuggestionIndex ? "13px" : "16px",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.target.style.backgroundColor = "#f8f9fa";
-                          e.target.style.borderLeft = "3px solid #007bff";
-                          e.target.style.paddingLeft = "13px";
-                          setSelectedSuggestionIndex(index);
-                        }}
-                        onMouseLeave={(e) => {
-                          if (index !== selectedSuggestionIndex) {
-                            e.target.style.backgroundColor = "#ffffff";
-                            e.target.style.borderLeft = "none";
-                            e.target.style.paddingLeft = "16px";
-                          }
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: "4px",
-                            height: "4px",
-                            backgroundColor:
-                              index === selectedSuggestionIndex
-                                ? "#007bff"
-                                : "#6c757d",
-                            borderRadius: "50%",
-                            flexShrink: 0,
-                          }}
-                        />
-                        <span>{suggestion}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Loading Indicator */}
-                {suggestionsLoading && !showSuggestions && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      right: 0,
-                      backgroundColor: "#ffffff",
-                      border: "2px solid #1a1a1a",
-                      borderTop: "2px solid #1a1a1a",
-                      padding: "16px",
-                      textAlign: "center",
-                      color: "#6c757d",
-                      zIndex: 1000,
-                      boxShadow: "0 8px 16px rgba(0,0,0,0.15)",
-                      borderRadius: "6px",
-                      marginTop: "2px",
-                      fontSize: "14px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "16px",
-                        height: "16px",
-                        border: "2px solid #e9ecef",
-                        borderTop: "2px solid #007bff",
-                        borderRadius: "50%",
-                        animation: "spin 1s linear infinite",
-                      }}
-                    />
-                    <span>Loading suggestions...</span>
-                  </div>
+                {/* Suggestions Portal */}
+                {showSuggestions &&
+                  modelSuggestions.length > 0 &&
+                  suggestionPosition &&
+                  createPortal(
+                    <SuggestionsPortal
+                      suggestions={modelSuggestions}
+                      selectedIndex={selectedSuggestionIndex}
+                      onSelect={handleSuggestionSelect}
+                      position={suggestionPosition}
+                      inputName="modelName"
+                    />,
+                    document.body
                 )}
               </div>
             </div>
@@ -1093,6 +1282,7 @@ export default function AddModel() {
                   required
                   autoComplete="off"
                   readOnly={isAddingColorVariant}
+                  ref={companyInputRef}
                   style={{
                     backgroundColor: isAddingColorVariant ? "#f5f5f5" : "white",
                     cursor: isAddingColorVariant ? "not-allowed" : "text",
@@ -1105,203 +1295,95 @@ export default function AddModel() {
                     ) {
                       if (e.key === "ArrowDown") {
                         e.preventDefault();
-                        // Move to next suggestion with cyclic behavior
-                        let newIndex;
-                        if (
-                          selectedCompanySuggestionIndex >=
-                          companySuggestions.length - 1
-                        ) {
-                          // If at last suggestion, cycle back to first
-                          newIndex = 0;
-                        } else {
-                          // Otherwise move to next
-                          newIndex = selectedCompanySuggestionIndex + 1;
-                        }
+                        // Find next non-loading suggestion
+                        let newIndex = selectedCompanySuggestionIndex;
+                        let attempts = 0;
+                        do {
+                          newIndex =
+                            newIndex >= companySuggestions.length - 1
+                              ? 0
+                              : newIndex + 1;
+                          attempts++;
+                        } while (
+                          attempts < companySuggestions.length &&
+                          companySuggestions[newIndex] &&
+                          typeof companySuggestions[newIndex] === "object" &&
+                          companySuggestions[newIndex].loading
+                        );
                         setSelectedCompanySuggestionIndex(newIndex);
                       } else if (e.key === "ArrowUp") {
                         e.preventDefault();
-                        // Move to previous suggestion with cyclic behavior
-                        let newIndex;
-                        if (selectedCompanySuggestionIndex <= 0) {
-                          // If at first suggestion, cycle to last
-                          newIndex = companySuggestions.length - 1;
-                        } else {
-                          // Otherwise move to previous
-                          newIndex = selectedCompanySuggestionIndex - 1;
-                        }
+                        // Find previous non-loading suggestion
+                        let newIndex = selectedCompanySuggestionIndex;
+                        let attempts = 0;
+                        do {
+                          newIndex =
+                            newIndex <= 0
+                              ? companySuggestions.length - 1
+                              : newIndex - 1;
+                          attempts++;
+                        } while (
+                          attempts < companySuggestions.length &&
+                          companySuggestions[newIndex] &&
+                          typeof companySuggestions[newIndex] === "object" &&
+                          companySuggestions[newIndex].loading
+                        );
                         setSelectedCompanySuggestionIndex(newIndex);
                       } else if (e.key === "Enter") {
                         e.preventDefault();
-                        // Select the highlighted company suggestion
+                        // Select the highlighted suggestion (skip loading items)
                         if (selectedCompanySuggestionIndex >= 0) {
-                          handleCompanySuggestionSelect(
-                            companySuggestions[selectedCompanySuggestionIndex]
-                          );
+                          const selected = companySuggestions[selectedCompanySuggestionIndex];
+                          if (!(selected && typeof selected === 'object' && selected.loading)) {
+                            handleCompanySuggestionSelect(selected);
+                          }
                         } else if (companySuggestions.length > 0) {
-                          // If no suggestion is highlighted, select the first one
-                          handleCompanySuggestionSelect(companySuggestions[0]);
+                          // If no suggestion is highlighted, select the first non-loading one
+                          const firstNonLoading = companySuggestions.find(
+                            s => !(s && typeof s === 'object' && s.loading)
+                          );
+                          if (firstNonLoading) {
+                            handleCompanySuggestionSelect(firstNonLoading);
+                          }
                         }
                       } else if (e.key === "Escape") {
                         // Hide company suggestions on Escape
                         setShowCompanySuggestions(false);
+                        setCompanySuggestions([]);
                         setSelectedCompanySuggestionIndex(-1);
+                        setCompanyPosition(null);
                       }
                     }
                   }}
                 />
 
-                {/* Company Suggestions Dropdown */}
-                {showCompanySuggestions && companySuggestions.length > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      right: 0,
-                      backgroundColor: "#ffffff",
-                      border: "2px solid #1a1a1a",
-                      borderTop: "2px solid #1a1a1a",
-                      height: "auto",
-                      maxHeight: "200px", // Height for 4 items (48px each + gaps)
-                      overflowY: "auto",
-                      zIndex: 1000,
-                      boxShadow: "0 8px 16px rgba(0,0,0,0.15)",
-                      borderRadius: "6px",
-                      marginTop: "2px",
-                    }}
-                  >
-                    {companySuggestions.map((company, index) => (
-                      <div
-                        key={company}
-                        style={{
-                          padding: "8px 16px",
-                          cursor: "pointer",
-                          borderBottom:
-                            index < companySuggestions.length - 1
-                              ? "1px solid #e8e8e8"
-                              : "none",
-                          backgroundColor:
-                            index === selectedCompanySuggestionIndex
-                              ? "#f0f8ff"
-                              : "#ffffff",
-                          transition: "all 0.2s ease",
-                          fontSize: "14px",
-                          fontWeight:
-                            index === selectedCompanySuggestionIndex
-                              ? "500"
-                              : "400",
-                          color: "#2c3e50",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "10px",
-                          margin: index === 0 ? "4px 4px 0 4px" : "0 4px",
-                          borderRadius:
-                            index === 0
-                              ? "4px 4px 0 0"
-                              : index === companySuggestions.length - 1
-                              ? "0 0 4px 4px"
-                              : "0",
-                          borderLeft:
-                            index === selectedCompanySuggestionIndex
-                              ? "3px solid #007bff"
-                              : "none",
-                          paddingLeft:
-                            index === selectedCompanySuggestionIndex
-                              ? "13px"
-                              : "16px",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.target.style.backgroundColor = "#f8f9fa";
-                          e.target.style.borderLeft = "3px solid #007bff";
-                          e.target.style.paddingLeft = "13px";
-                          setSelectedCompanySuggestionIndex(index);
-                        }}
-                        onMouseLeave={(e) => {
-                          if (index !== selectedCompanySuggestionIndex) {
-                            e.target.style.backgroundColor = "#ffffff";
-                            e.target.style.borderLeft = "none";
-                            e.target.style.paddingLeft = "16px";
-                          }
-                        }}
-                        onClick={() => handleCompanySuggestionSelect(company)}
-                      >
-                        <span
-                          style={{
-                            width: "4px",
-                            height: "4px",
-                            backgroundColor:
-                              index === selectedCompanySuggestionIndex
-                                ? "#007bff"
-                                : "#6c757d",
-                            borderRadius: "50%",
-                            flexShrink: 0,
-                          }}
-                        />
-                        <span>{company}</span>
-                        <span
-                          style={{
-                            color: "#6c757d",
-                            fontSize: "12px",
-                            backgroundColor: "#e9ecef",
-                            padding: "2px 8px",
-                            borderRadius: "12px",
-                          }}
-                        >
-                          Company
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Company Loading Indicator */}
-                {companySuggestionsLoading && !showCompanySuggestions && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      right: 0,
-                      backgroundColor: "#ffffff",
-                      border: "2px solid #1a1a1a",
-                      borderTop: "2px solid #1a1a1a",
-                      padding: "16px",
-                      textAlign: "center",
-                      color: "#6c757d",
-                      zIndex: 1000,
-                      boxShadow: "0 8px 16px rgba(0,0,0,0.15)",
-                      borderRadius: "6px",
-                      marginTop: "2px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "16px",
-                        height: "16px",
-                        border: "2px solid #f3f3f3",
-                        borderTop: "2px solid #007bff",
-                        borderRadius: "50%",
-                        animation: "spin 1s linear infinite",
-                      }}
-                    />
-                    <span>Loading suggestions...</span>
-                  </div>
+                {/* Company Suggestions Portal */}
+                {showCompanySuggestions &&
+                  companySuggestions.length > 0 &&
+                  companyPosition &&
+                  createPortal(
+                    <SuggestionsPortal
+                      suggestions={companySuggestions}
+                      selectedIndex={selectedCompanySuggestionIndex}
+                      onSelect={handleCompanySuggestionSelect}
+                      position={companyPosition}
+                      inputName="company"
+                    />,
+                    document.body
                 )}
               </div>
             </div>
           </div>
 
+
           <div className="form-row">
             <div className="form-group">
-              <label>Colour</label>
+              <label>Batteries Per Set *</label>
               <select
-                name="colour"
-                value={formData.colour}
+                name="batteriesPerSet"
+                value={formData.batteriesPerSet}
                 onChange={handleInputChange}
+                required
                 disabled={isSubmitting}
                 style={{
                   width: "100%",
@@ -1310,203 +1392,131 @@ export default function AddModel() {
                   borderRadius: "4px",
                 }}
               >
-                <option value="">Select a colour</option>
-                {colorOptions.map((color) => (
-                  <option key={color.value} value={color.value}>
-                    {color.label}
-                  </option>
-                ))}
-                <option value="other">Other (specify)</option>
+                <option value={5}>5 batteries</option>
+                <option value={6}>6 batteries</option>
               </select>
             </div>
 
             <div className="form-group">
-              <label>Colour Preview</label>
-              <div
-                style={{
-                  width: "100%",
-                  height: "40px",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "12px",
-                  position: "relative",
-                  overflow: "hidden",
-                }}
-              >
-                {/* White-Black split background */}
-                {formData.colour === "white-black" ? (
-                  <>
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        top: 0,
-                        width: "50%",
-                        height: "100%",
-                        backgroundColor: "#FFFFFF",
-                      }}
-                    />
-                    <div
-                      style={{
-                        position: "absolute",
-                        right: 0,
-                        top: 0,
-                        width: "50%",
-                        height: "100%",
-                        backgroundColor: "#000000",
-                      }}
-                    />
-                    <span
-                      style={{
-                        position: "relative",
-                        zIndex: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: "100%",
-                        height: "100%",
-                      }}
-                    >
-                      <span
-                        style={{
-                          position: "absolute",
-                          left: "25%",
-                          color: "#000",
-                          fontWeight: "bold",
-                          fontSize: "14px",
-                        }}
-                      >
-                        W
-                      </span>
-                      <span
-                        style={{
-                          position: "absolute",
-                          right: "25%",
-                          color: "#fff",
-                          fontWeight: "bold",
-                          fontSize: "14px",
-                        }}
-                      >
-                        B
-                      </span>
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        top: 0,
-                        width: "100%",
-                        height: "100%",
-                        backgroundColor:
-                          formData.colour === "other" || !formData.colour
-                            ? "#f5f5f5"
-                            : colorOptions.find(
-                                (c) => c.value === formData.colour
-                              )?.hex || "#f5f5f5",
-                      }}
-                    />
-                    <span
-                      style={{
-                        position: "relative",
-                        zIndex: 1,
-                        color:
-                          formData.colour === "white" ||
-                          formData.colour === "yellow"
-                            ? "#000"
-                            : "#fff",
-                      }}
-                    >
-                      {formData.colour && formData.colour !== "other"
-                        ? colorOptions.find((c) => c.value === formData.colour)
-                            ?.label
-                        : formData.colour === "other"
-                        ? "Custom"
-                        : "No colour"}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {formData.colour === "other" && (
-            <div className="form-row">
-              <div className="form-group">
-                <label>Custom Colour *</label>
-                <input
-                  type="text"
-                  name="customColour"
-                  value={formData.customColour || ""}
-                  onChange={handleInputChange}
-                  placeholder="Enter custom colour name"
-                  required={formData.colour === "other"}
-                  disabled={isSubmitting}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>Quantity (Numbers) *</label>
+              <label>Selling Price ({formData.batteriesPerSet} batteries) *</label>
               <input
                 type="number"
-                name="quantity"
-                value={formData.quantity}
+                name="sellingPrice"
+                value={formData.sellingPrice}
                 onChange={handleInputChange}
-                placeholder="Enter quantity"
+                placeholder={`Enter selling price for ${formData.batteriesPerSet} batteries`}
                 min="0"
+                step="0.01"
                 required
                 disabled={isSubmitting}
+                onWheel={(e) => e.target.blur()}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  border: "1px solid #ccc",
+                  borderRadius: "4px",
+                }}
               />
             </div>
 
             <div className="form-group">
               <label>Purchase Date</label>
-              <input
-                type="text"
-                name="purchaseDate"
-                value={formData.purchaseDate}
-                onChange={handleDateChange}
-                onBlur={(e) => {
-                  handleDateBlur(e);
-                  e.target.style.borderColor = "#e5e7eb";
-                  e.target.style.boxShadow = "none";
-                }}
-                placeholder="dd/mm/yyyy"
-                maxLength="10"
-                disabled={isSubmitting || shouldLockAdditionalFields}
+              <div
                 style={{
-                  width: "100%",
-                  padding: "0.625rem 0.875rem",
-                  border: "2px solid #e5e7eb",
-                  borderRadius: "0.5rem",
-                  fontSize: "0.9rem",
-                  fontWeight: "500",
-                  color: "#374151",
-                  backgroundColor: shouldLockAdditionalFields
-                    ? "#f5f5f5"
-                    : "#ffffff",
-                  transition: "all 0.2s ease",
-                  cursor:
-                    isSubmitting || shouldLockAdditionalFields
-                      ? "not-allowed"
-                      : "text",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  position: "relative",
                 }}
-                onFocus={(e) => {
-                  if (!isSubmitting && !shouldLockAdditionalFields) {
-                    e.target.style.borderColor = "#6366f1";
-                    e.target.style.boxShadow =
-                      "0 0 0 3px rgba(99, 102, 241, 0.1)";
-                  }
-                }}
-              />
+              >
+                <input
+                  type="text"
+                  name="purchaseDate"
+                  value={formData.purchaseDate}
+                  onChange={handleDateChange}
+                  onBlur={(e) => {
+                    handleDateBlur(e);
+                    e.target.style.borderColor = "#e5e7eb";
+                    e.target.style.boxShadow = "none";
+                  }}
+                  placeholder="dd/mm/yyyy"
+                  maxLength="10"
+                  disabled={isDateDisabled}
+                  style={{
+                    width: "100%",
+                    padding: "0.625rem 0.875rem",
+                    border: "2px solid #e5e7eb",
+                    borderRadius: "0.5rem",
+                    fontSize: "0.9rem",
+                    fontWeight: "500",
+                    color: "#374151",
+                    backgroundColor: shouldLockAdditionalFields
+                      ? "#f5f5f5"
+                      : "#ffffff",
+                    transition: "all 0.2s ease",
+                    cursor: isDateDisabled ? "not-allowed" : "text",
+                  }}
+                  onFocus={(e) => {
+                    if (!isDateDisabled) {
+                      e.target.style.borderColor = "#6366f1";
+                      e.target.style.boxShadow =
+                        "0 0 0 3px rgba(99, 102, 241, 0.1)";
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={isDateDisabled}
+                  onClick={(e) => {
+                    const button = e.currentTarget;
+                    const rect = button.getBoundingClientRect();
+                    const input = document.createElement("input");
+                    input.type = "date";
+                    input.value = parseDate(formData.purchaseDate) || "";
+                    input.style.position = "fixed";
+                    input.style.left = `${rect.left}px`;
+                    input.style.top = `${rect.bottom}px`;
+                    input.style.opacity = "0";
+                    input.style.pointerEvents = "none";
+                    document.body.appendChild(input);
+                    requestAnimationFrame(() => {
+                      input.showPicker?.();
+                    });
+                    input.addEventListener("change", (e) => {
+                      const isoValue = e.target.value;
+                      if (isoValue) {
+                        const [year, month, day] = isoValue.split("-");
+                        const formatted = `${day.padStart(
+                          2,
+                          "0"
+                        )}/${month.padStart(2, "0")}/${year}`;
+                        setFormData((prev) => ({
+                          ...prev,
+                          purchaseDate: formatted,
+                        }));
+                      }
+                      document.body.removeChild(input);
+                    });
+                    input.addEventListener("cancel", () => {
+                      document.body.removeChild(input);
+                    });
+                  }}
+                  style={{
+                    width: "2.2rem",
+                    height: "2.2rem",
+                    borderRadius: "9999px",
+                    border: "1px solid #d1d5db",
+                    backgroundColor: isDateDisabled ? "#f3f4f6" : "#ffffff",
+                    cursor: isDateDisabled ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "1rem",
+                  }}
+                >
+                  📅
+                </button>
+              </div>
               {autoAppliedPrice && (
                 <div
                   style={{
@@ -1572,6 +1582,360 @@ export default function AddModel() {
                 }}
               >
                 Default is today's date. Change if needed.
+              </small>
+            </div>
+          </div>
+
+          {/* Color and Quantity Entries */}
+          <div className="form-row">
+            <div className="form-group" style={{ width: "100%" }}>
+              <label>Color & Quantity</label>
+              {formData.colorQuantities.map((entry, index) => (
+                <div
+                  key={index}
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    marginBottom: "0.5rem",
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label style={{ fontSize: "0.875rem", marginBottom: "0.25rem", display: "block" }}>
+                      Color
+                    </label>
+                    <select
+                      value={entry.color}
+                      onChange={(e) =>
+                        handleColorQuantityChange(index, "color", e.target.value)
+                      }
+                      disabled={isSubmitting}
+                      style={{
+                        width: "100%",
+                        padding: "0.5rem",
+                        border: "1px solid #ccc",
+                        borderRadius: "4px",
+                        marginBottom: "0.5rem",
+                      }}
+                    >
+                      <option value="">Select color</option>
+                      {colorOptions.map((color) => {
+                        // Get all selected colors except the current entry
+                        const selectedColors = formData.colorQuantities
+                          .map((e, i) => i !== index ? e.color : "")
+                          .filter(c => c && c !== "");
+                        const isDisabled = selectedColors.includes(color.value);
+                        return (
+                          <option 
+                            key={color.value} 
+                            value={color.value}
+                            disabled={isDisabled}
+                          >
+                            {color.label} {isDisabled ? "(already selected)" : ""}
+                          </option>
+                        );
+                      })}
+                      <option 
+                        value="other"
+                        disabled={formData.colorQuantities
+                          .map((e, i) => i !== index ? e.color : "")
+                          .filter(c => c === "other").length > 0}
+                      >
+                        Other (specify) {formData.colorQuantities
+                          .map((e, i) => i !== index ? e.color : "")
+                          .filter(c => c === "other").length > 0 ? "(already selected)" : ""}
+                      </option>
+                    </select>
+                    {/* Color Preview */}
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "40px",
+                        border: "1px solid #ccc",
+                        borderRadius: "4px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "12px",
+                        position: "relative",
+                        overflow: "hidden",
+                        backgroundColor: "#f5f5f5",
+                      }}
+                    >
+                      {/* White-Black split background */}
+                      {entry.color === "white-black" ? (
+                        <>
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: 0,
+                              top: 0,
+                              width: "50%",
+                              height: "100%",
+                              backgroundColor: "#FFFFFF",
+                            }}
+                          />
+                          <div
+                            style={{
+                              position: "absolute",
+                              right: 0,
+                              top: 0,
+                              width: "50%",
+                              height: "100%",
+                              backgroundColor: "#000000",
+                            }}
+                          />
+                          <span
+                            style={{
+                              position: "relative",
+                              zIndex: 1,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: "100%",
+                              height: "100%",
+                            }}
+                          >
+                            <span
+                              style={{
+                                position: "absolute",
+                                left: "25%",
+                                color: "#000",
+                                fontWeight: "bold",
+                                fontSize: "14px",
+                              }}
+                            >
+                              W
+                            </span>
+                            <span
+                              style={{
+                                position: "absolute",
+                                right: "25%",
+                                color: "#fff",
+                                fontWeight: "bold",
+                                fontSize: "14px",
+                              }}
+                            >
+                              B
+                            </span>
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: 0,
+                              top: 0,
+                              width: "100%",
+                              height: "100%",
+                              backgroundColor:
+                                entry.color === "other" || !entry.color
+                                  ? "#f5f5f5"
+                                  : colorOptions.find(
+                                      (c) => c.value === entry.color
+                                    )?.hex || "#f5f5f5",
+                            }}
+                          />
+                          <span
+                            style={{
+                              position: "relative",
+                              zIndex: 1,
+                              color:
+                                entry.color === "white" ||
+                                entry.color === "yellow"
+                                  ? "#000"
+                                  : entry.color && entry.color !== "other"
+                                  ? "#fff"
+                                  : "#666",
+                            }}
+                          >
+                            {entry.color && entry.color !== "other"
+                              ? colorOptions.find((c) => c.value === entry.color)
+                                  ?.label
+                              : entry.color === "other"
+                              ? "Custom"
+                              : "No color"}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label style={{ fontSize: "0.875rem", marginBottom: "0.25rem", display: "block" }}>
+                      Quantity
+                    </label>
+                    <input
+                      type="number"
+                      value={entry.quantity}
+                      onChange={(e) =>
+                        handleColorQuantityChange(
+                          index,
+                          "quantity",
+                          e.target.value
+                        )
+                      }
+                      placeholder="Quantity"
+                      min="0"
+                      disabled={isSubmitting}
+                      onWheel={(e) => e.target.blur()}
+                      style={{
+                        width: "100%",
+                        padding: "0.5rem",
+                        border: "1px solid #ccc",
+                        borderRadius: "4px",
+                      }}
+                    />
+                  </div>
+                  {formData.colorQuantities.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeColorQuantityEntry(index)}
+                      disabled={isSubmitting}
+                      style={{
+                        padding: "0.5rem",
+                        border: "1px solid #dc2626",
+                        borderRadius: "4px",
+                        backgroundColor: "#fee2e2",
+                        color: "#dc2626",
+                        cursor: "pointer",
+                        fontSize: "1rem",
+                        width: "40px",
+                        height: "40px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                      title="Remove entry"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={addColorQuantityEntry}
+                  disabled={isSubmitting}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    border: "1px solid #10b981",
+                    borderRadius: "4px",
+                    backgroundColor: "#d1fae5",
+                    color: "#10b981",
+                    cursor: "pointer",
+                    fontSize: "0.9rem",
+                    fontWeight: "500",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <span style={{ fontSize: "1.2rem" }}>+</span>
+                  <span>Add More Color & Quantity</span>
+                </button>
+                {colorQuantityError && (
+                  <span
+                    style={{
+                      color: "#dc2626",
+                      fontSize: "0.875rem",
+                      fontWeight: "500",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {colorQuantityError}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group" style={{ width: "100%" }}>
+              <label>Description (Tags) *</label>
+              <div
+                style={{
+                  border: "1px solid #ccc",
+                  borderRadius: "4px",
+                  padding: "0.5rem",
+                  minHeight: "60px",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.5rem",
+                  alignItems: "center",
+                  backgroundColor: "#fff",
+                }}
+              >
+                {/* Display existing tags */}
+                {formData.description.map((tag, index) => (
+                  <span
+                    key={index}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.25rem",
+                      padding: "0.25rem 0.5rem",
+                      backgroundColor: "#6366f1",
+                      color: "#fff",
+                      borderRadius: "4px",
+                      fontSize: "0.875rem",
+                      fontWeight: "500",
+                    }}
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => removeTag(tag)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#fff",
+                        cursor: "pointer",
+                        fontSize: "1rem",
+                        padding: "0",
+                        marginLeft: "0.25rem",
+                        display: "flex",
+                        alignItems: "center",
+                        lineHeight: "1",
+                      }}
+                      disabled={isSubmitting}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {/* Tag input field */}
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={handleTagInputChange}
+                  onKeyDown={handleTagKeyDown}
+                  placeholder={
+                    formData.description.length === 0
+                      ? "Type and press Enter to add tags"
+                      : "Add more tags..."
+                  }
+                  disabled={isSubmitting}
+                  style={{
+                    border: "none",
+                    outline: "none",
+                    flex: 1,
+                    minWidth: "150px",
+                    fontSize: "0.9rem",
+                    padding: "0.25rem",
+                  }}
+                />
+              </div>
+              <small
+                style={{
+                  display: "block",
+                  marginTop: "0.25rem",
+                  color: "#666",
+                  fontSize: "0.8rem",
+                }}
+              >
+                Press Enter to add a tag. Press Backspace to remove the last tag.
               </small>
             </div>
           </div>

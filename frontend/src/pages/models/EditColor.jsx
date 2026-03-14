@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { getTodayFormatted } from "../../utils/dateUtils";
 
 export default function EditColor() {
   const navigate = useNavigate();
@@ -279,8 +280,8 @@ export default function EditColor() {
           quantity: parseInt(formData.quantity),
           purchasedInWarranty: formData.purchasedInWarranty,
           purchaseDate: formData.purchaseDate
-            ? new Date(formData.purchaseDate)
-            : new Date(),
+            ? new Date(parseDate(formData.purchaseDate))
+            : new Date(parseDate(getTodayFormatted())),
           purchasePrice: referenceModel?.purchasePrice || 0,
         }),
       });

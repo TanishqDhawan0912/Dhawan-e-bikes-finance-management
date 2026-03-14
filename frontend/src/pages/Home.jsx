@@ -14,13 +14,24 @@ function FeatureCard({ icon, title, description }) {
 export default function Home() {
   return (
     <div className="home-root">
-      <div className="home-logo-top">
-        <div className="home-logo-circle">
-          <FaMotorcycle size={64} />
+      <nav className="home-navbar">
+        <div className="home-navbar-inner">
+          <Link to="/" className="home-navbar-brand">
+            <span className="home-navbar-icon">
+              <FaMotorcycle size={24} />
+            </span>
+            <span>
+              <h1 className="home-navbar-title">Dhawan E-Bikes</h1>
+              <p className="home-navbar-subtitle">
+                Internal workshop & finance management
+              </p>
+            </span>
+          </Link>
+          <Link to="/admin" className="home-navbar-admin-btn">
+            Admin
+          </Link>
         </div>
-        <h1 className="home-title">Dhawan E-Bikes</h1>
-        <p className="home-subtitle">Internal workshop & finance management</p>
-      </div>
+      </nav>
 
       <div className="home-center">
         <div className="home-menu">
@@ -36,8 +47,11 @@ export default function Home() {
           <Link to="/batteries" className="home-menu-button">
             Batteries
           </Link>
-          <Link to="/admin" className="home-menu-button home-menu-button-admin">
-            Admin
+          <Link to="/chargers" className="home-menu-button">
+            Chargers
+          </Link>
+          <Link to="/bills" className="home-menu-button">
+            Bills
           </Link>
         </div>
       </div>

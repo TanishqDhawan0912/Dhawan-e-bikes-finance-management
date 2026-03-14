@@ -1,19 +1,47 @@
-import { Routes, Route, Link } from "react-router-dom";
+import { Routes, Route, Link, useLocation } from "react-router-dom";
+import { lazy, Suspense, memo, useMemo } from "react";
 import { FaMotorcycle } from "react-icons/fa";
-import Home from "./pages/Home.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
-import Loans from "./pages/Loans.jsx";
-import Customers from "./pages/Customers.jsx";
-import Payments from "./pages/Payments.jsx";
-import Reports from "./pages/Reports.jsx";
-import Jobcards from "./pages/Jobcards.jsx";
-import Spares from "./pages/Spares.jsx";
-import Models from "./pages/Models.jsx";
-import Admin from "./pages/Admin.jsx";
-import AdminLogin from "./components/AdminLogin.jsx";
-import Batteries from "./pages/Batteries.jsx";
 
-function Navbar() {
+// Lazy load all pages for better performance
+const Home = lazy(() => import("./pages/Home.jsx"));
+const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
+const Loans = lazy(() => import("./pages/Loans.jsx"));
+const Customers = lazy(() => import("./pages/Customers.jsx"));
+const Payments = lazy(() => import("./pages/Payments.jsx"));
+const Reports = lazy(() => import("./pages/Reports.jsx"));
+const Jobcards = lazy(() => import("./pages/Jobcards.jsx"));
+const Spares = lazy(() => import("./pages/Spares.jsx"));
+const Models = lazy(() => import("./pages/Models.jsx"));
+const Admin = lazy(() => import("./pages/Admin.jsx"));
+const AdminLogin = lazy(() => import("./components/AdminLogin.jsx"));
+const Batteries = lazy(() => import("./pages/Batteries.jsx"));
+const Chargers = lazy(() => import("./pages/Chargers.jsx"));
+const Bills = lazy(() => import("./pages/Bills.jsx"));
+
+// Loading component
+const PageLoader = () => (
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      minHeight: "50vh",
+    }}
+  >
+    <div
+      style={{
+        width: "40px",
+        height: "40px",
+        border: "4px solid #f3f3f3",
+        borderTop: "4px solid #3b82f6",
+        borderRadius: "50%",
+        animation: "spin 1s linear infinite",
+      }}
+    ></div>
+  </div>
+);
+
+const Navbar = memo(() => {
   return (
     <nav className="navbar">
       <div className="navbar-inner">
@@ -39,6 +67,9 @@ function Navbar() {
           <Link to="/models" className="nav-link">
             Models
           </Link>
+          <Link to="/bills" className="nav-link">
+            Bills
+          </Link>
         </div>
         <Link to="/admin" className="navbar-admin-btn">
           <button className="btn btn-primary">Admin</button>
@@ -46,22 +77,31 @@ function Navbar() {
       </div>
     </nav>
   );
-}
+});
 
 function AppLayout() {
-  const location = window.location.pathname;
-  const isHomePage = location === "/";
-  const isJobcardPage = location.startsWith("/jobcards");
-  const isSparesPage = location.startsWith("/spares");
-  const isModelsPage = location.startsWith("/models");
+  const location = useLocation();
+  const pathname = location.pathname;
+
+  const classNames = useMemo(() => {
+    const isJobcardPage = pathname.startsWith("/jobcards");
+    const isSparesPage = pathname.startsWith("/spares");
+    const isModelsPage = pathname.startsWith("/models");
+    const isBillsPage = pathname.startsWith("/bills");
+    const isHomePage = pathname === "/";
+
+    return {
+      root: `app-root ${isJobcardPage ? "jobcard-root" : ""} ${
+        isSparesPage ? "spares-root" : ""
+      } ${isModelsPage ? "models-root" : ""} ${isBillsPage ? "bills-root" : ""}`,
+      main: `app-main ${isHomePage ? "home-page" : ""}`,
+    };
+  }, [pathname]);
 
   return (
-    <div
-      className={`app-root ${isJobcardPage ? "jobcard-root" : ""} ${
-        isSparesPage ? "spares-root" : ""
-      } ${isModelsPage ? "models-root" : ""}`}
-    >
-      <main className={`app-main ${isHomePage ? "home-page" : ""}`}>
+    <div className={classNames.root}>
+      <main className={classNames.main}>
+        <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/dashboard" element={<Dashboard />} />
@@ -74,8 +114,11 @@ function AppLayout() {
           <Route path="/models/*" element={<Models />} />
           <Route path="/admin-login" element={<AdminLogin />} />
           <Route path="/admin" element={<Admin />} />
-          <Route path="/batteries" element={<Batteries />} />
+            <Route path="/batteries/*" element={<Batteries />} />
+            <Route path="/chargers/*" element={<Chargers />} />
+            <Route path="/bills/*" element={<Bills />} />
         </Routes>
+        </Suspense>
       </main>
     </div>
   );

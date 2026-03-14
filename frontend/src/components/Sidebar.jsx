@@ -2,7 +2,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 const menuItems = [
   { path: "new", label: "New Jobcard", icon: "📝" },
-  { path: "edit", label: "Edit Jobcard", icon: "✏️" },
+  { path: "pending", label: "Pending Jobcard", icon: "⏳" },
   { path: "all", label: "All Jobcards", icon: "📋" },
 ];
 
@@ -39,18 +39,21 @@ export default function Sidebar() {
       </div>
       <nav className="sidebar-nav">
         <ul>
-          {menuItems.map((item) => (
-            <li key={item.path}>
-              <a
-                href={`/jobcards/${item.path}`}
-                className={isActive(item.path) ? "active" : ""}
-                onClick={(e) => handleNavigation(e, item.path)}
-              >
-                <span className="icon">{item.icon}</span>
-                <span className="label">{item.label}</span>
-              </a>
-            </li>
-          ))}
+          {menuItems.map((item) => {
+            const active = isActive(item.path);
+            return (
+              <li key={item.path}>
+                <a
+                  href={`/jobcards/${item.path}`}
+                  className={active ? "active" : ""}
+                  onClick={(e) => handleNavigation(e, item.path)}
+                >
+                  <span className="icon">{item.icon}</span>
+                  <span className="label">{item.label}</span>
+                </a>
+              </li>
+            );
+          })}
         </ul>
       </nav>
     </div>

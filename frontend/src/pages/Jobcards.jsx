@@ -8,7 +8,7 @@ import {
 import { useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import NewJobcard from "./jobcards/NewJobcard";
-import EditJobcard from "./jobcards/EditJobcard";
+import PendingJobcard from "./jobcards/PendingJobcard";
 import AllJobcards from "./jobcards/AllJobcards";
 
 const WelcomeMessage = () => (
@@ -56,7 +56,7 @@ export default function Jobcards() {
 
   const getPageTitle = () => {
     if (location.pathname.endsWith("new")) return "Create New Jobcard";
-    if (location.pathname.endsWith("edit")) return "Edit Jobcard";
+    if (location.pathname.endsWith("pending")) return "Pending Jobcards";
     if (location.pathname.endsWith("all")) return "All Jobcards";
     return "Jobcards";
   };
@@ -85,7 +85,7 @@ export default function Jobcards() {
         <div className="content-area">
           <Routes>
             <Route path="new" element={<NewJobcard />} />
-            <Route path="edit" element={<EditJobcard />} />
+            <Route path="pending" element={<PendingJobcard />} />
             <Route path="all" element={<AllJobcards />} />
             <Route index element={<Navigate to="new" replace />} />
             <Route path="*" element={<Navigate to="new" replace />} />

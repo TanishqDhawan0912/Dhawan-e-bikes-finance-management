@@ -34,7 +34,24 @@ export const getTodayForInput = () => {
 export const formatDate = (dateString) => {
   if (!dateString) return "";
 
-  const date = new Date(dateString);
+  let date;
+
+  // Handle legacy dd/mm/yyyy strings gracefully
+  if (
+    typeof dateString === "string" &&
+    dateString.includes("/") &&
+    !dateString.includes("-")
+  ) {
+    const [day, month, year] = dateString.split("/");
+    date = new Date(
+      Number(year),
+      Number(month) - 1, // JS months are 0-based
+      Number(day)
+    );
+  } else {
+    date = new Date(dateString);
+  }
+
   if (isNaN(date.getTime())) return "";
 
   const day = String(date.getDate()).padStart(2, "0");
@@ -52,7 +69,24 @@ export const formatDate = (dateString) => {
 export const formatDateForInput = (dateString) => {
   if (!dateString) return "";
 
-  const date = new Date(dateString);
+  let date;
+
+  // Handle legacy dd/mm/yyyy strings gracefully
+  if (
+    typeof dateString === "string" &&
+    dateString.includes("/") &&
+    !dateString.includes("-")
+  ) {
+    const [day, month, year] = dateString.split("/");
+    date = new Date(
+      Number(year),
+      Number(month) - 1, // JS months are 0-based
+      Number(day)
+    );
+  } else {
+    date = new Date(dateString);
+  }
+
   if (isNaN(date.getTime())) return "";
 
   const year = date.getFullYear();

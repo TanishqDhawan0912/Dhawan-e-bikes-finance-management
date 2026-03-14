@@ -6,22 +6,19 @@ const asyncHandler = require("../middleware/async");
 // @access  Public
 exports.checkDuplicateModel = async (req, res) => {
   try {
-    const { modelName, company, colour, purchaseDate, purchasedInWarranty } =
-      req.query;
+    const { modelName, company, purchasedInWarranty } = req.query;
 
     console.log("=== DUPLICATE CHECK DEBUG ===");
     console.log("Input parameters:");
     console.log("  modelName:", modelName);
     console.log("  company:", company);
-    console.log("  colour:", colour);
-    console.log("  purchaseDate:", purchaseDate);
     console.log("  purchasedInWarranty:", purchasedInWarranty);
 
-    if (!modelName || !company || !colour) {
+    if (!modelName || !company || purchasedInWarranty === undefined) {
       console.log("ERROR: Missing required parameters");
       return res.status(400).json({
         success: false,
-        message: "Please provide modelName, company, and colour",
+        message: "Please provide modelName, company, and purchasedInWarranty",
       });
     }
 
@@ -35,23 +32,11 @@ exports.checkDuplicateModel = async (req, res) => {
 
       console.log(`\n--- Checking model ${i + 1}: ${model.modelName} ---`);
 
-      // Normalize and compare each field
+      // Normalize and compare each field (only model name, company, and warranty)
       const nameMatch =
         model.modelName.trim().toUpperCase() === modelName.trim().toUpperCase();
       const companyMatch =
         model.company.trim().toUpperCase() === company.trim().toUpperCase();
-      const colourMatch =
-        (model.colour || "").trim().toLowerCase() ===
-        colour.trim().toLowerCase();
-
-      let dateMatch = false;
-      if (model.purchaseDate && purchaseDate) {
-        const existingDate = new Date(model.purchaseDate)
-          .toISOString()
-          .split("T")[0];
-        dateMatch = existingDate === purchaseDate;
-      }
-
       const warrantyMatch =
         model.purchasedInWarranty.toString() ===
         (purchasedInWarranty || "false");
@@ -68,33 +53,13 @@ exports.checkDuplicateModel = async (req, res) => {
         `(${model.company} vs ${company})`
       );
       console.log(
-        "  Colour match:",
-        colourMatch,
-        `(${model.colour} vs ${colour})`
-      );
-      console.log(
-        "  Date match:",
-        dateMatch,
-        `(${
-          model.purchaseDate
-            ? new Date(model.purchaseDate).toISOString().split("T")[0]
-            : "none"
-        } vs ${purchaseDate})`
-      );
-      console.log(
         "  Warranty match:",
         warrantyMatch,
         `(${model.purchasedInWarranty} vs ${purchasedInWarranty})`
       );
 
-      // Check if ALL fields match exactly
-      if (
-        nameMatch &&
-        companyMatch &&
-        colourMatch &&
-        dateMatch &&
-        warrantyMatch
-      ) {
+      // Check if ALL three fields match exactly
+      if (nameMatch && companyMatch && warrantyMatch) {
         console.log(" EXACT DUPLICATE FOUND! Blocking creation.");
         console.log("=== END DUPLICATE CHECK ===");
 
@@ -104,11 +69,7 @@ exports.checkDuplicateModel = async (req, res) => {
           model: model,
           message: `EXACT DUPLICATE: A model with identical details already exists (Name: ${
             model.modelName
-          }, Company: ${model.company}, Colour: ${model.colour}, Date: ${
-            model.purchaseDate
-              ? new Date(model.purchaseDate).toISOString().split("T")[0]
-              : "none"
-          }, Warranty: ${model.purchasedInWarranty})`,
+          }, Company: ${model.company}, Warranty: ${model.purchasedInWarranty})`,
         });
       } else {
         console.log(" Not a duplicate - at least one field differs");
@@ -143,6 +104,10 @@ exports.createModel = asyncHandler(async (req, res) => {
     colour,
     quantity,
     purchasePrice,
+    sellingPrice,
+    batteriesPerSet,
+    description,
+    colorQuantities,
     purchasedInWarranty,
     purchaseDate,
   } = req.body;
@@ -171,8 +136,112 @@ exports.createModel = asyncHandler(async (req, res) => {
     return numPrice;
   };
 
+  // Normalize date to start/end of day for duplicate checks
+  const getDayRange = (dateInput) => {
+    if (!dateInput) return null;
+    const toDate = () => {
+      if (typeof dateInput === "string" && dateInput.includes("/")) {
+        // dd/mm/yyyy
+        const [dd, mm, yyyy] = dateInput.split("/");
+        return new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+      }
+      return new Date(dateInput);
+    };
+    const d = toDate();
+    if (Number.isNaN(d.getTime())) return null;
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    return { start, end };
+  };
+
+  // Prevent duplicate color entry with same purchase date (and warranty) for same model/company/color
+  const purchaseDayRange = getDayRange(purchaseDate);
+  if (purchaseDayRange) {
+    const existing = await Model.findOne({
+      isActive: true,
+      modelName: { $regex: new RegExp(`^${modelName.trim()}$`, "i") },
+      company: { $regex: new RegExp(`^${company.trim()}$`, "i") },
+      colour: { $regex: new RegExp(`^${(colour || "").trim()}$`, "i") },
+      purchaseDate: { $gte: purchaseDayRange.start, $lt: purchaseDayRange.end },
+      purchasedInWarranty: !!purchasedInWarranty,
+    });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Duplicate detected: this model, company, color, purchase date, and warranty combination already exists. Please use a different date or update the existing entry.",
+      });
+    }
+  }
+
   // Note: We allow creating models with same details but different purchase dates
   // The frontend will handle preventing exact duplicates (same details + same purchase date)
+
+  // Prepare colorQuantities array
+  const validatedColorQuantities = Array.isArray(colorQuantities) 
+    ? colorQuantities.filter(entry => entry && entry.color && entry.quantity !== undefined)
+      .map(entry => ({
+        color: entry.color.trim(),
+        quantity: parseInt(entry.quantity) || 0,
+      }))
+    : [];
+
+  // Prepare stock entry if colorQuantities are provided
+  const stockEntries = [];
+  console.log("createModel - validatedColorQuantities:", validatedColorQuantities);
+  console.log("createModel - validatedColorQuantities.length:", validatedColorQuantities.length);
+  if (validatedColorQuantities.length > 0) {
+    // Format purchase date as string (dd/mm/yyyy)
+    const formatDateString = (dateInput) => {
+      if (!dateInput) {
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+      
+      let date;
+      if (dateInput instanceof Date) {
+        date = dateInput;
+      } else if (typeof dateInput === "string" && dateInput.includes("/")) {
+        // dd/mm/yyyy format
+        const [dd, mm, yyyy] = dateInput.split("/");
+        date = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+      } else {
+        date = new Date(dateInput);
+      }
+      
+      if (Number.isNaN(date.getTime())) {
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+      
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    };
+
+    const formattedDate = formatDateString(purchaseDate);
+    stockEntries.push({
+      purchaseDate: formattedDate,
+      batteriesPerSet: batteriesPerSet && [5, 6].includes(parseInt(batteriesPerSet)) ? parseInt(batteriesPerSet) : 5,
+      sellingPrice: validatePurchasePrice(sellingPrice),
+      colorQuantities: validatedColorQuantities,
+      description: Array.isArray(description) ? description.filter(tag => tag && tag.trim()).map(tag => tag.trim()) : [],
+      purchasedInWarranty: purchasedInWarranty || false,
+    });
+    console.log("Creating stock entry with:", {
+      purchaseDate: formattedDate,
+      colorQuantities: validatedColorQuantities,
+      batteriesPerSet: batteriesPerSet && [5, 6].includes(parseInt(batteriesPerSet)) ? parseInt(batteriesPerSet) : 5,
+      sellingPrice: validatePurchasePrice(sellingPrice),
+    });
+  }
 
   const model = await Model.create({
     modelName: toTitleCase(modelName.trim()),
@@ -180,9 +249,17 @@ exports.createModel = asyncHandler(async (req, res) => {
     colour: colour ? colour.trim().toLowerCase() : "",
     quantity: parseInt(quantity),
     purchasePrice: validatePurchasePrice(purchasePrice),
+    sellingPrice: validatePurchasePrice(sellingPrice),
+    batteriesPerSet: batteriesPerSet && [5, 6].includes(parseInt(batteriesPerSet)) ? parseInt(batteriesPerSet) : 5,
+    description: Array.isArray(description) ? description.filter(tag => tag && tag.trim()).map(tag => tag.trim()) : [],
+    colorQuantities: validatedColorQuantities,
     purchasedInWarranty: purchasedInWarranty || false,
     purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
+    stockEntries: stockEntries,
   });
+
+  console.log("Model created with stockEntries:", model.stockEntries?.length || 0);
+  console.log("Model stockEntries:", JSON.stringify(model.stockEntries, null, 2));
 
   res.status(201).json({
     success: true,
@@ -291,10 +368,13 @@ exports.getModels = asyncHandler(async (req, res) => {
           modelName: 1,
           company: 1,
           colour: 1,
+          colorQuantities: 1,
           quantity: 1,
           purchasePrice: 1,
+          sellingPrice: 1,
           purchasedInWarranty: 1,
           purchaseDate: 1,
+          stockEntries: 1,
           createdAt: 1,
           updatedAt: 1,
           isActive: 1,
@@ -367,6 +447,70 @@ exports.getModelById = asyncHandler(async (req, res) => {
     });
   }
 
+  // If model has colorQuantities but no stockEntries, create an initial stock entry
+  // This handles both new models and existing models that were created before this feature
+  const hasColorQuantities = model.colorQuantities && Array.isArray(model.colorQuantities) && model.colorQuantities.length > 0;
+  const hasStockEntries = model.stockEntries && Array.isArray(model.stockEntries) && model.stockEntries.length > 0;
+  
+  console.log("getModelById - Checking model:", {
+    id: model._id,
+    hasColorQuantities,
+    colorQuantitiesLength: model.colorQuantities?.length || 0,
+    hasStockEntries,
+    stockEntriesLength: model.stockEntries?.length || 0,
+  });
+
+  if (hasColorQuantities && !hasStockEntries) {
+    const formatDateString = (dateInput) => {
+      if (!dateInput) {
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+      
+      let date;
+      if (dateInput instanceof Date) {
+        date = dateInput;
+      } else if (typeof dateInput === "string" && dateInput.includes("/")) {
+        const [dd, mm, yyyy] = dateInput.split("/");
+        date = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+      } else {
+        date = new Date(dateInput);
+      }
+      
+      if (Number.isNaN(date.getTime())) {
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+      
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    };
+
+    const initialStockEntry = {
+      purchaseDate: formatDateString(model.purchaseDate),
+      batteriesPerSet: model.batteriesPerSet || 5,
+      sellingPrice: model.sellingPrice || 0,
+      colorQuantities: model.colorQuantities,
+      description: model.description || [],
+      purchasedInWarranty: model.purchasedInWarranty || false,
+    };
+
+    model.stockEntries = [initialStockEntry];
+    await model.save();
+    console.log("Created initial stock entry for model:", model._id);
+    console.log("Stock entry created:", JSON.stringify(initialStockEntry, null, 2));
+  }
+
+  console.log("getModelById - Returning model with stockEntries:", model.stockEntries?.length || 0);
+
   res.status(200).json({
     success: true,
     data: model,
@@ -385,6 +529,11 @@ exports.updateModel = asyncHandler(async (req, res) => {
     purchasePrice,
     purchasedInWarranty,
     purchaseDate,
+    stockEntries,
+    batteriesPerSet,
+    sellingPrice,
+    colorQuantities,
+    description,
   } = req.body;
 
   let model = await Model.findById(req.params.id);
@@ -428,6 +577,82 @@ exports.updateModel = asyncHandler(async (req, res) => {
     updateData.purchasedInWarranty = Boolean(purchasedInWarranty);
   if (purchaseDate !== undefined)
     updateData.purchaseDate = new Date(purchaseDate);
+  if (stockEntries !== undefined) {
+    // Validate stockEntries array
+    if (Array.isArray(stockEntries)) {
+      // Validate each stock entry structure
+      const validatedEntries = stockEntries.map((entry) => {
+      const validated = {
+        purchaseDate: entry.purchaseDate || "",
+        batteriesPerSet: entry.batteriesPerSet === 6 ? 6 : 5,
+        sellingPrice: parseFloat(entry.sellingPrice) || 0,
+        purchasePrice: parseFloat(entry.purchasePrice) || 0,
+        colorQuantities: Array.isArray(entry.colorQuantities)
+          ? entry.colorQuantities
+              .filter((cq) => cq && cq.color && cq.quantity !== undefined)
+              .map((cq) => ({
+                color: cq.color.trim(),
+                quantity: parseInt(cq.quantity) || 0,
+              }))
+          : [],
+        description: Array.isArray(entry.description)
+          ? entry.description.filter((tag) => tag && tag.trim())
+          : [],
+        purchasedInWarranty: Boolean(entry.purchasedInWarranty),
+      };
+        return validated;
+      });
+      updateData.stockEntries = validatedEntries;
+    }
+  }
+  // Only update model-level fields if explicitly provided (not from stockEntries)
+  if (batteriesPerSet !== undefined && stockEntries === undefined) {
+    if (batteriesPerSet === 5 || batteriesPerSet === 6) {
+      updateData.batteriesPerSet = parseInt(batteriesPerSet);
+    }
+  }
+  if (sellingPrice !== undefined && stockEntries === undefined) {
+    const numPrice = parseFloat(sellingPrice);
+    if (!isNaN(numPrice) && numPrice >= 0) {
+      updateData.sellingPrice = numPrice;
+    }
+  }
+  if (colorQuantities !== undefined && stockEntries === undefined) {
+    if (Array.isArray(colorQuantities)) {
+      updateData.colorQuantities = colorQuantities.filter(
+        (entry) => entry && entry.color && entry.quantity !== undefined
+      );
+    }
+  }
+  if (description !== undefined && stockEntries === undefined) {
+    if (Array.isArray(description)) {
+      updateData.description = description.filter((tag) => tag && tag.trim());
+    }
+  }
+
+  const applyToGroup =
+    req.query &&
+    req.query.admin === "true" &&
+    req.query.applyToGroup === "true";
+
+  if (applyToGroup) {
+    const groupUpdateData = {};
+    if (updateData.purchaseDate !== undefined)
+      groupUpdateData.purchaseDate = updateData.purchaseDate;
+    if (updateData.purchasedInWarranty !== undefined)
+      groupUpdateData.purchasedInWarranty = updateData.purchasedInWarranty;
+
+    if (Object.keys(groupUpdateData).length > 0) {
+      await Model.updateMany(
+        {
+          isActive: true,
+          modelName: { $regex: new RegExp(`^${model.modelName}$`, "i") },
+          company: { $regex: new RegExp(`^${model.company}$`, "i") },
+        },
+        { $set: groupUpdateData }
+      );
+    }
+  }
 
   model = await Model.findByIdAndUpdate(req.params.id, updateData, {
     new: true,
@@ -437,6 +662,7 @@ exports.updateModel = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     data: model,
+    appliedToGroup: applyToGroup || false,
   });
 });
 
@@ -490,16 +716,43 @@ exports.checkPurchasePrice = async (req, res) => {
       });
     }
 
+    // Normalize warranty flag from query (string or boolean)
+    const warrantyFlag =
+      purchasedInWarranty === true ||
+      purchasedInWarranty === "true" ||
+      purchasedInWarranty === "1";
+
+    // Parse purchase date safely to avoid timezone drift (use local start/end of day)
+    const parsedDate = (() => {
+      // Accept both yyyy-mm-dd and dd/mm/yyyy
+      if (purchaseDate.includes("/")) {
+        const [dd, mm, yyyy] = purchaseDate.split("/");
+        return new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+      }
+      return new Date(purchaseDate);
+    })();
+
+    const startOfDay = new Date(
+      parsedDate.getFullYear(),
+      parsedDate.getMonth(),
+      parsedDate.getDate()
+    );
+    const endOfDay = new Date(
+      parsedDate.getFullYear(),
+      parsedDate.getMonth(),
+      parsedDate.getDate() + 1
+    );
+
     // Find models with same name, company, purchase date, and warranty status (any color) that have a purchase price
     const existingModels = await Model.find({
       isActive: true,
       modelName: { $regex: new RegExp(`^${modelName.trim()}$`, "i") },
       company: { $regex: new RegExp(`^${company.trim()}$`, "i") },
       purchaseDate: {
-        $gte: new Date(purchaseDate),
-        $lt: new Date(new Date(purchaseDate).getTime() + 24 * 60 * 60 * 1000), // Same day
+        $gte: startOfDay,
+        $lt: endOfDay,
       },
-      purchasedInWarranty: purchasedInWarranty === "true",
+      purchasedInWarranty: warrantyFlag,
       purchasePrice: { $exists: true, $gt: 0 },
     });
 
@@ -650,6 +903,7 @@ exports.checkDuplicateEdit = async (req, res) => {
       purchaseDate,
       purchasedInWarranty,
       excludeId,
+      admin,
     } = req.query;
 
     console.log("=== BACKEND DUPLICATE CHECK EDIT ===");
@@ -661,18 +915,33 @@ exports.checkDuplicateEdit = async (req, res) => {
     console.log("  purchasedInWarranty:", purchasedInWarranty);
     console.log("  excludeId:", excludeId);
 
-    if (
-      !modelName ||
-      !company ||
-      !colour ||
-      !purchaseDate ||
-      purchasedInWarranty === undefined
-    ) {
-      console.log("ERROR: Missing required parameters");
-      return res.status(400).json({
-        success: false,
-        message: "Missing required parameters for duplicate check",
-      });
+    const isAdminEdit = admin === "true";
+
+    if (isAdminEdit) {
+      if (!modelName || !company || purchasedInWarranty === undefined) {
+        console.log(
+          "ERROR: Missing required parameters for admin duplicate check"
+        );
+        return res.status(400).json({
+          success: false,
+          message:
+            "Please provide modelName, company, and purchasedInWarranty for admin duplicate check",
+        });
+      }
+    } else {
+      if (
+        !modelName ||
+        !company ||
+        !colour ||
+        !purchaseDate ||
+        purchasedInWarranty === undefined
+      ) {
+        console.log("ERROR: Missing required parameters");
+        return res.status(400).json({
+          success: false,
+          message: "Missing required parameters for duplicate check",
+        });
+      }
     }
 
     // Build query to find existing model with same details
@@ -696,27 +965,45 @@ exports.checkDuplicateEdit = async (req, res) => {
 
       console.log(`\n--- Checking model ${i + 1}: ${model.modelName} ---`);
 
-      // Normalize and compare each field (same as original checkDuplicateModel)
+      // Normalize and compare
       const nameMatch =
         model.modelName.trim().toUpperCase() === modelName.trim().toUpperCase();
       const companyMatch =
         model.company.trim().toUpperCase() === company.trim().toUpperCase();
-      const colourMatch =
-        (model.colour || "").trim().toLowerCase() ===
-        colour.trim().toLowerCase();
-
-      let dateMatch = false;
-      if (model.purchaseDate && purchaseDate) {
-        const existingDate = new Date(model.purchaseDate)
-          .toISOString()
-          .split("T")[0];
-        const newDate = new Date(purchaseDate).toISOString().split("T")[0];
-        dateMatch = existingDate === newDate;
-      }
-
       const warrantyMatch =
         model.purchasedInWarranty.toString() ===
         (purchasedInWarranty || "false");
+
+      let colourMatch = true;
+      let dateMatch = true;
+
+      if (!isAdminEdit) {
+        colourMatch =
+          (model.colour || "").trim().toLowerCase() ===
+          (colour || "").trim().toLowerCase();
+
+        dateMatch = false;
+        if (model.purchaseDate && purchaseDate) {
+          const existingDate = new Date(model.purchaseDate)
+            .toISOString()
+            .split("T")[0];
+
+          let newDate;
+          if (purchaseDate.includes("/")) {
+            const [day, month, year] = purchaseDate.split("/");
+            newDate = new Date(`${year}-${month}-${day}`)
+              .toISOString()
+              .split("T")[0];
+          } else {
+            newDate = new Date(purchaseDate).toISOString().split("T")[0];
+          }
+
+          dateMatch = existingDate === newDate;
+          console.log(
+            `  Comparing dates: DB="${existingDate}" vs New="${newDate}" (from "${purchaseDate}")`
+          );
+        }
+      }
 
       console.log("Field comparisons:");
       console.log(
@@ -729,16 +1016,21 @@ exports.checkDuplicateEdit = async (req, res) => {
         companyMatch,
         `(DB: "${model.company}" vs New: "${company}")`
       );
-      console.log(
-        "  Colour match:",
-        colourMatch,
-        `(DB: "${model.colour}" vs New: "${colour}")`
-      );
-      console.log(
-        "  Date match:",
-        dateMatch,
-        `(DB: "${model.purchaseDate}" vs New: "${purchaseDate}")`
-      );
+      if (!isAdminEdit) {
+        console.log(
+          "  Colour match:",
+          colourMatch,
+          `(DB: "${model.colour}" vs New: "${colour}")`
+        );
+        console.log(
+          "  Date match:",
+          dateMatch,
+          `(DB: "${model.purchaseDate}" vs New: "${purchaseDate}")`
+        );
+      } else {
+        console.log("  Colour match: (ignored in admin edit)");
+        console.log("  Date match: (ignored in admin edit)");
+      }
       console.log(
         "  Warranty match:",
         warrantyMatch,
@@ -747,17 +1039,25 @@ exports.checkDuplicateEdit = async (req, res) => {
         })`
       );
 
-      // If all fields match, we found a duplicate
-      if (
-        nameMatch &&
-        companyMatch &&
-        colourMatch &&
-        dateMatch &&
-        warrantyMatch
-      ) {
-        console.log("🚨 DUPLICATE FOUND!");
-        existingModel = model;
-        break;
+      // Duplicate criteria
+      if (isAdminEdit) {
+        if (nameMatch && companyMatch && warrantyMatch) {
+          console.log("🚨 DUPLICATE FOUND (admin criteria)!");
+          existingModel = model;
+          break;
+        }
+      } else {
+        if (
+          nameMatch &&
+          companyMatch &&
+          colourMatch &&
+          dateMatch &&
+          warrantyMatch
+        ) {
+          console.log("🚨 DUPLICATE FOUND!");
+          existingModel = model;
+          break;
+        }
       }
     }
 
@@ -765,7 +1065,9 @@ exports.checkDuplicateEdit = async (req, res) => {
       success: true,
       exists: !!existingModel,
       message: existingModel
-        ? "A model with these details already exists"
+        ? isAdminEdit
+          ? "A model with same name, company and warranty status already exists"
+          : "A model with these details already exists"
         : "No duplicate found",
     });
   } catch (error) {

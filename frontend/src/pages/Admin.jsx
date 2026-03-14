@@ -1,5 +1,5 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { formatDate } from "../utils/dateUtils";
 import { useSessionTimeout } from "../hooks/useSessionTimeout";
 import {
@@ -13,19 +13,22 @@ export default function Admin() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [activeSection, setActiveSection] = useState("spares");
+  const [spares, setSpares] = useState([]);
+  const [sparesLoading, setSparesLoading] = useState(false);
+  const [sparesError, setSparesError] = useState("");
+  const [showLowStockModal, setShowLowStockModal] = useState(false);
   const [models, setModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("purchasePrice");
+  const [sortBy, setSortBy] = useState("sellingPrice");
   const [sortOrder, setSortOrder] = useState("asc");
   const [filterCompany, setFilterCompany] = useState("all");
   const [filterStock, setFilterStock] = useState("all");
-  const [filterWarranty, setFilterWarranty] = useState("all");
   const [companies, setCompanies] = useState([]);
 
   // Initialize session timeout for admin
-  useSessionTimeout();
+  const { showAdminLeavePrompt } = useSessionTimeout();
 
   // Handle authentication check in useEffect
   useEffect(() => {
@@ -46,25 +49,14 @@ export default function Admin() {
     }
   }, [searchParams]);
 
-  // Fetch models data
-  useEffect(() => {
-    if (activeSection === "models") {
-      fetchModels();
-    }
-  }, [activeSection]);
-
-  // Check if user is authenticated
-  const isAdminAuth = sessionStorage.getItem("adminAuth");
-  if (!isAdminAuth) {
-    return null;
-  }
-
   const fetchModels = async () => {
     try {
       setModelsLoading(true);
       setModelsError("");
+      // Add cache-busting timestamp so latest model changes always reflect
+      const timestamp = Date.now();
       const response = await fetch(
-        "http://localhost:5000/api/models?limit=1000"
+        `http://localhost:5000/api/models?limit=1000&t=${timestamp}`
       );
       const data = await response.json();
 
@@ -89,6 +81,52 @@ export default function Admin() {
       setModelsLoading(false);
     }
   };
+
+  // Fetch models data
+  useEffect(() => {
+    if (activeSection === "models") {
+      fetchModels();
+    }
+  }, [activeSection]);
+
+  // Fetch spares data for admin spares section
+  const fetchSparesForAdmin = async () => {
+    try {
+      setSparesLoading(true);
+      setSparesError("");
+
+      // Add cache-busting parameter to ensure fresh data
+      const timestamp = Date.now();
+      const response = await fetch(
+        `http://localhost:5000/api/spares?t=${timestamp}`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Error fetching spares");
+      }
+
+      setSpares(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Admin - Error fetching spares:", error);
+      setSparesError(error.message || "Error fetching spares. Please try again.");
+    } finally {
+      setSparesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection === "spares") {
+      fetchSparesForAdmin();
+    }
+  }, [activeSection]);
+
+  // Check if user is authenticated
+  const isAdminAuth = sessionStorage.getItem("adminAuth");
+  if (!isAdminAuth) {
+    return null;
+  }
 
   // Filter and sort models
   const getFilteredAndSortedModels = () => {
@@ -116,25 +154,23 @@ export default function Admin() {
       filtered = filtered.filter((model) => model.quantity === 0);
     }
 
-    // Apply warranty filter
-    if (filterWarranty === "inwarranty") {
-      filtered = filtered.filter((model) => model.purchasedInWarranty === true);
-    } else if (filterWarranty === "nowarranty") {
-      filtered = filtered.filter(
-        (model) => model.purchasedInWarranty === false
-      );
-    }
-    // "all" option shows all warranties (no filtering)
-
     // Apply sorting
     filtered.sort((a, b) => {
       let aValue = a[sortBy];
       let bValue = b[sortBy];
 
       // Handle different data types
-      if (sortBy === "quantity" || sortBy === "purchasePrice") {
-        aValue = aValue || 0;
-        bValue = bValue || 0;
+      if (
+        sortBy === "quantity" ||
+        sortBy === "purchasePrice" ||
+        sortBy === "sellingPrice"
+      ) {
+        aValue = aValue ?? 0;
+        bValue = bValue ?? 0;
+        aValue = typeof aValue === "number" ? aValue : parseFloat(aValue) || 0;
+        bValue = typeof bValue === "number" ? bValue : parseFloat(bValue) || 0;
+        if (sortOrder === "asc") return aValue - bValue;
+        return bValue - aValue;
       } else if (sortBy === "purchasedInWarranty") {
         // For warranty sorting, convert boolean to number for comparison
         aValue = aValue ? 1 : 0;
@@ -154,55 +190,282 @@ export default function Admin() {
     return filtered;
   };
 
-  // Group models by all details except colour (each unique combination gets its own group)
+  // Group models by name and company (matching Models page grouping & quantities)
   const getModelsGroupedByNameAndCompany = () => {
-    const filtered = getFilteredAndSortedModels();
+    const filteredModels = getFilteredAndSortedModels();
     const grouped = {};
 
-    filtered.forEach((model) => {
-      // Create a unique key using all details except colour
-      const key = `${model.modelName}-${model.company}-${model.purchaseDate}-${model.purchasedInWarranty}`;
+    filteredModels.forEach((model) => {
+      const key = `${model.modelName}-${model.company}`;
 
       if (!grouped[key]) {
         grouped[key] = {
           modelName: model.modelName,
           company: model.company,
-          purchaseDate: model.purchaseDate,
-          purchasedInWarranty: model.purchasedInWarranty,
+          // Use earliest purchase date within the group for display
+          purchaseDate: model.purchaseDate || model.createdAt || null,
+          // True if any entry in the group was purchased in warranty
+          purchasedInWarranty: !!model.purchasedInWarranty,
           colours: [],
+          // Map of description label -> { [colour]: quantity }
+          descriptionColorMap: {},
           totalQuantity: 0,
           totalValue: 0,
+          hasMissingPrice: false,
           inWarranty: false,
           models: [],
+          lowestPrice: null,
+          sellingPrice: null,
         };
+      } else {
+        // Keep the earliest purchase date for the group
+        const currentDate = grouped[key].purchaseDate
+          ? new Date(grouped[key].purchaseDate)
+          : null;
+        const modelDate = model.purchaseDate || model.createdAt || null;
+        if (modelDate) {
+          const modelDateObj = new Date(modelDate);
+          if (!currentDate || modelDateObj < currentDate) {
+            grouped[key].purchaseDate = modelDate;
+          }
+        }
+
+        if (model.purchasedInWarranty) {
+          grouped[key].purchasedInWarranty = true;
+        }
       }
 
-      // Add colour if not already present
-      if (!grouped[key].colours.find((c) => c.colour === model.colour)) {
-        grouped[key].colours.push({
-          colour: model.colour,
-          quantity: model.quantity,
-          inWarranty: model.purchasedInWarranty,
-          purchasePrice: model.purchasePrice,
+      // Store selling price from model (first non-null)
+      if (!grouped[key].sellingPrice && model.sellingPrice) {
+        grouped[key].sellingPrice = model.sellingPrice;
+      }
+
+      // Update lowest purchase price (only consider prices > 0)
+      if (model.purchasePrice && model.purchasePrice > 0) {
+        if (
+          grouped[key].lowestPrice === null ||
+          model.purchasePrice < grouped[key].lowestPrice
+        ) {
+          grouped[key].lowestPrice = model.purchasePrice;
+        }
+      }
+
+      // Aggregate colors from stockEntries if available
+      let hasColorsFromStockEntries = false;
+      if (
+        model.stockEntries &&
+        Array.isArray(model.stockEntries) &&
+        model.stockEntries.length > 0
+      ) {
+        model.stockEntries.forEach((entry) => {
+          if (
+            entry.colorQuantities &&
+            Array.isArray(entry.colorQuantities) &&
+            entry.colorQuantities.length > 0
+          ) {
+            hasColorsFromStockEntries = true;
+            entry.colorQuantities.forEach((cq) => {
+              if (cq.color && cq.color.trim() !== "") {
+                const existingColor = grouped[key].colours.find(
+                  (c) => c.colour === cq.color
+                );
+                const quantityToAdd = parseInt(cq.quantity) || 0;
+                if (existingColor) {
+                  existingColor.quantity += quantityToAdd;
+                } else {
+                  grouped[key].colours.push({
+                    colour: cq.color,
+                    quantity: quantityToAdd,
+                  });
+                }
+                grouped[key].totalQuantity += quantityToAdd;
+
+                // Also aggregate by combined description tags for this stock entry.
+                // All description tags entered together for this entry are treated as ONE label.
+                const descParts = Array.isArray(entry.description)
+                  ? entry.description
+                  : entry.description
+                  ? [entry.description]
+                  : [];
+                const combinedLabel = descParts
+                  .map((d) => (d || "").toString().trim())
+                  .filter(Boolean)
+                  .join(", ");
+                if (combinedLabel) {
+                  if (!grouped[key].descriptionColorMap[combinedLabel]) {
+                    grouped[key].descriptionColorMap[combinedLabel] = {};
+                  }
+                  const mapForDesc =
+                    grouped[key].descriptionColorMap[combinedLabel];
+                  const colorKey = cq.color;
+                  mapForDesc[colorKey] =
+                    (mapForDesc[colorKey] || 0) + quantityToAdd;
+                }
+              }
+            });
+          }
         });
       }
 
-      grouped[key].totalQuantity += model.quantity;
-      grouped[key].totalValue += (model.purchasePrice || 0) * model.quantity;
+      // Also check model.colorQuantities directly (aggregated from stockEntries)
+      if (
+        model.colorQuantities &&
+        Array.isArray(model.colorQuantities) &&
+        model.colorQuantities.length > 0
+      ) {
+        model.colorQuantities.forEach((cq) => {
+          if (cq.color && cq.color.trim() !== "") {
+            const existingColor = grouped[key].colours.find(
+              (c) => c.colour === cq.color
+            );
+            const quantityToAdd = parseInt(cq.quantity) || 0;
+            if (existingColor) {
+              // Only update if the quantity from colorQuantities is greater (more recent/accurate)
+              if (quantityToAdd > existingColor.quantity) {
+                grouped[key].totalQuantity -= existingColor.quantity;
+                existingColor.quantity = quantityToAdd;
+                grouped[key].totalQuantity += quantityToAdd;
+              }
+            } else {
+              grouped[key].colours.push({
+                colour: cq.color,
+                quantity: quantityToAdd,
+              });
+              grouped[key].totalQuantity += quantityToAdd;
+            }
+
+            // Also aggregate by combined model-level description tags if present
+            const descParts = Array.isArray(model.description)
+              ? model.description
+              : model.description
+              ? [model.description]
+              : [];
+            const combinedLabel = descParts
+              .map((d) => (d || "").toString().trim())
+              .filter(Boolean)
+              .join(", ");
+            if (combinedLabel) {
+              if (!grouped[key].descriptionColorMap[combinedLabel]) {
+                grouped[key].descriptionColorMap[combinedLabel] = {};
+              }
+              const mapForDesc =
+                grouped[key].descriptionColorMap[combinedLabel];
+              const colorKey = cq.color;
+              mapForDesc[colorKey] =
+                (mapForDesc[colorKey] || 0) + quantityToAdd;
+            }
+          }
+        });
+      }
+
+      // Fallback: use old single colour/quantity fields if no colorQuantities found
+      if (
+        !hasColorsFromStockEntries &&
+        (!model.colorQuantities || model.colorQuantities.length === 0) &&
+        model.colour &&
+        model.colour.trim() !== ""
+      ) {
+        const modelQuantity = model.quantity || 0;
+        const existingColor = grouped[key].colours.find(
+          (c) => c.colour === model.colour
+        );
+        if (existingColor) {
+          existingColor.quantity += modelQuantity;
+        } else {
+          grouped[key].colours.push({
+            colour: model.colour,
+            quantity: modelQuantity,
+          });
+        }
+        grouped[key].totalQuantity += modelQuantity;
+
+        // Also aggregate fallback colour by combined model-level description tags if present
+        const descParts = Array.isArray(model.description)
+          ? model.description
+          : model.description
+          ? [model.description]
+          : [];
+        const combinedLabel = descParts
+          .map((d) => (d || "").toString().trim())
+          .filter(Boolean)
+          .join(", ");
+        if (combinedLabel) {
+          if (!grouped[key].descriptionColorMap[combinedLabel]) {
+            grouped[key].descriptionColorMap[combinedLabel] = {};
+          }
+          const mapForDesc =
+            grouped[key].descriptionColorMap[combinedLabel];
+          const colorKey = model.colour;
+          mapForDesc[colorKey] =
+            (mapForDesc[colorKey] || 0) + modelQuantity;
+        }
+      }
+
+      // Inventory value: sum purchasePrice × quantity per stock entry (like Models/AddMoreStock).
+      // Also mark groups that have missing purchase prices.
+      let modelValueFromEntries = 0;
+      let modelHasMissingPrice = false;
+
+      if (
+        model.stockEntries &&
+        Array.isArray(model.stockEntries) &&
+        model.stockEntries.length > 0
+      ) {
+        model.stockEntries.forEach((entry) => {
+          const entryQuantity = Array.isArray(entry.colorQuantities)
+            ? entry.colorQuantities.reduce(
+                (sum, cq) => sum + (parseInt(cq.quantity) || 0),
+                0
+              )
+            : 0;
+
+          if (entryQuantity <= 0) return;
+
+          const entryPurchasePrice = parseFloat(entry.purchasePrice) || 0;
+          if (entryPurchasePrice > 0) {
+            modelValueFromEntries += entryQuantity * entryPurchasePrice;
+          } else {
+            modelHasMissingPrice = true;
+          }
+        });
+      }
+
+      // Fallback for older models without detailed stockEntries: use model-level quantity × purchasePrice
+      if (modelValueFromEntries === 0) {
+        const qty = model.quantity || 0;
+        const purchasePrice = parseFloat(model.purchasePrice) || 0;
+
+        if (qty > 0 && purchasePrice > 0) {
+          modelValueFromEntries += qty * purchasePrice;
+        } else if (qty > 0) {
+          modelHasMissingPrice = true;
+        }
+      }
+
+      grouped[key].totalValue += modelValueFromEntries;
+      if (modelHasMissingPrice) {
+        grouped[key].hasMissingPrice = true;
+      }
       if (model.purchasedInWarranty) grouped[key].inWarranty = true;
       grouped[key].models.push(model);
     });
 
-    // Convert to array and sort by average purchase price in ascending order
+    // Convert to array and sort: by selling price if selected, else by lowest purchase price
     const groupedArray = Object.values(grouped);
-    groupedArray.sort((a, b) => {
-      // Calculate average price for each group
-      const avgPriceA = a.totalValue / a.totalQuantity || 0;
-      const avgPriceB = b.totalValue / b.totalQuantity || 0;
-
-      // Sort in ascending order
-      return avgPriceA - avgPriceB;
-    });
+    if (sortBy === "sellingPrice") {
+      groupedArray.sort((a, b) => {
+        const pa = parseFloat(a.sellingPrice) || 0;
+        const pb = parseFloat(b.sellingPrice) || 0;
+        return sortOrder === "asc" ? pa - pb : pb - pa;
+      });
+    } else {
+      groupedArray.sort((a, b) => {
+        if (a.lowestPrice === null && b.lowestPrice === null) return 0;
+        if (a.lowestPrice === null) return 1;
+        if (b.lowestPrice === null) return -1;
+        return a.lowestPrice - b.lowestPrice;
+      });
+    }
 
     return groupedArray;
   };
@@ -280,6 +543,228 @@ export default function Admin() {
     navigate("/", { replace: true });
   };
 
+  const handleNavigateOutsideAdmin = (targetPath) => {
+    showAdminLeavePrompt(
+      () => {
+        navigate(targetPath);
+      },
+      () => {
+        if (window.sessionTimeout) {
+          clearTimeout(window.sessionTimeout);
+        }
+        if (window.warningTimeout) {
+          clearTimeout(window.warningTimeout);
+        }
+        sessionStorage.removeItem("adminAuth");
+        navigate(targetPath, { replace: true });
+      }
+    );
+  };
+
+  // -------- SPARES HELPERS --------
+
+  // Determine if color tracking is enabled for a spare
+  const isColorTrackingEnabled = (spare) => {
+    if (!spare) return false;
+    if (spare.hasColors === true) return true;
+    if (spare.hasColors === false) return false;
+    return Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0;
+  };
+
+  // Safely parse purchase dates (supports dd/mm/yyyy and ISO strings)
+  const parsePurchaseDate = (dateValue) => {
+    if (!dateValue || typeof dateValue !== "string") return NaN;
+
+    // Handle dd/mm/yyyy format
+    if (dateValue.includes("/")) {
+      const parts = dateValue.split("/");
+      if (parts.length === 3) {
+        const [dayStr, monthStr, yearStr] = parts;
+        const day = parseInt(dayStr, 10);
+        const month = parseInt(monthStr, 10);
+        const year = parseInt(yearStr, 10);
+        if (
+          !Number.isNaN(day) &&
+          !Number.isNaN(month) &&
+          !Number.isNaN(year) &&
+          day > 0 &&
+          month > 0
+        ) {
+          return new Date(year, month - 1, day).getTime();
+        }
+      }
+    }
+
+    // Fallback to Date parsing for other formats (e.g., ISO)
+    const timestamp = new Date(dateValue).getTime();
+    return Number.isNaN(timestamp) ? NaN : timestamp;
+  };
+
+  // Get latest purchase date from both stockEntries and colorQuantity
+  const getLastPurchaseDate = (spare) => {
+    if (!spare) return "N/A";
+
+    const allDates = [];
+
+    if (Array.isArray(spare.stockEntries)) {
+      spare.stockEntries.forEach((entry) => {
+        if (entry && entry.purchaseDate) {
+          allDates.push(entry.purchaseDate);
+        }
+      });
+    }
+
+    if (Array.isArray(spare.colorQuantity)) {
+      spare.colorQuantity.forEach((cq) => {
+        if (cq && cq.purchaseDate) {
+          allDates.push(cq.purchaseDate);
+        }
+      });
+    }
+
+    if (allDates.length === 0) return "N/A";
+
+    const dated = allDates
+      .map((raw) => ({
+        raw,
+        time: parsePurchaseDate(raw),
+      }))
+      .filter((d) => !Number.isNaN(d.time));
+
+    if (dated.length === 0) return "N/A";
+
+    const latest = dated.reduce((max, curr) =>
+      curr.time > max.time ? curr : max
+    );
+
+    return latest.raw;
+  };
+
+  // Total number of spares
+  const totalSpares = useMemo(() => spares.length, [spares]);
+
+  // Calculate total inventory value for spares: quantity × purchasePrice
+  const totalSparesValue = useMemo(() => {
+    if (!Array.isArray(spares) || spares.length === 0) return 0;
+
+    return spares.reduce((sum, spare) => {
+      // If color tracking is enabled, use colorQuantity purchase prices
+      if (isColorTrackingEnabled(spare) && Array.isArray(spare.colorQuantity)) {
+        const valueFromColors = spare.colorQuantity.reduce((subSum, cq) => {
+          const qty = cq.quantity || 0;
+          const price = cq.purchasePrice || 0;
+          return subSum + qty * price;
+        }, 0);
+        if (valueFromColors > 0) return sum + valueFromColors;
+      }
+
+      // Otherwise, fall back to stockEntries
+      if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
+        const valueFromEntries = spare.stockEntries.reduce((subSum, entry) => {
+          const qty = entry.quantity || 0;
+          const price = entry.purchasePrice || 0;
+          return subSum + qty * price;
+        }, 0);
+        return sum + valueFromEntries;
+      }
+
+      return sum;
+    }, 0);
+  }, [spares]);
+
+  // Compute low-stock info for each spare
+  const lowStockItems = useMemo(() => {
+    if (!Array.isArray(spares) || spares.length === 0) return [];
+
+    const items = [];
+
+    spares.forEach((spare) => {
+      const colorTracking = isColorTrackingEnabled(spare);
+
+      if (colorTracking && Array.isArray(spare.colorQuantity)) {
+        // Find colors that are below their individual min stock levels
+        const lowColors = spare.colorQuantity.filter((cq) => {
+          const qty = cq.quantity || 0;
+          const minLevel = cq.minStockLevel || 0;
+          return qty < minLevel;
+        });
+
+        if (lowColors.length === 0) return;
+
+        const currentQty = lowColors.reduce(
+          (total, cq) => total + (cq.quantity || 0),
+          0
+        );
+
+        const colorDisplay = lowColors
+          .map(
+            (cq) =>
+              `${cq.color || "N/A"} (${cq.quantity || 0}/${cq.minStockLevel || 0})`
+          )
+          .join(", ");
+
+        const minStockDisplay = lowColors
+          .map((cq) => cq.minStockLevel || 0)
+          .join(", ");
+
+        items.push({
+          id: spare._id,
+          name: spare.name,
+          supplierName: spare.supplierName || "N/A",
+          models:
+            Array.isArray(spare.models) && spare.models.length > 0
+              ? spare.models.join(", ")
+              : "N/A",
+          colorDisplay,
+          currentQuantity: currentQty,
+          minStockDisplay,
+          sellingPrice: spare.sellingPrice || 0,
+          status: "Low Stock (Colors)",
+          lastPurchaseDate: getLastPurchaseDate(spare),
+        });
+      } else {
+        // Non-color-tracked spare: compare total quantity to global minStockLevel
+        let totalQuantity = 0;
+
+        if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
+          totalQuantity = spare.stockEntries.reduce(
+            (sum, entry) => sum + (entry.quantity || 0),
+            0
+          );
+        } else if (typeof spare.quantity === "number") {
+          totalQuantity = spare.quantity;
+        }
+
+        const minLevel = spare.minStockLevel || 0;
+
+        if (totalQuantity < minLevel && minLevel > 0) {
+          items.push({
+            id: spare._id,
+            name: spare.name,
+            supplierName: spare.supplierName || "N/A",
+            models:
+              Array.isArray(spare.models) && spare.models.length > 0
+                ? spare.models.join(", ")
+                : "N/A",
+            colorDisplay: "N/A",
+            currentQuantity: totalQuantity,
+            minStockDisplay: String(minLevel),
+            sellingPrice: spare.sellingPrice || 0,
+            status: "Low Stock",
+            lastPurchaseDate: getLastPurchaseDate(spare),
+          });
+        }
+      }
+    });
+
+    return items;
+  }, [spares]);
+
+  const lowStockCount = useMemo(
+    () => lowStockItems.length,
+    [lowStockItems]
+  );
+
   const sidebarItems = [
     { id: "spares", name: "Spares", icon: FaTools, color: "#007bff" },
     {
@@ -298,43 +783,318 @@ export default function Admin() {
         return (
           <div className="admin-content">
             <h2>Spares Management</h2>
+
+            {/* Summary cards */}
             <div className="admin-cards">
               <div className="admin-card">
                 <h3>Total Spares</h3>
-                <p className="card-number">0</p>
-                <small>Manage spare parts inventory</small>
+                <p className="card-number">
+                  {sparesLoading ? "…" : totalSpares}
+                </p>
+                <small>Unique spare items</small>
               </div>
               <div className="admin-card">
                 <h3>Low Stock</h3>
-                <p className="card-number">0</p>
-                <small>Items below minimum stock</small>
+                <p
+                  className="card-number"
+                  style={{ color: lowStockCount > 0 ? "#dc2626" : "#16a34a" }}
+                >
+                  {sparesLoading ? "…" : lowStockCount}
+                </p>
+                <small>Items below minimum stock level</small>
               </div>
               <div className="admin-card">
-                <h3>Recent Additions</h3>
-                <p className="card-number">0</p>
-                <small>Added this week</small>
+                <h3>Total Value</h3>
+                <p className="card-number">
+                  ₹{sparesLoading ? "…" : totalSparesValue.toLocaleString()}
+                </p>
+                <small>Quantity × purchase price</small>
               </div>
             </div>
-            <div className="admin-actions">
+
+            {/* Actions */}
+            <div className="admin-actions" style={{ marginBottom: "1.5rem" }}>
               <button
                 className="btn btn-primary"
-                onClick={() => navigate("/spares")}
+                onClick={() => handleNavigateOutsideAdmin("/spares/add")}
               >
                 Add New Spare
               </button>
               <button
                 className="btn btn-secondary"
-                onClick={() => navigate("/spares")}
+                onClick={() => handleNavigateOutsideAdmin("/spares/all")}
               >
                 View All Spares
               </button>
               <button
                 className="btn btn-info"
-                onClick={() => navigate("/spares")}
+                onClick={() => setShowLowStockModal(true)}
+                disabled={sparesLoading}
               >
-                Stock Report
+                Low Stock Report
               </button>
             </div>
+
+            {/* Error / loading state */}
+            {sparesLoading && (
+              <div
+                style={{
+                  padding: "1rem 0",
+                  color: "#6b7280",
+                  fontSize: "0.9rem",
+                }}
+              >
+                Loading spares data…
+              </div>
+            )}
+            {sparesError && (
+              <div
+                style={{
+                  padding: "0.75rem 1rem",
+                  marginBottom: "1rem",
+                  borderRadius: "0.375rem",
+                  backgroundColor: "#fef2f2",
+                  color: "#b91c1c",
+                  fontSize: "0.875rem",
+                }}
+              >
+                {sparesError}
+                <button
+                  className="btn btn-primary"
+                  style={{ marginLeft: "0.75rem", padding: "0.25rem 0.75rem" }}
+                  onClick={fetchSparesForAdmin}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {/* Low Stock Report Modal */}
+            {showLowStockModal && (
+              <div
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  backgroundColor: "rgba(15, 23, 42, 0.5)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 50,
+                }}
+                onClick={() => setShowLowStockModal(false)}
+              >
+                <div
+                  style={{
+                    backgroundColor: "white",
+                    borderRadius: "0.75rem",
+                    maxWidth: "1100px",
+                    width: "95%",
+                    maxHeight: "80vh",
+                    display: "flex",
+                    flexDirection: "column",
+                    boxShadow:
+                      "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div
+                    style={{
+                      padding: "1rem 1.5rem",
+                      borderBottom: "1px solid #e5e7eb",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div>
+                      <h3
+                        style={{
+                          margin: 0,
+                          fontSize: "1.125rem",
+                          fontWeight: 600,
+                          color: "#111827",
+                        }}
+                      >
+                        Low Stock Report
+                      </h3>
+                      <p
+                        style={{
+                          margin: "0.25rem 0 0 0",
+                          fontSize: "0.875rem",
+                          color: "#6b7280",
+                        }}
+                      >
+                        Showing spares where quantity is below minimum stock
+                        level.
+                      </p>
+                    </div>
+                    <button
+                      className="btn"
+                      style={{
+                        backgroundColor: "#ef4444",
+                        color: "white",
+                        padding: "0.25rem 0.75rem",
+                        fontSize: "0.875rem",
+                      }}
+                      onClick={() => setShowLowStockModal(false)}
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <div style={{ padding: "1rem 1.5rem", overflow: "auto" }}>
+                    {lowStockItems.length === 0 ? (
+                      <div
+                        style={{
+                          padding: "2rem",
+                          textAlign: "center",
+                          color: "#6b7280",
+                          fontSize: "0.95rem",
+                        }}
+                      >
+                        No items are currently below their minimum stock level.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: "auto" }}>
+                        <table
+                          style={{
+                            width: "100%",
+                            borderCollapse: "collapse",
+                            fontSize: "0.85rem",
+                          }}
+                        >
+                          <thead>
+                            <tr
+                              style={{
+                                backgroundColor: "#f9fafb",
+                                borderBottom: "1px solid #e5e7eb",
+                              }}
+                            >
+                              {[
+                                "Spare Name",
+                                "Supplier",
+                                "Models",
+                                "Color (Low Stock)",
+                                "Current Quantity",
+                                "Min Stock Level",
+                                "Selling Price",
+                                "Last Purchase Date",
+                                "Status",
+                              ].map((header) => (
+                                <th
+                                  key={header}
+                                  style={{
+                                    padding: "0.75rem 0.75rem",
+                                    textAlign: "left",
+                                    fontWeight: 600,
+                                    color: "#374151",
+                                    fontSize: "0.75rem",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.05em",
+                                    borderRight: "1px solid #e5e7eb",
+                                  }}
+                                >
+                                  {header}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {lowStockItems.map((item) => (
+                              <tr
+                                key={item.id}
+                                style={{
+                                  borderBottom: "1px solid #f3f4f6",
+                                  backgroundColor: "white",
+                                }}
+                              >
+                                <td
+                                  style={{
+                                    padding: "0.75rem",
+                                    fontWeight: 600,
+                                    color: "#111827",
+                                  }}
+                                >
+                                  {item.name}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "0.75rem",
+                                    color: "#4b5563",
+                                  }}
+                                >
+                                  {item.supplierName}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "0.75rem",
+                                    color: "#4b5563",
+                                  }}
+                                >
+                                  {item.models}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "0.75rem",
+                                    color: "#b91c1c",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  {item.colorDisplay}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "0.75rem",
+                                    color: "#b91c1c",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {item.currentQuantity}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "0.75rem",
+                                    color: "#4b5563",
+                                  }}
+                                >
+                                  {item.minStockDisplay}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "0.75rem",
+                                    color: "#111827",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  ₹{item.sellingPrice.toFixed(2)}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "0.75rem",
+                                    color: "#4b5563",
+                                  }}
+                                >
+                                  {item.lastPurchaseDate}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "0.75rem",
+                                    color: "#b91c1c",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {item.status}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       case "batteries":
@@ -361,19 +1121,19 @@ export default function Admin() {
             <div className="admin-actions">
               <button
                 className="btn btn-primary"
-                onClick={() => navigate("/batteries")}
+                onClick={() => handleNavigateOutsideAdmin("/batteries")}
               >
                 Add New Battery
               </button>
               <button
                 className="btn btn-secondary"
-                onClick={() => navigate("/batteries")}
+                onClick={() => handleNavigateOutsideAdmin("/batteries")}
               >
                 View All Batteries
               </button>
               <button
                 className="btn btn-info"
-                onClick={() => navigate("/batteries")}
+                onClick={() => handleNavigateOutsideAdmin("/batteries")}
               >
                 Warranty Report
               </button>
@@ -383,6 +1143,13 @@ export default function Admin() {
       case "models": {
         console.log("Rendering models section, models data:", models);
         const groupedModels = getModelsGroupedByNameAndCompany();
+        const modelsTotalValue = groupedModels.reduce(
+          (acc, group) => acc + (group.totalValue || 0),
+          0
+        );
+        const hasMissingPrice = groupedModels.some(
+          (group) => group.hasMissingPrice
+        );
 
         return (
           <div className="admin-content">
@@ -390,66 +1157,29 @@ export default function Admin() {
             <div className="admin-cards">
               <div className="admin-card">
                 <h3>Total Models</h3>
-                <p className="card-number">
-                  {
-                    new Set(
-                      models.map(
-                        (model) =>
-                          `${model.modelName || ""}-${model.company || ""}`
-                      )
-                    ).size
-                  }
-                </p>
+                <p className="card-number">{groupedModels.length}</p>
                 <small>All vehicle models</small>
               </div>
               <div className="admin-card">
                 <h3>Total Quantity</h3>
                 <p className="card-number">
-                  {models.reduce((sum, m) => sum + m.quantity, 0)}
+                  {groupedModels.reduce(
+                    (sum, group) => sum + (group.totalQuantity || 0),
+                    0
+                  )}
                 </p>
                 <small>All vehicles in stock</small>
               </div>
               <div className="admin-card">
-                <h3>In Warranty</h3>
-                <p className="card-number">
-                  {
-                    new Set(
-                      models
-                        .filter((m) => m.purchasedInWarranty)
-                        .map(
-                          (model) =>
-                            `${model.modelName || ""}-${model.company || ""}`
-                        )
-                    ).size
-                  }
-                </p>
-                <small>Models with warranty coverage</small>
-              </div>
-              <div className="admin-card">
-                <h3>No Warranty</h3>
-                <p className="card-number">
-                  {
-                    new Set(
-                      models
-                        .filter((m) => !m.purchasedInWarranty)
-                        .map(
-                          (model) =>
-                            `${model.modelName || ""}-${model.company || ""}`
-                        )
-                    ).size
-                  }
-                </p>
-                <small>Models without warranty coverage</small>
-              </div>
-              <div className="admin-card">
                 <h3>Total Value</h3>
                 <p className="card-number">
-                  ₹
-                  {models
-                    .reduce((sum, m) => sum + m.purchasePrice * m.quantity, 0)
-                    .toLocaleString()}
+                  ₹{modelsTotalValue.toLocaleString("en-IN")}
                 </p>
-                <small>Inventory value</small>
+                <small>
+                  {hasMissingPrice
+                    ? "⚠️ Some stock entries are missing purchase price. Enter prices for best accuracy."
+                    : "Inventory value (all stock entries up to date)."}
+                </small>
               </div>
             </div>
 
@@ -564,35 +1294,6 @@ export default function Admin() {
                   </select>
                 </div>
 
-                {/* Warranty Filter */}
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      marginBottom: "0.5rem",
-                      fontWeight: "500",
-                      color: "#495057",
-                    }}
-                  >
-                    Warranty Status:
-                  </label>
-                  <select
-                    value={filterWarranty}
-                    onChange={(e) => setFilterWarranty(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem",
-                      border: "1px solid #ced4da",
-                      borderRadius: "4px",
-                      fontSize: "0.9rem",
-                    }}
-                  >
-                    <option value="all">All Warranty</option>
-                    <option value="inwarranty">In Warranty</option>
-                    <option value="nowarranty">No Warranty</option>
-                  </select>
-                </div>
-
                 {/* Sort Options */}
                 <div>
                   <label
@@ -620,25 +1321,11 @@ export default function Admin() {
                       fontSize: "0.9rem",
                     }}
                   >
-                    <option value="modelName-asc">Name (A-Z)</option>
-                    <option value="modelName-desc">Name (Z-A)</option>
-                    <option value="company-asc">Company (A-Z)</option>
-                    <option value="company-desc">Company (Z-A)</option>
-                    <option value="quantity-asc">Quantity (Low to High)</option>
-                    <option value="quantity-desc">
-                      Quantity (High to Low)
-                    </option>
-                    <option value="purchasePrice-asc">
+                    <option value="sellingPrice-asc">
                       Price (Low to High)
                     </option>
-                    <option value="purchasePrice-desc">
+                    <option value="sellingPrice-desc">
                       Price (High to Low)
-                    </option>
-                    <option value="purchasedInWarranty-asc">
-                      Warranty (No → Yes)
-                    </option>
-                    <option value="purchasedInWarranty-desc">
-                      Warranty (Yes → No)
                     </option>
                   </select>
                 </div>
@@ -660,12 +1347,6 @@ export default function Admin() {
                   {filterStock !== "all" &&
                     ` (${
                       filterStock === "instock" ? "in stock" : "out of stock"
-                    })`}
-                  {filterWarranty !== "all" &&
-                    ` (${
-                      filterWarranty === "inwarranty"
-                        ? "in warranty"
-                        : "no warranty"
                     })`}
                 </span>
               </div>
@@ -852,9 +1533,8 @@ export default function Admin() {
                               cursor: "pointer",
                               transition: "background-color 0.2s",
                               borderRight: "1px solid #e5e7eb",
-                              width: "10%",
                             }}
-                            onClick={() => handleSort("purchasePrice")}
+                            onClick={() => handleSort("sellingPrice")}
                             onMouseEnter={(e) =>
                               (e.target.style.backgroundColor = "#f3f4f6")
                             }
@@ -862,38 +1542,11 @@ export default function Admin() {
                               (e.target.style.backgroundColor = "#f9fafb")
                             }
                           >
-                            Unit Price{" "}
-                            {sortBy === "purchasePrice" &&
+                            Selling Price{" "}
+                            {sortBy === "sellingPrice" &&
                               (sortOrder === "asc" ? "↑" : "↓")}
                           </th>
-                          <th
-                            style={{
-                              padding: "1rem 1.5rem",
-                              textAlign: "left",
-                              fontWeight: "600",
-                              color: "#374151",
-                              fontSize: "0.75rem",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.05em",
-                              borderRight: "1px solid #e5e7eb",
-                            }}
-                          >
-                            Total Value
-                          </th>
-                          <th
-                            style={{
-                              padding: "1rem 1.5rem",
-                              textAlign: "left",
-                              fontWeight: "600",
-                              color: "#374151",
-                              fontSize: "0.75rem",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.05em",
-                              borderRight: "1px solid #e5e7eb",
-                            }}
-                          >
-                            Warranty
-                          </th>
+                          {/* Unit Price, Total Value, and Warranty columns removed as requested */}
                           <th
                             style={{
                               padding: "1rem 1.5rem",
@@ -928,7 +1581,7 @@ export default function Admin() {
                         {groupedModels.length === 0 ? (
                           <tr>
                             <td
-                              colSpan="9"
+                              colSpan="7"
                               style={{
                                 padding: "4rem 2rem",
                                 textAlign: "center",
@@ -1001,42 +1654,7 @@ export default function Admin() {
                                   borderRight: "1px solid #e5e7eb",
                                 }}
                               >
-                                <div>
-                                  <div>{group.modelName || "N/A"}</div>
-                                  <div
-                                    style={{
-                                      fontSize: "0.75rem",
-                                      fontWeight: "400",
-                                      color: "#6b7280",
-                                      marginTop: "0.25rem",
-                                    }}
-                                  >
-                                    {group.purchaseDate &&
-                                      formatDate(group.purchaseDate)}
-                                    {group.purchasedInWarranty !==
-                                      undefined && (
-                                      <span
-                                        style={{
-                                          marginLeft: "0.5rem",
-                                          padding: "0.125rem 0.375rem",
-                                          borderRadius: "0.25rem",
-                                          fontSize: "0.7rem",
-                                          backgroundColor:
-                                            group.purchasedInWarranty
-                                              ? "#dcfce7"
-                                              : "#fef2f2",
-                                          color: group.purchasedInWarranty
-                                            ? "#166534"
-                                            : "#991b1b",
-                                        }}
-                                      >
-                                        {group.purchasedInWarranty
-                                          ? "In Warranty"
-                                          : "No Warranty"}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
+                                <div>{group.modelName || "N/A"}</div>
                               </td>
                               <td
                                 style={{
@@ -1059,106 +1677,248 @@ export default function Admin() {
                                   style={{
                                     display: "flex",
                                     flexDirection: "column",
-                                    gap: "0.3rem",
-                                    alignItems: "center",
+                                    gap: "0.35rem",
+                                    alignItems: "flex-start",
                                     lineHeight: "1.2",
                                   }}
                                 >
-                                  {group.colours.map(
-                                    (colourItem, colourIndex) => (
-                                      <div
-                                        key={colourIndex}
-                                        style={{
-                                          display: "flex",
-                                          alignItems: "center",
-                                          gap: "0.2rem",
-                                          backgroundColor: "#f8fafc",
-                                          padding: "0.3rem 0.4rem",
-                                          borderRadius: "0.3rem",
-                                          border: "1px solid #e2e8f0",
-                                          transition: "all 0.15s",
-                                          cursor: "default",
-                                          fontSize: "0.8rem",
-                                          lineHeight: "1",
-                                          minWidth: "40px",
-                                          justifyContent: "center",
-                                        }}
-                                        title={`${
-                                          colourItem.colour || "N/A"
-                                        }: ${colourItem.quantity} units`}
-                                      >
-                                        {colourItem.colour?.toLowerCase() ===
-                                        "white-black" ? (
-                                          <div
-                                            style={{
-                                              width: "16px",
-                                              height: "16px",
-                                              borderRadius: "50%",
-                                              border: "1px solid #cbd5e1",
-                                              boxShadow:
-                                                "0 1px 2px rgba(0,0,0,0.1)",
-                                              flexShrink: 0,
-                                              position: "relative",
-                                              overflow: "hidden",
-                                            }}
-                                          >
-                                            <div
-                                              style={{
-                                                position: "absolute",
-                                                left: 0,
-                                                top: 0,
-                                                width: "50%",
-                                                height: "100%",
-                                                backgroundColor: "#FFFFFF",
-                                              }}
-                                            />
-                                            <div
-                                              style={{
-                                                position: "absolute",
-                                                right: 0,
-                                                top: 0,
-                                                width: "50%",
-                                                height: "100%",
-                                                backgroundColor: "#000000",
-                                              }}
-                                            />
-                                          </div>
-                                        ) : (
-                                          <div
-                                            style={{
-                                              width: "16px",
-                                              height: "16px",
-                                              borderRadius: "50%",
-                                              backgroundColor: getColourDisplay(
-                                                colourItem.colour
-                                              ),
-                                              border:
-                                                colourItem.colour?.toLowerCase() ===
-                                                "white"
-                                                  ? "1px solid #cbd5e1"
-                                                  : "none",
-                                              boxShadow:
-                                                "0 1px 2px rgba(0,0,0,0.1)",
-                                              flexShrink: 0,
-                                            }}
-                                          />
-                                        )}
-                                        <span
+                                  {group.descriptionColorMap &&
+                                  Object.keys(group.descriptionColorMap)
+                                    .length > 0
+                                    ? // Show colours grouped by description tags
+                                      Object.entries(
+                                        group.descriptionColorMap
+                                      ).map(([descLabel, coloursByDesc]) => (
+                                        <div
+                                          key={descLabel}
                                           style={{
-                                            fontSize: "0.75rem",
-                                            color: "#475569",
-                                            fontWeight: "500",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "0.4rem",
+                                            flexWrap: "wrap",
+                                            width: "100%",
                                           }}
                                         >
-                                          {colourItem.quantity}
-                                        </span>
-                                      </div>
-                                    )
-                                  )}
+                                          <span
+                                            style={{
+                                              fontSize: "0.75rem",
+                                              fontWeight: 600,
+                                              color: "#374151",
+                                              whiteSpace: "nowrap",
+                                            }}
+                                          >
+                                            {descLabel} -
+                                          </span>
+                                          <div
+                                            style={{
+                                              display: "flex",
+                                              flexWrap: "wrap",
+                                              gap: "0.25rem",
+                                            }}
+                                          >
+                                            {Object.entries(
+                                              coloursByDesc
+                                            ).map(
+                                              (
+                                                [colourName, qty],
+                                                colourIndex
+                                              ) => (
+                                                <div
+                                                  key={`${descLabel}-${colourName}-${colourIndex}`}
+                                                  style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "0.2rem",
+                                                    backgroundColor: "#f8fafc",
+                                                    padding: "0.25rem 0.35rem",
+                                                    borderRadius: "999px",
+                                                    border:
+                                                      "1px solid #e2e8f0",
+                                                    fontSize: "0.75rem",
+                                                    lineHeight: "1",
+                                                  }}
+                                                  title={`${colourName || "N/A"}: ${
+                                                    qty || 0
+                                                  } units`}
+                                                >
+                                                  {colourName
+                                                    ?.toLowerCase() ===
+                                                  "white-black" ? (
+                                                    <div
+                                                      style={{
+                                                        width: "14px",
+                                                        height: "14px",
+                                                        borderRadius: "50%",
+                                                        border:
+                                                          "1px solid #cbd5e1",
+                                                        boxShadow:
+                                                          "0 1px 2px rgba(0,0,0,0.1)",
+                                                        flexShrink: 0,
+                                                        position: "relative",
+                                                        overflow: "hidden",
+                                                      }}
+                                                    >
+                                                      <div
+                                                        style={{
+                                                          position: "absolute",
+                                                          left: 0,
+                                                          top: 0,
+                                                          width: "50%",
+                                                          height: "100%",
+                                                          backgroundColor:
+                                                            "#FFFFFF",
+                                                        }}
+                                                      />
+                                                      <div
+                                                        style={{
+                                                          position: "absolute",
+                                                          right: 0,
+                                                          top: 0,
+                                                          width: "50%",
+                                                          height: "100%",
+                                                          backgroundColor:
+                                                            "#000000",
+                                                        }}
+                                                      />
+                                                    </div>
+                                                  ) : (
+                                                    <div
+                                                      style={{
+                                                        width: "14px",
+                                                        height: "14px",
+                                                        borderRadius: "50%",
+                                                        backgroundColor:
+                                                          getColourDisplay(
+                                                            colourName
+                                                          ),
+                                                        border:
+                                                          colourName
+                                                            ?.toLowerCase() ===
+                                                          "white"
+                                                            ? "1px solid #cbd5e1"
+                                                            : "none",
+                                                        boxShadow:
+                                                          "0 1px 2px rgba(0,0,0,0.1)",
+                                                        flexShrink: 0,
+                                                      }}
+                                                    />
+                                                  )}
+                                                  <span
+                                                    style={{
+                                                      fontSize: "0.75rem",
+                                                      color: "#475569",
+                                                      fontWeight: "500",
+                                                    }}
+                                                  >
+                                                    {qty}
+                                                  </span>
+                                                </div>
+                                              )
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))
+                                    : // Fallback: simple colour list when no descriptions available
+                                      group.colours.map(
+                                        (colourItem, colourIndex) => (
+                                          <div
+                                            key={colourIndex}
+                                            style={{
+                                              display: "flex",
+                                              alignItems: "center",
+                                              gap: "0.2rem",
+                                              backgroundColor: "#f8fafc",
+                                              padding: "0.3rem 0.4rem",
+                                              borderRadius: "0.3rem",
+                                              border: "1px solid #e2e8f0",
+                                              transition: "all 0.15s",
+                                              cursor: "default",
+                                              fontSize: "0.8rem",
+                                              lineHeight: "1",
+                                              minWidth: "40px",
+                                              justifyContent: "center",
+                                            }}
+                                            title={`${
+                                              colourItem.colour || "N/A"
+                                            }: ${colourItem.quantity} units`}
+                                          >
+                                            {colourItem.colour
+                                              ?.toLowerCase() ===
+                                            "white-black" ? (
+                                              <div
+                                                style={{
+                                                  width: "16px",
+                                                  height: "16px",
+                                                  borderRadius: "50%",
+                                                  border:
+                                                    "1px solid #cbd5e1",
+                                                  boxShadow:
+                                                    "0 1px 2px rgba(0,0,0,0.1)",
+                                                  flexShrink: 0,
+                                                  position: "relative",
+                                                  overflow: "hidden",
+                                                }}
+                                              >
+                                                <div
+                                                  style={{
+                                                    position: "absolute",
+                                                    left: 0,
+                                                    top: 0,
+                                                    width: "50%",
+                                                    height: "100%",
+                                                    backgroundColor:
+                                                      "#FFFFFF",
+                                                  }}
+                                                />
+                                                <div
+                                                  style={{
+                                                    position: "absolute",
+                                                    right: 0,
+                                                    top: 0,
+                                                    width: "50%",
+                                                    height: "100%",
+                                                    backgroundColor:
+                                                      "#000000",
+                                                  }}
+                                                />
+                                              </div>
+                                            ) : (
+                                              <div
+                                                style={{
+                                                  width: "16px",
+                                                  height: "16px",
+                                                  borderRadius: "50%",
+                                                  backgroundColor:
+                                                    getColourDisplay(
+                                                      colourItem.colour
+                                                    ),
+                                                  border:
+                                                    colourItem.colour?.toLowerCase() ===
+                                                    "white"
+                                                      ? "1px solid #cbd5e1"
+                                                      : "none",
+                                                  boxShadow:
+                                                    "0 1px 2px rgba(0,0,0,0.1)",
+                                                  flexShrink: 0,
+                                                }}
+                                              />
+                                            )}
+                                            <span
+                                              style={{
+                                                fontSize: "0.75rem",
+                                                color: "#475569",
+                                                fontWeight: "500",
+                                              }}
+                                            >
+                                              {colourItem.quantity}
+                                            </span>
+                                          </div>
+                                        )
+                                      )}
                                   <button
                                     onClick={() => {
                                       if (group.models.length > 0) {
-                                        navigate(
+                                        handleNavigateOutsideAdmin(
                                           `/models/add?modelId=${group.models[0]._id}&admin=true`
                                         );
                                       }
@@ -1212,263 +1972,18 @@ export default function Admin() {
                                   padding: "1.25rem 1.5rem",
                                   verticalAlign: "middle",
                                   borderRight: "1px solid #e5e7eb",
-                                  borderLeft: "1px solid #e5e7eb",
+                                  color: "#374151",
                                 }}
                               >
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: "0.75rem",
-                                  }}
-                                >
-                                  {group.models.length > 0 &&
-                                  group.models[0].purchasePrice > 0 ? (
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        alignItems: "baseline",
-                                        gap: "0.5rem",
-                                      }}
-                                    >
-                                      <span
-                                        style={{
-                                          fontWeight: "600",
-                                          color: "#111827",
-                                          fontSize: "0.9375rem",
-                                        }}
-                                      >
-                                        ₹
-                                        {group.models[0].purchasePrice.toLocaleString()}
-                                      </span>
-                                      <span
-                                        style={{
-                                          fontSize: "0.75rem",
-                                          color: "#6b7280",
-                                        }}
-                                      >
-                                        per unit
-                                      </span>
-                                    </div>
-                                  ) : null}
-                                  {group.models.length > 0 &&
-                                  group.models[0].purchasePrice > 0 ? (
-                                    <button
-                                      onClick={async () => {
-                                        const newPrice = prompt(
-                                          `Update purchase price for all ${group.modelName} models in ${group.company}:`,
-                                          group.models[0].purchasePrice
-                                        );
-                                        if (newPrice === null) return; // User cancelled
-
-                                        const numPrice = parseFloat(newPrice);
-                                        if (isNaN(numPrice)) {
-                                          alert(
-                                            "Please enter a valid number for the price."
-                                          );
-                                          return;
-                                        }
-
-                                        if (numPrice < 0) {
-                                          alert(
-                                            "Price cannot be negative. Please enter a valid price (0 or greater)."
-                                          );
-                                          return;
-                                        }
-
-                                        let successCount = 0;
-                                        for (const model of group.models) {
-                                          const success =
-                                            await updateModelPrice(
-                                              model._id,
-                                              numPrice.toString()
-                                            );
-                                          if (success) successCount++;
-                                        }
-                                        if (
-                                          successCount === group.models.length
-                                        ) {
-                                          alert(
-                                            `Price updated to ₹${numPrice.toLocaleString()} for ${successCount} models`
-                                          );
-                                        } else {
-                                          alert(
-                                            `Price updated for ${successCount} of ${group.models.length} models`
-                                          );
-                                        }
-                                      }}
-                                      style={{
-                                        padding: "0.375rem 0.75rem",
-                                        fontSize: "0.75rem",
-                                        backgroundColor: "#f59e0b",
-                                        color: "white",
-                                        border: "none",
-                                        borderRadius: "0.375rem",
-                                        cursor: "pointer",
-                                        fontWeight: "500",
-                                        transition: "all 0.15s",
-                                        boxShadow:
-                                          "0 1px 2px rgba(245, 158, 11, 0.2)",
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.target.style.backgroundColor =
-                                          "#d97706";
-                                        e.target.style.transform =
-                                          "translateY(-1px)";
-                                        e.target.style.boxShadow =
-                                          "0 4px 6px rgba(245, 158, 11, 0.3)";
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.target.style.backgroundColor =
-                                          "#f59e0b";
-                                        e.target.style.transform =
-                                          "translateY(0)";
-                                        e.target.style.boxShadow =
-                                          "0 1px 2px rgba(245, 158, 11, 0.2)";
-                                      }}
-                                      title="Update price for all models in this group"
-                                    >
-                                      ✏️
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={async () => {
-                                        const newPrice = prompt(
-                                          `Enter purchase price for all ${group.modelName} models in ${group.company}:`
-                                        );
-                                        if (newPrice === null) return; // User cancelled
-
-                                        const numPrice = parseFloat(newPrice);
-                                        if (isNaN(numPrice)) {
-                                          alert(
-                                            "Please enter a valid number for the price."
-                                          );
-                                          return;
-                                        }
-
-                                        if (numPrice < 0) {
-                                          alert(
-                                            "Price cannot be negative. Please enter a valid price (0 or greater)."
-                                          );
-                                          return;
-                                        }
-
-                                        let successCount = 0;
-                                        for (const model of group.models) {
-                                          const success =
-                                            await updateModelPrice(
-                                              model._id,
-                                              numPrice.toString()
-                                            );
-                                          if (success) successCount++;
-                                        }
-                                        if (
-                                          successCount === group.models.length
-                                        ) {
-                                          alert(
-                                            `Price set to ₹${numPrice.toLocaleString()} for ${successCount} models`
-                                          );
-                                        } else {
-                                          alert(
-                                            `Price set for ${successCount} of ${group.models.length} models`
-                                          );
-                                        }
-                                      }}
-                                      style={{
-                                        padding: "0.5rem 1rem",
-                                        fontSize: "0.75rem",
-                                        backgroundColor: "#10b981",
-                                        color: "white",
-                                        border: "none",
-                                        borderRadius: "0.375rem",
-                                        cursor: "pointer",
-                                        fontWeight: "500",
-                                        transition: "all 0.15s",
-                                        boxShadow:
-                                          "0 1px 2px rgba(16, 185, 129, 0.2)",
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.target.style.backgroundColor =
-                                          "#059669";
-                                        e.target.style.transform =
-                                          "translateY(-1px)";
-                                        e.target.style.boxShadow =
-                                          "0 4px 6px rgba(16, 185, 129, 0.3)";
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.target.style.backgroundColor =
-                                          "#10b981";
-                                        e.target.style.transform =
-                                          "translateY(0)";
-                                        e.target.style.boxShadow =
-                                          "0 1px 2px rgba(16, 185, 129, 0.2)";
-                                      }}
-                                      title="Add purchase price for all models in this group"
-                                    >
-                                      + Add Price
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                              <td
-                                style={{
-                                  padding: "1.25rem 1.5rem",
-                                  fontWeight: "600",
-                                  color: "#059669",
-                                  verticalAlign: "middle",
-                                  borderRight: "1px solid #e5e7eb",
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "baseline",
-                                    gap: "0.5rem",
-                                  }}
-                                >
-                                  <span style={{ fontSize: "1rem" }}>
-                                    ₹{group.totalValue.toLocaleString()}
-                                  </span>
-                                  <span
-                                    style={{
-                                      fontSize: "0.75rem",
-                                      color: "#6b7280",
-                                    }}
-                                  >
-                                    total
-                                  </span>
-                                </div>
-                              </td>
-                              <td
-                                style={{
-                                  padding: "1.25rem 1.5rem",
-                                  verticalAlign: "middle",
-                                  borderRight: "1px solid #e5e7eb",
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    background: group.inWarranty
-                                      ? "#3b82f6"
-                                      : "#6b7280",
-                                    color: "white",
-                                    padding: "0.25rem 0.6rem",
-                                    borderRadius: "9999px",
-                                    fontSize: "0.7rem",
-                                    fontWeight: "500",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "0.25rem",
-                                  }}
-                                >
-                                  <span style={{ fontSize: "0.7rem" }}>
-                                    {group.inWarranty ? "" : ""}
-                                  </span>
-                                  {group.inWarranty
-                                    ? "In Warranty"
-                                    : "No Warranty"}
-                                </span>
+                                {group.sellingPrice != null &&
+                                group.sellingPrice !== ""
+                                  ? `₹${parseFloat(
+                                      group.sellingPrice
+                                    ).toLocaleString("en-IN", {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}`
+                                  : "—"}
                               </td>
                               <td
                                 style={{
@@ -1516,15 +2031,15 @@ export default function Admin() {
                                 <div
                                   style={{
                                     display: "flex",
-                                    gap: "0.25rem",
-                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                    justifyContent: "center",
                                   }}
                                 >
                                   <button
                                     onClick={() => {
                                       // Navigate to edit page for the first model in this group
                                       if (group.models.length > 0) {
-                                        navigate(
+                                        handleNavigateOutsideAdmin(
                                           `/models/edit/${group.models[0]._id}?admin=true`
                                         );
                                       }
@@ -1718,7 +2233,7 @@ export default function Admin() {
             </button>
             <button
               className="btn btn-back-home"
-              onClick={() => navigate("/")}
+              onClick={() => handleNavigateOutsideAdmin("/")}
               title="Back to Home"
             >
               Home

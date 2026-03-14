@@ -5,12 +5,14 @@ import {
   Navigate,
   useNavigate,
 } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import ModelsSidebar from "../components/ModelsSidebar";
 import AddModel from "./models/AddModel";
 import EditModel from "./models/EditModel";
 import EditColor from "./models/EditColor";
 import AllModels from "./models/AllModels";
+import AddMoreStock from "./models/AddMoreStock";
+import OldScooties from "./models/OldScooties";
 
 const WelcomeMessage = () => (
   <div className="welcome-message">
@@ -27,6 +29,8 @@ const WelcomeMessage = () => (
 export default function Models() {
   const location = useLocation();
   const navigate = useNavigate();
+  const headerHomeRef = useRef(null);
+  const [isHeaderHomeVisible, setIsHeaderHomeVisible] = useState(true);
 
   // Clean up any malformed URLs on mount and route changes
   useEffect(() => {
@@ -46,6 +50,28 @@ export default function Models() {
     }
   }, [location.pathname, navigate]);
 
+  useEffect(() => {
+    const target = headerHomeRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        setIsHeaderHomeVisible(entry.isIntersecting);
+      },
+      {
+        root: null,
+        threshold: 0.1,
+      }
+    );
+
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   // If we're still on a path that needs redirection, show loading
   if (
     location.pathname === "/models" ||
@@ -56,16 +82,25 @@ export default function Models() {
   }
 
   const getPageTitle = () => {
-    if (location.pathname.endsWith("add")) return "Add New Model";
-    if (location.pathname.endsWith("edit")) return "Edit Model";
-    if (location.pathname.includes("edit-color")) return "Add Color Variant";
-    if (location.pathname.endsWith("all")) return "All Models";
+    const path = location.pathname;
+
+    // More specific path matching
+    if (path.includes("add-more")) return "Add More Model Stock";
+    if (path.includes("/models/add")) return "Add Models Here";
+    if (path.includes("/models/edit")) return "Edit Models Here";
+    if (path.includes("edit-color")) return "Add Color Variant";
+    if (path.includes("/models/all")) return "All Models";
+    if (path.includes("/models/old-scooties")) return "Old Scooties";
     return "Models";
   };
 
   return (
     <div className="models-layout">
-      <ModelsSidebar />
+      <ModelsSidebar
+        showBottomHome={
+          !isHeaderHomeVisible && location.pathname === "/models/all"
+        }
+      />
       <main className="models-content">
         <header className="content-header">
           <div className="header-content">
@@ -76,6 +111,7 @@ export default function Models() {
             <div className="header-right">
               <button
                 className="btn btn-back-home"
+                ref={headerHomeRef}
                 onClick={() => navigate("/")}
                 title="Back to Home"
               >
@@ -89,7 +125,9 @@ export default function Models() {
             <Route path="add" element={<AddModel />} />
             <Route path="edit/:id" element={<EditModel />} />
             <Route path="edit-color/:id" element={<EditColor />} />
+            <Route path="add-more/:id" element={<AddMoreStock />} />
             <Route path="all" element={<AllModels />} />
+            <Route path="old-scooties" element={<OldScooties />} />
             <Route index element={<Navigate to="add" replace />} />
             <Route path="*" element={<Navigate to="add" replace />} />
           </Routes>

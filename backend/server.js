@@ -34,6 +34,13 @@ const spareRoutes = require("./routes/spareRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const batteryRoutes = require("./routes/batteryRoutes");
+const batteryScrapRoutes = require("./routes/batteryScrapRoutes");
+const chargerRoutes = require("./routes/chargerRoutes");
+const oldChargerRoutes = require("./routes/oldChargerRoutes");
+const oldChargerScrapRoutes = require("./routes/oldChargerScrapRoutes");
+const oldScootyRoutes = require("./routes/oldScootyRoutes");
+const jobcardRoutes = require("./routes/jobcardRoutes");
 
 // Use routes
 app.use("/api/models", modelRoutes);
@@ -41,6 +48,13 @@ app.use("/api/spares", spareRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/batteries", batteryRoutes);
+app.use("/api/battery-scraps", batteryScrapRoutes);
+app.use("/api/chargers", chargerRoutes);
+app.use("/api/old-chargers", oldChargerRoutes);
+app.use("/api/old-charger-scraps", oldChargerScrapRoutes);
+app.use("/api/old-scooties", oldScootyRoutes);
+app.use("/api/jobcards", jobcardRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -48,25 +62,13 @@ app.use((err, req, res, next) => {
   res.status(500).send("Something broke!");
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = 5000;
 
 const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-// Handle port conflicts automatically
 server.on("error", (err) => {
-  if (err.code === "EADDRINUSE") {
-    console.log(`Port ${PORT} is busy, trying to find an available port...`);
-    // Try the next port
-    const newPort = parseInt(PORT) + 1;
-    server.listen(newPort, () => {
-      console.log(
-        `Server running on port ${newPort} (original port ${PORT} was busy)`
-      );
-    });
-  } else {
-    console.error("Server error:", err);
-    process.exit(1);
-  }
+  console.error("Server error:", err);
+  process.exit(1);
 });

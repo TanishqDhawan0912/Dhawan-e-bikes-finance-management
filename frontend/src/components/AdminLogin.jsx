@@ -29,8 +29,9 @@ export default function AdminLogin() {
       console.log("Response data:", data);
 
       if (data.success) {
-        // Store admin authentication in sessionStorage
+        // Store admin authentication and security key in sessionStorage
         sessionStorage.setItem("adminAuth", "true");
+        sessionStorage.setItem("adminSecurityKey", securityKey);
 
         // Check for redirect parameter
         const redirectUrl = searchParams.get("redirect");
@@ -121,25 +122,34 @@ export default function AdminLogin() {
                   background: "none",
                   border: "none",
                   cursor: "pointer",
-                  fontSize: "1.2rem",
-                  color: "#666",
-                  padding: "5px",
-                  borderRadius: "3px",
+                  color: "#6b7280",
+                  padding: "0.25rem",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  width: "30px",
-                  height: "30px",
+                  borderRadius: "4px",
                 }}
                 title={showPassword ? "Hide password" : "Show password"}
                 onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = "#f0f0f0";
+                  e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.06)";
+                  e.currentTarget.style.color = "#374151";
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = "none";
+                  e.currentTarget.style.backgroundColor = "transparent";
+                  e.currentTarget.style.color = "#6b7280";
                 }}
               >
-                {showPassword ? "👁️" : "👁️‍🗨️"}
+                {showPassword ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>
