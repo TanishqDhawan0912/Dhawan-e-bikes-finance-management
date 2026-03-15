@@ -41,6 +41,7 @@ const oldChargerRoutes = require("./routes/oldChargerRoutes");
 const oldChargerScrapRoutes = require("./routes/oldChargerScrapRoutes");
 const oldScootyRoutes = require("./routes/oldScootyRoutes");
 const jobcardRoutes = require("./routes/jobcardRoutes");
+const billRoutes = require("./routes/billRoutes");
 
 // Use routes
 app.use("/api/models", modelRoutes);
@@ -55,6 +56,7 @@ app.use("/api/old-chargers", oldChargerRoutes);
 app.use("/api/old-charger-scraps", oldChargerScrapRoutes);
 app.use("/api/old-scooties", oldScootyRoutes);
 app.use("/api/jobcards", jobcardRoutes);
+app.use("/api/bills", billRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

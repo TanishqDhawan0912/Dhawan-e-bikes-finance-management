@@ -14,6 +14,7 @@ const createBattery = async (req, res) => {
       warrantyStatus,
       sellingPrice,
       supplierName,
+      batteryType,
       minStockLevel,
       purchaseDate,
       stockEntries,
@@ -33,6 +34,7 @@ const createBattery = async (req, res) => {
       warrantyStatus: warrantyStatus || false,
       sellingPrice: sellingPrice || 0,
       supplierName: supplierName || "",
+      batteryType: batteryType === "lead" || batteryType === "lithium" ? batteryType : "",
       minStockLevel: minStockLevel || 0,
       purchaseDate: purchaseDate ? new Date(purchaseDate) : undefined,
       stockEntries:
@@ -143,6 +145,7 @@ const updateBattery = async (req, res) => {
       warrantyStatus,
       sellingPrice,
       supplierName,
+      batteryType,
       minStockLevel,
       purchaseDate,
       stockEntries,
@@ -169,6 +172,9 @@ const updateBattery = async (req, res) => {
     if (warrantyStatus !== undefined) battery.warrantyStatus = warrantyStatus;
     if (sellingPrice !== undefined) battery.sellingPrice = sellingPrice;
     if (supplierName !== undefined) battery.supplierName = supplierName;
+    if (batteryType !== undefined) {
+      battery.batteryType = batteryType === "lead" || batteryType === "lithium" ? batteryType : "";
+    }
     if (minStockLevel !== undefined) battery.minStockLevel = minStockLevel;
     if (purchaseDate !== undefined) {
       battery.purchaseDate = purchaseDate ? new Date(purchaseDate) : undefined;

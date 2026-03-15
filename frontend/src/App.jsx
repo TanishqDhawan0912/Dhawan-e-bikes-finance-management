@@ -67,9 +67,6 @@ const Navbar = memo(() => {
           <Link to="/models" className="nav-link">
             Models
           </Link>
-          <Link to="/bills" className="nav-link">
-            Bills
-          </Link>
         </div>
         <Link to="/admin" className="navbar-admin-btn">
           <button className="btn btn-primary">Admin</button>
@@ -93,7 +90,9 @@ function AppLayout() {
     return {
       root: `app-root ${isJobcardPage ? "jobcard-root" : ""} ${
         isSparesPage ? "spares-root" : ""
-      } ${isModelsPage ? "models-root" : ""} ${isBillsPage ? "bills-root" : ""}`,
+      } ${isModelsPage ? "models-root" : ""} ${
+        isBillsPage ? "bills-root" : ""
+      }`.trim(),
       main: `app-main ${isHomePage ? "home-page" : ""}`,
     };
   }, [pathname]);

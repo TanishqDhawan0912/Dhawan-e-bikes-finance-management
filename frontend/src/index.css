@@ -277,7 +277,8 @@ button {
   color: white;
 }
 
-.sidebar-nav .active a {
+.sidebar-nav .active a,
+.sidebar-nav a.active {
   background: #2c5282;
   color: white;
   border-left: 4px solid #4299e1;
@@ -329,6 +330,579 @@ button {
   height: 100vh;
 }
 
+/* Bills Layout – same theme as Models/Spares */
+.bills-layout {
+  display: flex;
+  min-height: 100vh;
+  background-color: #f5f7fa;
+}
+
+.bills-content {
+  flex: 1;
+  margin-left: 250px;
+  padding: 2rem;
+  max-width: calc(100% - 250px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100vh;
+}
+
+/* New Bill form – tabs & subtabs (stretch to full page) */
+.bills-layout .content-area .page-content {
+  width: 100%;
+  min-height: calc(100vh - 12rem);
+}
+
+.bill-form-tabs-wrapper {
+  width: 100%;
+  max-width: none;
+}
+
+.bill-form-error {
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.bill-select-model-warning {
+  padding: 0.75rem 1rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #b91c1c;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.bill-form-actions .btn-primary.btn-disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.bill-form-actions .btn-primary.btn-disabled:hover {
+  background-color: #6366f1;
+}
+
+.bill-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.bill-tab {
+  padding: 0.6rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.bill-tab:hover {
+  color: #374151;
+}
+
+.bill-tab.active {
+  color: #6366f1;
+  border-bottom-color: #6366f1;
+}
+
+.bill-subtabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.bill-subtab {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bill-subtab:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.bill-subtab.active {
+  background: #6366f1;
+  color: white;
+  border-color: #6366f1;
+}
+
+.bill-subtab.complete:not(.active) {
+  background: #059669;
+  color: white;
+  border-color: #059669;
+}
+
+.bill-subtab.complete:not(.active):hover {
+  background: #047857;
+  color: white;
+  border-color: #047857;
+}
+
+.form-section-inner {
+  padding: 0 1.5rem 1.5rem;
+}
+
+.form-section-inner .form-group {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.bill-specs {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.bill-specs ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.bill-specs li {
+  margin: 0.25rem 0;
+}
+
+.bill-specs-empty {
+  margin: 0;
+  color: #9ca3af;
+}
+
+.bill-colors-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* Model name autocomplete */
+.model-name-autocomplete {
+  position: relative;
+  width: 100%;
+}
+
+.model-suggestions-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.model-suggestion-item {
+  padding: 0.6rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.15s;
+}
+
+.model-suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.model-suggestion-item:hover {
+  background: #eef2ff;
+}
+
+.model-suggestion-item-selected,
+.model-suggestion-item.model-suggestion-item-selected:hover {
+  background: #6366f1;
+  color: #fff;
+}
+
+.model-suggestion-item-selected .model-suggestion-name,
+.model-suggestion-item-selected .model-suggestion-company {
+  color: #fff;
+}
+
+.model-suggestions-empty {
+  margin-top: 0.25rem;
+  padding: 0.6rem 0.85rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #b91c1c;
+  font-size: 0.875rem;
+}
+
+.model-suggestion-name {
+  font-weight: 500;
+  color: #111827;
+}
+
+.model-suggestion-company {
+  color: #6b7280;
+}
+
+.bill-colors-available {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.bill-color-chip {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  background: #eef2ff;
+  color: #4338ca;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.bill-color-chip-clickable {
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.bill-color-chip-clickable:hover {
+  background: #c7d2fe;
+  color: #3730a3;
+}
+
+.bill-color-chip-selected {
+  background: #6366f1;
+  color: #fff;
+  border-color: #4f46e5;
+}
+
+.bill-color-chip-selected:hover {
+  background: #4f46e5;
+  color: #fff;
+}
+
+.bill-color-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+
+.bill-color-chip {
+  display: inline-flex;
+  align-items: center;
+}
+
+.bill-color-chip .bill-color-swatch {
+  margin-right: 0.4rem;
+}
+
+.bill-description-variant-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.bill-description-tag {
+  padding: 0.4rem 0.9rem;
+  border-radius: 9999px;
+  border: 1px solid #6366f1;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.bill-description-tag:hover {
+  background: #c7d2fe;
+  border-color: #4f46e5;
+}
+
+.bill-description-tag-selected {
+  background: #6366f1;
+  color: #fff;
+  border-color: #6366f1;
+}
+
+.bill-description-tag-selected:hover {
+  background: #4f46e5;
+  color: #fff;
+  border-color: #4f46e5;
+}
+
+.bill-description-tag-more {
+  font-size: 0.8rem;
+  color: #6b7280;
+  align-self: center;
+}
+
+.bill-description-variant-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.bill-description-group {
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.bill-description-variant-select {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.9rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.bill-description-variant-select:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.bill-description-group-colors {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.bill-description-group-colors-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+}
+
+.bill-description-group-colors .bill-colors-available {
+  margin-top: 0.25rem;
+}
+
+.bill-detail-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-top: 1rem;
+}
+
+.bill-detail-card h4 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: #334155;
+}
+
+.bill-detail-card dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1.5rem;
+}
+
+.bill-detail-card dt {
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.bill-detail-card dd {
+  margin: 0;
+  color: #1e293b;
+  font-size: 0.875rem;
+}
+
+.bill-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.bill-form-actions .btn-primary {
+  background-color: #6366f1;
+  color: white;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.bill-form-actions .btn-primary:hover:not(:disabled) {
+  background-color: #4f46e5;
+}
+
+.bill-form-actions .btn-secondary {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.bill-form-actions .btn-secondary:hover {
+  background: #f9fafb;
+}
+
+.form-group .required {
+  color: #dc2626;
+}
+
+/* Bill form – professional checkbox */
+/* Battery Details section – extra top spacing */
+.battery-details-section {
+  margin-top: 1.5rem;
+}
+
+.battery-details-section .form-section-inner {
+  padding-top: 1.25rem;
+}
+
+.form-help.text-muted {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+/* More specific so it overrides .form-group label { display: block } */
+.form-group label.bill-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0;
+  cursor: pointer;
+  font-weight: 500;
+  color: #374151;
+  user-select: none;
+  line-height: 1;
+  font-size: 0.9375rem;
+}
+
+.bill-checkbox-label input[type="checkbox"] {
+  appearance: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  vertical-align: middle;
+  border: 2px solid #d1d5db;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  align-self: center;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+}
+
+.bill-checkbox-label input[type="checkbox"]:hover {
+  border-color: #9ca3af;
+  background-color: #fafafa;
+}
+
+.bill-checkbox-label input[type="checkbox"]:checked {
+  border-color: #6366f1;
+  background-color: #6366f1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7l3 3 5-6'/%3E%3C/svg%3E");
+  background-size: 70%;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: 0 1px 2px rgba(99, 102, 241, 0.2);
+}
+
+.bill-checkbox-label input[type="checkbox"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+.bill-checkbox-label input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Modern date picker (Bill form and anywhere using date-picker-modern) */
+.date-picker-root.date-picker-modern {
+  width: 100%;
+}
+
+.date-picker-input-wrap-modern {
+  position: relative;
+}
+
+.date-picker-input-wrap-modern .date-picker-icon {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6366f1;
+  font-size: 1rem;
+  pointer-events: none;
+}
+
+.date-picker-input-modern:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.date-picker-dropdown-modern {
+  animation: date-picker-open 0.2s ease-out;
+}
+
+.date-picker-dropdown-modern .date-picker-nav-btn-modern:hover {
+  background: #eef2ff !important;
+  color: #6366f1 !important;
+}
+
+.date-picker-dropdown-modern .date-picker-day-modern:hover {
+  background-color: #eef2ff !important;
+  color: #6366f1 !important;
+}
+
+.date-picker-dropdown-modern .date-picker-day-modern:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+@keyframes date-picker-open {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .content-header {
   margin-bottom: 2rem;
 }
@@ -342,6 +916,8 @@ button {
 
 .header-left {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .header-right {
@@ -383,6 +959,8 @@ button {
 .content-header p {
   color: #718096;
   margin: 0;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .content-area {

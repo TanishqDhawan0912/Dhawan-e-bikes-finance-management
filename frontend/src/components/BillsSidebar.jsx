@@ -1,7 +1,7 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 const menuItems = [
-  { path: "new", label: "New Bill", icon: "📄" },
+  { path: "new", label: "New Bill", icon: "📝" },
   { path: "edit", label: "Edit Bill", icon: "✏️" },
   { path: "all", label: "All Bills", icon: "📋" },
 ];
@@ -34,21 +34,18 @@ export default function BillsSidebar() {
       </div>
       <nav className="sidebar-nav">
         <ul>
-          {menuItems.map((item) => {
-            const active = isActive(item.path);
-            return (
-              <li key={item.path}>
-                <a
-                  href={`/bills/${item.path}`}
-                  className={active ? "active" : ""}
-                  onClick={(e) => handleNavigation(e, item.path)}
-                >
-                  <span className="icon">{item.icon}</span>
-                  <span className="label">{item.label}</span>
-                </a>
-              </li>
-            );
-          })}
+          {menuItems.map((item) => (
+            <li key={item.path}>
+              <a
+                href={`/bills/${item.path}`}
+                className={isActive(item.path) ? "active" : ""}
+                onClick={(e) => handleNavigation(e, item.path)}
+              >
+                <span className="icon">{item.icon}</span>
+                <span className="label">{item.label}</span>
+              </a>
+            </li>
+          ))}
         </ul>
       </nav>
     </div>

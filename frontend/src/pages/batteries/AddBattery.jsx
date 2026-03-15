@@ -17,6 +17,7 @@ export default function AddBattery() {
     warrantyStatus: false,
     sellingPrice: "",
     supplierName: "",
+    batteryType: "",
     minStockLevel: "",
     // Default purchase date to today's date for the HTML date picker (yyyy-mm-dd)
     purchaseDate: getTodayForInput(),
@@ -476,6 +477,10 @@ export default function AddBattery() {
         warrantyStatus: formData.warrantyStatus || false,
         sellingPrice: parseFloat(formData.sellingPrice) || 0,
         supplierName: formData.supplierName || "",
+        batteryType:
+          formData.batteryType === "lead" || formData.batteryType === "lithium"
+            ? formData.batteryType
+            : "",
         minStockLevel: parseFloat(formData.minStockLevel) || 0,
         purchaseDate: formData.purchaseDate || null,
       };
@@ -881,6 +886,23 @@ export default function AddBattery() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Battery type</label>
+              <select
+                name="batteryType"
+                value={formData.batteryType}
+                onChange={handleInputChange}
+                disabled={isDuplicate}
+                data-form-type="other"
+              >
+                <option value="">— Select type —</option>
+                <option value="lead">Lead</option>
+                <option value="lithium">Lithium</option>
+              </select>
             </div>
           </div>
 

@@ -21,6 +21,7 @@ export default function EditBattery() {
     warrantyStatus: false,
     sellingPrice: "",
     supplierName: "",
+    batteryType: "",
     minStockLevel: "",
   });
 
@@ -72,6 +73,7 @@ export default function EditBattery() {
           warrantyStatus: battery.warrantyStatus || false,
           sellingPrice: battery.sellingPrice?.toString() || "",
           supplierName: battery.supplierName || "",
+          batteryType: battery.batteryType || "",
           minStockLevel: battery.minStockLevel?.toString() || "",
         });
       } catch (err) {
@@ -249,6 +251,10 @@ export default function EditBattery() {
         warrantyStatus: formData.warrantyStatus || false,
         sellingPrice: parseFloat(formData.sellingPrice) || 0,
         supplierName: formData.supplierName || "",
+        batteryType:
+          formData.batteryType === "lead" || formData.batteryType === "lithium"
+            ? formData.batteryType
+            : "",
         minStockLevel: parseFloat(formData.minStockLevel) || 0,
       };
 
@@ -615,6 +621,21 @@ export default function EditBattery() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Battery type</label>
+              <select
+                name="batteryType"
+                value={formData.batteryType}
+                onChange={handleInputChange}
+              >
+                <option value="">— Select type —</option>
+                <option value="lead">Lead</option>
+                <option value="lithium">Lithium</option>
+              </select>
             </div>
           </div>
         </div>

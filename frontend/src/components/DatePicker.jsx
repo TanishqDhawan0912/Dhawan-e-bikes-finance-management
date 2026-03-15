@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { FaCalendarAlt } from "react-icons/fa";
 
-export default function DatePicker({ value, onChange, placeholder = "dd/mm/yyyy", style = {} }) {
+export default function DatePicker({ value, onChange, placeholder = "dd/mm/yyyy", style = {}, className = "" }) {
+  const isModern = className.includes("date-picker-modern");
   const [isOpen, setIsOpen] = useState(false);
   const [displayValue, setDisplayValue] = useState("");
   const [selectedDate, setSelectedDate] = useState(null);
@@ -176,135 +178,130 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/yyyy"
     );
   };
 
+  const dropdownClass = `date-picker-dropdown ${isModern ? "date-picker-dropdown-modern" : ""}`;
+  const accentBg = isModern ? "#6366f1" : "#3b82f6";
+  const accentLight = isModern ? "#eef2ff" : "#eff6ff";
+
   return (
-    <div style={{ position: "relative", width: "100%", zIndex: isOpen ? 9999 : "auto" }}>
-      <input
-        ref={inputRef}
-        type="text"
-        value={displayValue}
-        onChange={handleInputChange}
-        onClick={handleInputClick}
-        placeholder={placeholder}
-        maxLength={10}
-        style={{
-          width: "100%",
-          padding: "0.5rem",
-          borderRadius: "0.375rem",
-          border: "1px solid #d1d5db",
-          fontSize: "1rem",
-          cursor: "pointer",
-          ...style,
-        }}
-      />
+    <div className={`date-picker-root ${className}`.trim()} style={{ position: "relative", width: "100%", zIndex: isOpen ? 9999 : "auto" }}>
+      <div className={isModern ? "date-picker-input-wrap-modern" : ""} style={{ position: "relative", width: "100%" }}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={displayValue}
+          onChange={handleInputChange}
+          onClick={handleInputClick}
+          placeholder={placeholder}
+          maxLength={10}
+          className={isModern ? "date-picker-input-modern" : ""}
+          style={{
+            width: "100%",
+            padding: isModern ? "0.6rem 2.5rem 0.6rem 0.85rem" : "0.5rem",
+            borderRadius: isModern ? "0.5rem" : "0.375rem",
+            border: "1px solid #e5e7eb",
+            fontSize: "1rem",
+            cursor: "pointer",
+            ...style,
+          }}
+        />
+        {isModern && (
+          <span className="date-picker-icon" aria-hidden="true">
+            <FaCalendarAlt />
+          </span>
+        )}
+      </div>
       {isOpen && createPortal(
         <div
           ref={pickerRef}
+          className={dropdownClass}
           style={{
             position: "fixed",
-            top: inputRef.current ? `${inputRef.current.getBoundingClientRect().bottom + 4}px` : "50%",
+            top: inputRef.current ? `${inputRef.current.getBoundingClientRect().bottom + 8}px` : "50%",
             left: inputRef.current ? `${inputRef.current.getBoundingClientRect().left}px` : "50%",
             transform: inputRef.current ? "none" : "translate(-50%, -50%)",
             backgroundColor: "white",
-            borderRadius: "0.5rem",
-            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+            borderRadius: isModern ? "12px" : "0.5rem",
+            boxShadow: isModern ? "0 25px 50px -12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05)" : "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
             border: "1px solid #e5e7eb",
             zIndex: 9999,
-            padding: "1rem",
-            minWidth: "280px",
+            padding: isModern ? "1.25rem" : "1rem",
+            minWidth: "300px",
           }}
         >
-          {/* Calendar Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
             <button
               type="button"
+              className={isModern ? "date-picker-nav-btn-modern" : ""}
               onClick={handlePrevMonth}
               style={{
-                padding: "0.25rem 0.5rem",
+                padding: "0.35rem 0.5rem",
                 border: "none",
                 backgroundColor: "transparent",
                 cursor: "pointer",
-                fontSize: "1rem",
+                fontSize: "1.1rem",
                 color: "#6b7280",
+                borderRadius: "6px",
               }}
             >
               ←
             </button>
-            <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>
+            <h3 style={{ margin: 0, fontSize: isModern ? "1.05rem" : "1rem", fontWeight: 600, color: "#111827" }}>
               {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </h3>
             <button
               type="button"
+              className={isModern ? "date-picker-nav-btn-modern" : ""}
               onClick={handleNextMonth}
               style={{
-                padding: "0.25rem 0.5rem",
+                padding: "0.35rem 0.5rem",
                 border: "none",
                 backgroundColor: "transparent",
                 cursor: "pointer",
-                fontSize: "1rem",
+                fontSize: "1.1rem",
                 color: "#6b7280",
+                borderRadius: "6px",
               }}
             >
               →
             </button>
           </div>
 
-          {/* Day Names */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.25rem", marginBottom: "0.5rem" }}>
             {dayNames.map((day) => (
-              <div
-                key={day}
-                style={{
-                  textAlign: "center",
-                  fontSize: "0.75rem",
-                  fontWeight: 500,
-                  color: "#6b7280",
-                  padding: "0.25rem",
-                }}
-              >
+              <div key={day} style={{ textAlign: "center", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", padding: "0.35rem" }}>
                 {day}
               </div>
             ))}
           </div>
 
-          {/* Calendar Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.25rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.35rem" }}>
             {days.map((day, index) => (
               <button
                 key={index}
                 type="button"
                 onClick={() => day && handleDateSelect(day)}
                 disabled={!day}
+                className={isModern ? "date-picker-day-modern" : ""}
                 style={{
                   padding: "0.5rem",
                   border: "none",
-                  backgroundColor: isSelected(day)
-                    ? "#3b82f6"
-                    : isToday(day)
-                    ? "#eff6ff"
-                    : "transparent",
-                  color: isSelected(day)
-                    ? "white"
-                    : isToday(day)
-                    ? "#3b82f6"
-                    : "#111827",
-                  borderRadius: "0.375rem",
+                  backgroundColor: isSelected(day) ? accentBg : isToday(day) ? accentLight : "transparent",
+                  color: isSelected(day) ? "white" : isToday(day) ? (isModern ? "#6366f1" : "#3b82f6") : "#111827",
+                  borderRadius: isModern ? "8px" : "0.375rem",
                   cursor: day ? "pointer" : "default",
                   fontSize: "0.875rem",
                   fontWeight: isSelected(day) || isToday(day) ? 600 : 400,
-                  minHeight: "2rem",
+                  minHeight: "2.25rem",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  transition: "background-color 0.15s, color 0.15s",
                 }}
                 onMouseEnter={(e) => {
-                  if (day && !isSelected(day)) {
-                    e.target.style.backgroundColor = "#f3f4f6";
-                  }
+                  if (day && !isSelected(day)) e.currentTarget.style.backgroundColor = "#f3f4f6";
                 }}
                 onMouseLeave={(e) => {
-                  if (day && !isSelected(day)) {
-                    e.target.style.backgroundColor = isToday(day) ? "#eff6ff" : "transparent";
-                  }
+                  if (day && !isSelected(day)) e.currentTarget.style.backgroundColor = isToday(day) ? accentLight : "transparent";
                 }}
               >
                 {day || ""}

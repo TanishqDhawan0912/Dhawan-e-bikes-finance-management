@@ -19,8 +19,8 @@ export default function Bills() {
     const path = location.pathname;
     const segments = path.split("/").filter(Boolean);
 
-    if (segments.length > 2) {
-      const cleanPath = `/${segments[0]}/${segments[1]}`;
+    if (segments.length > 3) {
+      const cleanPath = `/${segments[0]}/${segments[1]}/${segments[2]}`;
       navigate(cleanPath, { replace: true });
       return;
     }
@@ -33,15 +33,16 @@ export default function Bills() {
   if (
     location.pathname === "/bills" ||
     location.pathname.endsWith("/bills/") ||
-    location.pathname.split("/").filter(Boolean).length > 2
+    location.pathname.split("/").filter(Boolean).length > 3
   ) {
     return <div className="loading">Loading...</div>;
   }
 
   const getPageTitle = () => {
-    if (location.pathname.endsWith("new")) return "New Bill";
-    if (location.pathname.endsWith("edit")) return "Edit Bill";
-    if (location.pathname.endsWith("all")) return "All Bills";
+    const path = location.pathname;
+    if (path.includes("/bills/new")) return "New Bill";
+    if (path.includes("/bills/edit")) return "Edit Bill";
+    if (path.includes("/bills/all")) return "All Bills";
     return "Bills";
   };
 
@@ -53,7 +54,7 @@ export default function Bills() {
           <div className="header-content">
             <div className="header-left">
               <h1>{getPageTitle()}</h1>
-              <p>Manage bills and invoices</p>
+              <p>Manage bills for new scooty sales</p>
             </div>
             <div className="header-right">
               <button

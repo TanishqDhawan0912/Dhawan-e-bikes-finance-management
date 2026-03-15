@@ -47,6 +47,12 @@ const batterySchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    batteryType: {
+      type: String,
+      enum: ["lead", "lithium"],
+      required: false,
+      default: "",
+    },
     minStockLevel: {
       type: Number,
       required: false,
