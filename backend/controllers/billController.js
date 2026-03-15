@@ -49,6 +49,8 @@ const createBill = async (req, res) => {
       warranty: body.warranty || "None",
       withBattery: body.withBattery !== false,
       withCharger: body.withCharger !== false,
+      accessoryIncluded: body.accessoryIncluded || "",
+      accessoryDetails: Array.isArray(body.accessoryDetails) ? body.accessoryDetails : [],
     });
     const created = await bill.save();
     res.status(201).json(created);
@@ -90,6 +92,8 @@ const updateBill = async (req, res) => {
       withCharger: body.withCharger !== undefined ? body.withCharger : bill.withCharger,
     };
     if (Array.isArray(body.paymentHistory)) updates.paymentHistory = body.paymentHistory;
+    if (body.accessoryIncluded !== undefined) updates.accessoryIncluded = body.accessoryIncluded;
+    if (Array.isArray(body.accessoryDetails)) updates.accessoryDetails = body.accessoryDetails;
 
     const updated = await Bill.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
     res.json(updated);

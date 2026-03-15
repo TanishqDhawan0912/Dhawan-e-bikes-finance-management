@@ -95,7 +95,11 @@ export default function NewBill() {
   const [paidAmount, setPaidAmount] = useState("");
   const [pendingAmount, setPendingAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash");
-  const [warranty, setWarranty] = useState("None");
+  const [accessoryQuery, setAccessoryQuery] = useState(""); // optional spare search (name)
+  const [accessorySuggestions, setAccessorySuggestions] = useState([]);
+  const [showAccessorySuggestions, setShowAccessorySuggestions] = useState(false);
+  const [selectedAccessories, setSelectedAccessories] = useState([]); // array of spare objects
+  const [accessorySelectedIndex, setAccessorySelectedIndex] = useState(-1);
 
   // When "Battery available" is unchecked, clear battery type, voltage and selection
   useEffect(() => {
@@ -139,6 +143,13 @@ export default function NewBill() {
       setCustomChargerVoltage("");
     }
   }, [withCharger]);
+
+  // When battery type is chosen, default charger type to the same (user can still change it)
+  useEffect(() => {
+    if (batteryTypeForBill && !chargerTypeForBill && withCharger) {
+      setChargerTypeForBill(batteryTypeForBill);
+    }
+  }, [batteryTypeForBill, chargerTypeForBill, withCharger]);
 
   // When charger type changes, clear selected charger
   useEffect(() => {
@@ -432,7 +443,19 @@ export default function NewBill() {
         paidAmount: Number(paidAmount) || 0,
         pendingAmount: Number(pendingAmount) || 0,
         paymentMode: paymentMode || "cash",
-        warranty: warranty.trim() || "None",
+        accessoryIncluded:
+          selectedAccessories.length > 0
+            ? selectedAccessories.map((a) => a.name).join(", ")
+            : accessoryQuery.trim() || "",
+        accessoryDetails:
+          selectedAccessories.length > 0
+            ? selectedAccessories.map((a) => ({
+                id: a._id,
+                name: a.name || "",
+                sellingPrice: a.sellingPrice || 0,
+                sku: a.sku || "",
+              }))
+            : [],
         withBattery: withBattery,
         withCharger: withCharger,
       };
@@ -1065,7 +1088,7 @@ export default function NewBill() {
 
         {/* Tab 3: Payment Details */}
         {activeTab === "payment" && (
-          <div className="form-section">
+          <div className="form-section payment-section">
             <h3>Payment Details</h3>
             <div className="form-section-inner">
               {selectedModel && (
@@ -1085,8 +1108,8 @@ export default function NewBill() {
                   </div>
                 </div>
               )}
-              <div className="form-row" style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
-                <div className="form-group" style={{ flex: "1 1 160px" }}>
+              <div className="payment-row">
+                <div className="form-group">
                   <label>Selling Price (₹)</label>
                   <input
                     type="number"
@@ -1107,7 +1130,7 @@ export default function NewBill() {
                     title="Auto-calculated: Selling price − Net amount"
                   />
                 </div>
-                <div className="form-group" style={{ flex: "1 1 160px" }}>
+                <div className="form-group net-amount-group">
                   <label>Net Amount (₹)</label>
                   <input
                     type="text"
@@ -1117,8 +1140,8 @@ export default function NewBill() {
                   />
                 </div>
               </div>
-              <div className="form-row" style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
-                <div className="form-group" style={{ flex: "1 1 160px" }}>
+              <div className="payment-row">
+                <div className="form-group payment-key-amount">
                   <label>Amount Paid (₹)</label>
                   <input
                     type="number"
@@ -1129,7 +1152,7 @@ export default function NewBill() {
                     placeholder="0"
                   />
                 </div>
-                <div className="form-group" style={{ flex: "1 1 160px" }}>
+                <div className="form-group payment-key-amount">
                   <label>Pending (₹)</label>
                   <input
                     type="number"
@@ -1140,7 +1163,7 @@ export default function NewBill() {
                     placeholder="0"
                   />
                 </div>
-                <div className="form-group" style={{ flex: "1 1 160px" }}>
+                <div className="form-group">
                   <label>Payment Mode</label>
                   <select
                     value={paymentMode}
@@ -1151,15 +1174,242 @@ export default function NewBill() {
                   </select>
                 </div>
               </div>
-              <div className="form-group">
-                <label>Warranty (e.g. Battery, Charger, Motor)</label>
+              <div
+                className="form-group"
+                style={{ position: "relative", maxWidth: "440px" }}
+              >
+                <label>
+                  Any accessory included{" "}
+                  <span className="text-muted" style={{ fontWeight: 400 }}>(optional)</span>
+                </label>
                 <input
                   type="text"
-                  value={warranty}
-                  onChange={(e) => setWarranty(e.target.value)}
-                  placeholder="None"
+                  value={accessoryQuery}
+                  onChange={async (e) => {
+                    const value = e.target.value;
+                    setAccessoryQuery(value);
+                    setAccessorySelectedIndex(-1);
+                    if (!value.trim()) {
+                      setAccessorySuggestions([]);
+                      setShowAccessorySuggestions(false);
+                      return;
+                    }
+                    try {
+                      const res = await fetch(
+                        `${API}/spares/suggestions/names?search=${encodeURIComponent(
+                          value.trim()
+                        )}`
+                      );
+                      const data = await res.json();
+                      if (res.ok) {
+                        const suggestions = (data.suggestions || []).slice(0, 3);
+                        setAccessorySuggestions(suggestions);
+                        setAccessorySelectedIndex(suggestions.length ? 0 : -1);
+                        setShowAccessorySuggestions(suggestions.length > 0);
+                      } else {
+                        setAccessorySuggestions([]);
+                        setAccessorySelectedIndex(-1);
+                        setShowAccessorySuggestions(false);
+                      }
+                    } catch {
+                      setAccessorySuggestions([]);
+                      setAccessorySelectedIndex(-1);
+                      setShowAccessorySuggestions(false);
+                    }
+                  }}
+                  onKeyDown={async (e) => {
+                    if (!showAccessorySuggestions || accessorySuggestions.length === 0) return;
+                    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setAccessorySelectedIndex((prev) => {
+                        if (accessorySuggestions.length === 0) return -1;
+                        if (prev === -1) return 0;
+                        if (e.key === "ArrowDown") {
+                          return prev >= accessorySuggestions.length - 1 ? 0 : prev + 1;
+                        }
+                        // ArrowUp
+                        return prev <= 0 ? accessorySuggestions.length - 1 : prev - 1;
+                      });
+                    } else if (e.key === "Enter") {
+                      e.preventDefault();
+                      const idx =
+                        accessorySelectedIndex >= 0
+                          ? accessorySelectedIndex
+                          : 0;
+                      const name = accessorySuggestions[idx];
+                      if (!name) return;
+                      setAccessoryQuery("");
+                      setShowAccessorySuggestions(false);
+                      try {
+                        const res = await fetch(
+                          `${API}/spares?search=${encodeURIComponent(name)}`
+                        );
+                        const data = await res.json();
+                        if (res.ok && Array.isArray(data) && data.length > 0) {
+                          const spare = data[0];
+                          setSelectedAccessories((prev) => {
+                            const exists = prev.some(
+                              (p) =>
+                                (p._id && spare._id && p._id === spare._id) ||
+                                (p.name || "").toLowerCase() ===
+                                  (spare.name || "").toLowerCase()
+                            );
+                            return exists ? prev : [...prev, spare];
+                          });
+                        } else {
+                          setSelectedAccessories((prev) => prev);
+                        }
+                      } catch {
+                        setSelectedAccessories((prev) => prev);
+                      }
+                    } else if (e.key === "Escape") {
+                      setShowAccessorySuggestions(false);
+                      setAccessorySelectedIndex(-1);
+                    }
+                  }}
+                  placeholder="Search accessory from spares (e.g. helmet, charger cable)"
                 />
+                {showAccessorySuggestions && accessorySuggestions.length > 0 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "100%",
+                      left: 0,
+                      right: 0,
+                      background: "#ffffff",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "0.5rem",
+                      boxShadow: "0 10px 25px rgba(15, 23, 42, 0.15)",
+                      marginTop: 0,
+                      zIndex: 1000,
+                      maxHeight: "220px",
+                      overflowY: "auto",
+                    }}
+                  >
+                    {accessorySuggestions.map((name, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={async () => {
+                          setAccessoryQuery("");
+                          setShowAccessorySuggestions(false);
+                          try {
+                            // Fetch full spare details by name via search
+                            const res = await fetch(
+                              `${API}/spares?search=${encodeURIComponent(name)}`
+                            );
+                            const data = await res.json();
+                            if (res.ok && Array.isArray(data) && data.length > 0) {
+                              const spare = data[0];
+                              setSelectedAccessories((prev) => {
+                                const exists = prev.some(
+                                  (p) =>
+                                    (p._id && spare._id && p._id === spare._id) ||
+                                    (p.name || "").toLowerCase() ===
+                                      (spare.name || "").toLowerCase()
+                                );
+                                return exists ? prev : [...prev, spare];
+                              });
+                            } else {
+                              setSelectedAccessories((prev) => prev);
+                            }
+                          } catch {
+                            setSelectedAccessories((prev) => prev);
+                          }
+                        }}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "0.5rem 0.75rem",
+                          border: "none",
+                          background:
+                            idx === accessorySelectedIndex ? "#eff6ff" : "white",
+                          cursor: "pointer",
+                          fontSize: "0.9rem",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#eff6ff";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "white";
+                        }}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+              {selectedAccessories.length > 0 && (
+                <div
+                  className="bill-model-price-info"
+                  style={{
+                    marginTop: "0.5rem",
+                    padding: "0.65rem 0.95rem 0.9rem",
+                    background: "#f9fafb",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "0.75rem",
+                    maxWidth: "520px",
+                  }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+                    Accessory details
+                  </div>
+                  {selectedAccessories.map((acc) => (
+                    <div
+                      key={acc._id || acc.name}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "0.35rem 0",
+                        borderTop: "1px dashed #e5e7eb",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "0.9rem", color: "#374151" }}>
+                          {acc.name || "—"}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "0.85rem",
+                            color: "#4b5563",
+                            marginTop: "0.05rem",
+                          }}
+                        >
+                          Price: ₹
+                          {(acc.sellingPrice || 0).toLocaleString("en-IN")}
+                          {acc.sku ? ` • SKU: ${acc.sku}` : ""}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedAccessories((prev) =>
+                            prev.filter(
+                              (p) =>
+                                (p._id || p.name) !== (acc._id || acc.name)
+                            )
+                          );
+                        }}
+                        style={{
+                          borderRadius: "999px",
+                          border: "1px solid #fecaca",
+                          background: "#fef2f2",
+                          padding: "0.15rem 0.75rem",
+                          fontSize: "0.78rem",
+                          color: "#b91c1c",
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="bill-form-actions">
                 <button
                   type="button"

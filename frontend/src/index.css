@@ -790,6 +790,43 @@ button {
   padding-top: 1.25rem;
 }
 
+/* Payment section */
+.payment-section .form-section-inner {
+  padding-top: 1.5rem;
+}
+
+.payment-section .payment-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.payment-section .payment-row .form-group {
+  flex: 1 1 160px;
+}
+
+.payment-section .payment-key-amount {
+  background: #fefce8;
+  border-radius: 8px;
+  padding: 0.75rem 0.75rem 0.5rem;
+  border: 1px solid #facc15;
+}
+
+.payment-section .payment-key-amount label {
+  font-weight: 600;
+  color: #854d0e;
+}
+
+.payment-section .payment-key-amount input.readonly,
+.payment-section .payment-key-amount input,
+.payment-section .payment-key-amount select {
+  background-color: #fffbeb;
+}
+
+.payment-section .net-amount-group label {
+  font-weight: 600;
+}
+
 .form-help.text-muted {
   margin: 0.5rem 0 0;
   font-size: 0.875rem;
@@ -1278,6 +1315,11 @@ button {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   overflow: hidden;
+}
+
+/* Allow accessory suggestions dropdown to show above section border */
+.payment-section {
+  overflow: visible;
 }
 
 .form-section h3 {

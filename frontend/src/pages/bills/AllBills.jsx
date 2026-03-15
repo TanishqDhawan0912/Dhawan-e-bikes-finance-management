@@ -46,6 +46,20 @@ function getModelDisplay(bill) {
   return parts.length ? parts.join(" ") : "—";
 }
 
+function getAccessoryDisplay(bill) {
+  if (!bill) return "";
+  if (Array.isArray(bill.accessoryDetails) && bill.accessoryDetails.length > 0) {
+    const names = bill.accessoryDetails
+      .map((a) => a && a.name)
+      .filter(Boolean);
+    if (names.length) return names.join(", ");
+  }
+  if (bill.accessoryIncluded && String(bill.accessoryIncluded).trim()) {
+    return String(bill.accessoryIncluded).trim();
+  }
+  return "";
+}
+
 export default function AllBills() {
   const navigate = useNavigate();
   const [bills, setBills] = useState([]);
@@ -255,12 +269,16 @@ export default function AllBills() {
             const warrantyDisplay = bill.warranty && String(bill.warranty).trim() ? bill.warranty : "None";
             const batteryChargerTags = getBatteryChargerTags(bill);
             const paymentHistory = getPaymentHistory(bill);
+            const accessoriesText = getAccessoryDisplay(bill);
 
             return (
               <div key={bill._id} className="bills-card">
                 <div className="bills-card-header">
                   <h3 className="bills-card-title">Bill No. – {bill.billNo && bill.billNo.trim() ? bill.billNo : "—"}</h3>
                   <div className="bills-card-meta">
+                    <span style={{ fontSize: "0.8rem", color: "#4b5563", marginRight: "0.75rem" }}>
+                      Date: {formatDateShort(bill.billDate)}
+                    </span>
                     <span className={`bills-badge ${isPaid ? "bills-badge-paid" : "bills-badge-pending"}`}>
                       {isPaid ? "Paid" : "Pending"}
                     </span>
@@ -285,6 +303,10 @@ export default function AllBills() {
                     <div>
                       <p className="bills-card-label">Warranty</p>
                       <p className="bills-card-value">{warrantyDisplay}</p>
+                    </div>
+                    <div>
+                      <p className="bills-card-label">Address</p>
+                      <p className="bills-card-value">{bill.address || "—"}</p>
                     </div>
                   </div>
                   <div className="bills-card-grid" style={{ marginBottom: paymentHistory.length > 0 || batteryChargerTags.length ? "1rem" : 0 }}>
@@ -318,6 +340,13 @@ export default function AllBills() {
                       ))}
                     </div>
                   </div>
+
+                  {accessoriesText && (
+                    <div style={{ marginBottom: paymentHistory.length > 0 ? "1rem" : 0, padding: "0.75rem 1rem", backgroundColor: "#eff6ff", borderRadius: "0.5rem", border: "1px dashed #bfdbfe" }}>
+                      <p className="bills-card-label" style={{ marginBottom: "0.5rem", color: "#1d4ed8" }}>Accessories included</p>
+                      <p className="bills-card-value">{accessoriesText}</p>
+                    </div>
+                  )}
 
                   {paymentHistory.length > 0 && (
                     <div style={{ padding: "0.75rem 1rem", backgroundColor: "#f5f3ff", borderRadius: "0.5rem", border: "1px dashed #c4b5fd" }}>

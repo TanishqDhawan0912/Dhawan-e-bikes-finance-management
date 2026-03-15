@@ -7,6 +7,16 @@ const paymentEntrySchema = new mongoose.Schema({
   paymentMode: { type: String, enum: ["cash", "upi"], required: true },
 });
 
+const accessoryDetailSchema = new mongoose.Schema(
+  {
+    id: { type: String, default: "" },
+    name: { type: String, default: "", trim: true },
+    sellingPrice: { type: Number, default: 0, min: 0 },
+    sku: { type: String, default: "", trim: true },
+  },
+  { _id: false }
+);
+
 const billSchema = new mongoose.Schema(
   {
     billNo: { type: String, required: true, trim: true },
@@ -31,6 +41,9 @@ const billSchema = new mongoose.Schema(
     // Optional flags for display
     withBattery: { type: Boolean, default: true },
     withCharger: { type: Boolean, default: true },
+    // Optional accessories included with this bill
+    accessoryIncluded: { type: String, default: "", trim: true },
+    accessoryDetails: [accessoryDetailSchema],
   },
   { timestamps: true }
 );
