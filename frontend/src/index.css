@@ -785,7 +785,8 @@ button {
   margin-top: 1.5rem;
 }
 
-.battery-details-section .form-section-inner {
+.battery-details-section .form-section-inner,
+.charger-details-section .form-section-inner {
   padding-top: 1.25rem;
 }
 

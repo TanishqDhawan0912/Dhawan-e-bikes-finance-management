@@ -497,6 +497,7 @@ export default function EditBattery() {
                 placeholder="Enter batteries per set"
                 min="1"
                 onWheel={(e) => e.target.blur()}
+                disabled={formData.batteryType === "lithium"}
               />
             </div>
 
@@ -543,6 +544,7 @@ export default function EditBattery() {
                 placeholder="Enter open batteries"
                 min="0"
                 onWheel={(e) => e.target.blur()}
+                disabled={formData.batteryType === "lithium"}
               />
             </div>
           </div>

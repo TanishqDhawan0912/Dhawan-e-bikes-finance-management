@@ -79,15 +79,21 @@ export default function NewBill() {
   const [withBattery, setWithBattery] = useState(true);
   const [batteryTypeForBill, setBatteryTypeForBill] = useState(""); // "lead" | "lithium"
   const [batteryVoltage, setBatteryVoltage] = useState(""); // "48" | "60" | "72" → 4, 5, 6 batteries
+  const [customLithiumVoltage, setCustomLithiumVoltage] = useState(""); // free text e.g. "72V" for lithium
+  const [batteryWarranty, setBatteryWarranty] = useState("with"); // "with" | "without" for battery on this bill
+  const [batteryNumbers, setBatteryNumbers] = useState(""); // free text, any characters
 
   // Charger (selected for this bill)
   const [selectedChargerId, setSelectedChargerId] = useState("");
   const [withCharger, setWithCharger] = useState(true);
+  const [chargerTypeForBill, setChargerTypeForBill] = useState(""); // "lead" | "lithium"
+  const [customChargerVoltage, setCustomChargerVoltage] = useState("");
+  const [chargerWarranty, setChargerWarranty] = useState("with"); // "with" | "without"
 
   // Payment
   const [sellingPrice, setSellingPrice] = useState("");
-  const [discount, setDiscount] = useState("");
   const [paidAmount, setPaidAmount] = useState("");
+  const [pendingAmount, setPendingAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash");
   const [warranty, setWarranty] = useState("None");
 
@@ -96,7 +102,9 @@ export default function NewBill() {
     if (!withBattery) {
       setBatteryTypeForBill("");
       setBatteryVoltage("");
+      setCustomLithiumVoltage("");
       setSelectedBatteryId("");
+      setBatteryNumbers("");
     }
   }, [withBattery]);
 
@@ -104,6 +112,50 @@ export default function NewBill() {
   useEffect(() => {
     setSelectedBatteryId("");
   }, [batteryTypeForBill, batteryVoltage]);
+
+  // When switching from Custom to a specific battery, clear custom voltage
+  useEffect(() => {
+    if (selectedBatteryId && selectedBatteryId !== "custom") {
+      setCustomLithiumVoltage("");
+    }
+  }, [selectedBatteryId]);
+
+  // Reset battery warranty to default when selection changes
+  useEffect(() => {
+    if (selectedBatteryId) setBatteryWarranty("with");
+  }, [selectedBatteryId]);
+
+  // When switching to Lithium, clear lead voltage; when switching away, clear custom lithium voltage
+  useEffect(() => {
+    if (batteryTypeForBill === "lithium") setBatteryVoltage("");
+    else setCustomLithiumVoltage("");
+  }, [batteryTypeForBill]);
+
+  // When "Include charger" is unchecked, clear charger type, selection and related fields
+  useEffect(() => {
+    if (!withCharger) {
+      setChargerTypeForBill("");
+      setSelectedChargerId("");
+      setCustomChargerVoltage("");
+    }
+  }, [withCharger]);
+
+  // When charger type changes, clear selected charger
+  useEffect(() => {
+    setSelectedChargerId("");
+  }, [chargerTypeForBill]);
+
+  // When switching from Custom to a specific charger, clear custom voltage
+  useEffect(() => {
+    if (selectedChargerId && selectedChargerId !== "custom") {
+      setCustomChargerVoltage("");
+    }
+  }, [selectedChargerId]);
+
+  // Reset charger warranty to default when selection changes
+  useEffect(() => {
+    if (selectedChargerId) setChargerWarranty("with");
+  }, [selectedChargerId]);
 
   useEffect(() => {
     (async () => {
@@ -272,8 +324,15 @@ export default function NewBill() {
   const selectedBattery = batteries.find((b) => b._id === selectedBatteryId) || null;
   const selectedCharger = chargers.find((c) => c._id === selectedChargerId) || null;
 
-  const netAmount = Math.max(0, (Number(sellingPrice) || 0) - (Number(discount) || 0));
-  const pendingAmount = Math.max(0, netAmount - (Number(paidAmount) || 0));
+  // Sync selling price from selected model when model details are set
+  useEffect(() => {
+    if (selectedModel && selectedModel.sellingPrice != null && selectedModel.sellingPrice !== "") {
+      setSellingPrice(String(selectedModel.sellingPrice));
+    }
+  }, [selectedModel?.modelName, selectedModel?.sellingPrice]);
+
+  const netAmount = (Number(paidAmount) || 0) + (Number(pendingAmount) || 0);
+  const discount = Math.max(0, (Number(sellingPrice) || 0) - netAmount);
 
   const isCustomerDetailsComplete =
     billNo.trim() !== "" &&
@@ -312,12 +371,14 @@ export default function NewBill() {
   );
   const batteryVoltageToCount = { "48": 4, "60": 5, "72": 6 };
   const batteryRequiredCount = batteryVoltage ? batteryVoltageToCount[batteryVoltage] : 0;
+  const isLead = batteryTypeForBill === "lead";
   const isBatteryTabComplete =
     !withBattery ||
     (Boolean(batteryTypeForBill) &&
-      Boolean(batteryVoltage) &&
-      Boolean(selectedBatteryId));
-  const isChargerTabComplete = !withCharger || Boolean(selectedChargerId);
+      Boolean(selectedBatteryId) &&
+      (batteryTypeForBill === "lithium" || Boolean(batteryVoltage)));
+  const isChargerTabComplete =
+    !withCharger || (Boolean(chargerTypeForBill) && Boolean(selectedChargerId));
 
   const isSubtabComplete = (tabId) => {
     if (tabId === "model") return isModelTabComplete;
@@ -366,8 +427,10 @@ export default function NewBill() {
         descriptionVariant: descriptionVariant.trim(),
         modelColor: modelColor.trim(),
         sellingPrice: Number(sellingPrice) || 0,
-        discount: Number(discount) || 0,
+        discount: Math.max(0, (Number(sellingPrice) || 0) - ((Number(paidAmount) || 0) + (Number(pendingAmount) || 0))),
+        netAmount: (Number(paidAmount) || 0) + (Number(pendingAmount) || 0),
         paidAmount: Number(paidAmount) || 0,
+        pendingAmount: Number(pendingAmount) || 0,
         paymentMode: paymentMode || "cash",
         warranty: warranty.trim() || "None",
         withBattery: withBattery,
@@ -673,26 +736,32 @@ export default function NewBill() {
                       </div>
                       {batteryTypeForBill && (
                         <>
-                          <div className="form-group">
-                            <label>Voltage</label>
-                            <select
-                              value={batteryVoltage}
-                              onChange={(e) => setBatteryVoltage(e.target.value)}
-                              className="battery-type-select"
-                            >
-                              <option value="">— Select voltage —</option>
-                              <option value="48">48V (4 batteries)</option>
-                              <option value="60">60V (5 batteries)</option>
-                              <option value="72">72V (6 batteries)</option>
-                            </select>
-                          </div>
-                          {batteryVoltage && (
+                          {isLead && (
+                            <div className="form-group">
+                              <label>Voltage</label>
+                              <select
+                                value={batteryVoltage}
+                                onChange={(e) => setBatteryVoltage(e.target.value)}
+                                className="battery-type-select"
+                              >
+                                <option value="">— Select voltage —</option>
+                                <option value="48">48V (4 batteries)</option>
+                                <option value="60">60V (5 batteries)</option>
+                                <option value="72">72V (6 batteries)</option>
+                              </select>
+                            </div>
+                          )}
+                          {(batteryTypeForBill === "lithium" || (isLead && batteryVoltage)) && (
                             <div className="form-group">
                               <label>Select Battery</label>
                               {(() => {
                                 const availableBatteries = batteries.filter((b) => {
                                   if (b.batteryType && b.batteryType !== batteryTypeForBill)
                                     return false;
+                                  if (batteryTypeForBill === "lithium") {
+                                    // Lithium: only show if in stock (total sets > 0)
+                                    return (b.totalSets || 0) > 0;
+                                  }
                                   const stock =
                                     (b.totalSets || 0) * (b.batteriesPerSet || 0) +
                                     (b.openBatteries || 0);
@@ -705,6 +774,9 @@ export default function NewBill() {
                                       onChange={(e) => setSelectedBatteryId(e.target.value)}
                                     >
                                       <option value="">— Select battery —</option>
+                                      {batteryTypeForBill === "lithium" && (
+                                        <option value="custom">— Custom —</option>
+                                      )}
                                       {availableBatteries.map((b) => (
                                         <option key={b._id} value={b._id}>
                                           {b.name}
@@ -714,7 +786,9 @@ export default function NewBill() {
                                     </select>
                                     {availableBatteries.length === 0 && (
                                       <p className="form-help text-muted">
-                                        No batteries in stock for {batteryVoltage}V (need {batteryRequiredCount} batteries). Add stock or choose another voltage.
+                                        {isLead
+                                          ? `No batteries in stock for ${batteryVoltage}V (need ${batteryRequiredCount} batteries). Add stock or choose another voltage.`
+                                          : "No lithium batteries in stock. Add stock to show them here."}
                                       </p>
                                     )}
                                   </>
@@ -722,9 +796,72 @@ export default function NewBill() {
                               })()}
                             </div>
                           )}
+                          {batteryTypeForBill === "lithium" &&
+                            (selectedBatteryId === "custom" || selectedBattery) && (
+                              <div className="form-group">
+                                <label>Voltage {selectedBatteryId === "custom" ? "(optional)" : ""}</label>
+                                <input
+                                  type="text"
+                                  value={
+                                    selectedBatteryId === "custom"
+                                      ? customLithiumVoltage
+                                      : "—"
+                                  }
+                                  onChange={(e) =>
+                                    selectedBatteryId === "custom" &&
+                                    setCustomLithiumVoltage(e.target.value)
+                                  }
+                                  placeholder="e.g. 48V, 60V, 72V"
+                                  className="form-control"
+                                  disabled={selectedBatteryId !== "custom"}
+                                  readOnly={selectedBatteryId !== "custom"}
+                                />
+                              </div>
+                            )}
+                          {(selectedBatteryId === "custom" || selectedBattery) && (
+                            <div className="form-group">
+                              <label>Battery warranty</label>
+                              <select
+                                value={batteryWarranty}
+                                onChange={(e) => setBatteryWarranty(e.target.value)}
+                                className="form-control"
+                                style={{ maxWidth: "200px" }}
+                              >
+                                <option value="with">With warranty</option>
+                                <option value="without">Without warranty</option>
+                              </select>
+                            </div>
+                          )}
+                          {(selectedBatteryId === "custom" || selectedBattery) && (
+                            <div className="form-group">
+                              <label>Battery numbers</label>
+                              <input
+                                type="text"
+                                value={batteryNumbers}
+                                onChange={(e) => setBatteryNumbers(e.target.value)}
+                                placeholder="Enter battery numbers"
+                                className="form-control"
+                              />
+                            </div>
+                          )}
                         </>
                       )}
                     </>
+                  )}
+                  {selectedBatteryId === "custom" && batteryTypeForBill === "lithium" && (
+                    <div className="bill-detail-card">
+                      <h4>Battery details</h4>
+                      <dl>
+                        <dt>Name</dt>
+                        <dd>Custom</dd>
+                        <dt>Voltage</dt>
+                        <dd>{customLithiumVoltage.trim() || "—"}</dd>
+                        <dt>Warranty</dt>
+                        <dd>{batteryWarranty === "with" ? "With warranty" : "Without warranty"}</dd>
+                        <dt>Battery numbers</dt>
+                        <dd>{batteryNumbers.trim() || "—"}</dd>
+                      </dl>
+                    </div>
                   )}
                   {selectedBattery && (
                     <div className="bill-detail-card">
@@ -734,7 +871,13 @@ export default function NewBill() {
                         <dd>{selectedBattery.name}</dd>
                         <dt>Ampere / Type</dt>
                         <dd>{selectedBattery.ampereValue || "—"}</dd>
-                        {batteryVoltage && (
+                        {batteryTypeForBill === "lithium" && customLithiumVoltage.trim() && (
+                          <>
+                            <dt>Voltage</dt>
+                            <dd>{customLithiumVoltage.trim()}</dd>
+                          </>
+                        )}
+                        {isLead && batteryVoltage && (
                           <>
                             <dt>Voltage / Batteries used</dt>
                             <dd>{batteryVoltage}V ({batteryRequiredCount} batteries)</dd>
@@ -743,7 +886,9 @@ export default function NewBill() {
                         <dt>Batteries per set</dt>
                         <dd>{selectedBattery.batteriesPerSet ?? "—"}</dd>
                         <dt>Warranty</dt>
-                        <dd>{selectedBattery.warrantyStatus ? "Yes" : "No"}</dd>
+                        <dd>{batteryWarranty === "with" ? "With warranty" : "Without warranty"}</dd>
+                        <dt>Battery numbers</dt>
+                        <dd>{batteryNumbers.trim() || "—"}</dd>
                         <dt>Selling price</dt>
                         <dd>₹{selectedBattery.sellingPrice}</dd>
                         {selectedBattery.supplierName && (
@@ -760,7 +905,7 @@ export default function NewBill() {
             )}
 
             {modelSubTab === "charger" && (
-              <div className="form-section">
+              <div className="form-section charger-details-section">
                 <h3>Charger Details</h3>
                 <div className="form-section-inner">
                   <div className="form-group">
@@ -773,21 +918,105 @@ export default function NewBill() {
                       Include charger with this bill
                     </label>
                   </div>
-                  <div className="form-group">
-                    <label>Select Charger</label>
-                    <select
-                      value={selectedChargerId}
-                      onChange={(e) => setSelectedChargerId(e.target.value)}
-                      disabled={!withCharger}
-                    >
-                      <option value="">— Select charger —</option>
-                      {chargers.map((c) => (
-                        <option key={c._id} value={c._id}>
-                          {c.name} {c.batteryType ? `(${c.batteryType})` : ""} — ₹{c.sellingPrice}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {withCharger && (
+                    <>
+                      <div className="form-group">
+                        <label>Charger type</label>
+                        <select
+                          value={chargerTypeForBill}
+                          onChange={(e) => setChargerTypeForBill(e.target.value)}
+                          className="battery-type-select"
+                        >
+                          <option value="">— Select type —</option>
+                          <option value="lead">Lead</option>
+                          <option value="lithium">Lithium</option>
+                        </select>
+                      </div>
+                      {chargerTypeForBill && (
+                        <div className="form-group">
+                          <label>Select Charger</label>
+                          <select
+                            value={selectedChargerId}
+                            onChange={(e) => setSelectedChargerId(e.target.value)}
+                          >
+                            <option value="">— Select charger —</option>
+                            <option value="custom">— Custom —</option>
+                            {chargers
+                              .filter((c) => {
+                                if ((c.quantity || 0) <= 0) return false;
+                                const type = (c.batteryType || "").toLowerCase().trim();
+                                if (!type) return true; // no type = show in both
+                                return type === chargerTypeForBill;
+                              })
+                              .map((c) => (
+                                <option key={c._id} value={c._id}>
+                                  {c.name}
+                                  {c.voltage ? ` (${c.voltage})` : ""}
+                                </option>
+                              ))}
+                          </select>
+                          {chargers.filter((c) => {
+                            if ((c.quantity || 0) <= 0) return false;
+                            const type = (c.batteryType || "").toLowerCase().trim();
+                            if (!type) return true;
+                            return type === chargerTypeForBill;
+                          }).length === 0 && (
+                            <p className="form-help text-muted">
+                              No chargers in stock for this type. Add stock or choose another type.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      {(selectedChargerId === "custom" || selectedCharger) && (
+                        <>
+                          <div className="form-group">
+                            <label>Voltage {selectedChargerId === "custom" ? "(optional)" : ""}</label>
+                            <input
+                              type="text"
+                              value={
+                                selectedChargerId === "custom"
+                                  ? customChargerVoltage
+                                  : "—"
+                              }
+                              onChange={(e) =>
+                                selectedChargerId === "custom" &&
+                                setCustomChargerVoltage(e.target.value)
+                              }
+                              placeholder="e.g. 48V, 60V, 72V"
+                              className="form-control"
+                              disabled={selectedChargerId !== "custom"}
+                              readOnly={selectedChargerId !== "custom"}
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Charger warranty</label>
+                            <select
+                              value={chargerWarranty}
+                              onChange={(e) => setChargerWarranty(e.target.value)}
+                              className="form-control"
+                              style={{ maxWidth: "200px" }}
+                            >
+                              <option value="with">With warranty</option>
+                              <option value="without">Without warranty</option>
+                            </select>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                  {selectedChargerId === "custom" && (
+                    <div className="bill-detail-card">
+                      <h4>Charger details</h4>
+                      <dl>
+                        <dt>Name</dt>
+                        <dd>Custom</dd>
+                        <dt>Voltage</dt>
+                        <dd>{customChargerVoltage.trim() || "—"}</dd>
+                        <dt>Warranty</dt>
+                        <dd>{chargerWarranty === "with" ? "With warranty" : "Without warranty"}</dd>
+                      </dl>
+                    </div>
+                  )}
                   {selectedCharger && (
                     <div className="bill-detail-card">
                       <h4>Charger details</h4>
@@ -799,7 +1028,7 @@ export default function NewBill() {
                         <dt>Voltage</dt>
                         <dd>{selectedCharger.voltage || "—"}</dd>
                         <dt>Warranty</dt>
-                        <dd>{selectedCharger.warrantyStatus ? "Yes" : "No"}</dd>
+                        <dd>{chargerWarranty === "with" ? "With warranty" : "Without warranty"}</dd>
                         <dt>Selling price</dt>
                         <dd>₹{selectedCharger.sellingPrice}</dd>
                         {selectedCharger.supplierName && (
@@ -839,6 +1068,23 @@ export default function NewBill() {
           <div className="form-section">
             <h3>Payment Details</h3>
             <div className="form-section-inner">
+              {selectedModel && (
+                <div className="bill-model-price-info" style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "8px" }}>
+                  <div style={{ fontWeight: "600", color: "#0c4a6e", marginBottom: "0.25rem" }}>
+                    Model selling price
+                  </div>
+                  <div style={{ fontSize: "0.95rem", color: "#075985" }}>
+                    ₹{(selectedModel.sellingPrice ?? 0).toLocaleString("en-IN")}
+                  </div>
+                  <div style={{ fontSize: "0.9rem", color: "#0369a1", marginTop: "0.25rem" }}>
+                    Price set for{" "}
+                    {selectedModel.batteriesPerSet ??
+                      selectedModel.stockEntries?.[0]?.batteriesPerSet ??
+                      "—"}{" "}
+                    batteries
+                  </div>
+                </div>
+              )}
               <div className="form-row" style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
                 <div className="form-group" style={{ flex: "1 1 160px" }}>
                   <label>Selling Price (₹)</label>
@@ -848,18 +1094,17 @@ export default function NewBill() {
                     step={1}
                     value={sellingPrice}
                     onChange={(e) => setSellingPrice(e.target.value)}
-                    placeholder="0"
+                    placeholder={selectedModel ? (selectedModel.sellingPrice ?? 0).toString() : "0"}
                   />
                 </div>
                 <div className="form-group" style={{ flex: "1 1 160px" }}>
                   <label>Discount (₹)</label>
                   <input
-                    type="number"
-                    min={0}
-                    step={1}
+                    type="text"
                     value={discount}
-                    onChange={(e) => setDiscount(e.target.value)}
-                    placeholder="0"
+                    readOnly
+                    className="readonly"
+                    title="Auto-calculated: Selling price − Net amount"
                   />
                 </div>
                 <div className="form-group" style={{ flex: "1 1 160px" }}>
@@ -887,10 +1132,12 @@ export default function NewBill() {
                 <div className="form-group" style={{ flex: "1 1 160px" }}>
                   <label>Pending (₹)</label>
                   <input
-                    type="text"
+                    type="number"
+                    min={0}
+                    step={1}
                     value={pendingAmount}
-                    readOnly
-                    className="readonly"
+                    onChange={(e) => setPendingAmount(e.target.value)}
+                    placeholder="0"
                   />
                 </div>
                 <div className="form-group" style={{ flex: "1 1 160px" }}>

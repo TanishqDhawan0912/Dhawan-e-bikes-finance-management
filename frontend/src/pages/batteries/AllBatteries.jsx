@@ -9,6 +9,7 @@ export default function AllBatteries() {
   const [error, setError] = useState("");
   const [searchName, setSearchName] = useState("");
   const [searchSupplier, setSearchSupplier] = useState("");
+  const [searchBatteryType, setSearchBatteryType] = useState(""); // "" | "lead" | "lithium"
 
   const fetchBatteries = useCallback(async () => {
     try {
@@ -87,7 +88,11 @@ export default function AllBatteries() {
         .toLowerCase()
         .includes(searchSupplier.toLowerCase());
 
-    return nameMatch && supplierMatch;
+    const batteryTypeMatch =
+      !searchBatteryType ||
+      (battery.batteryType || "") === searchBatteryType;
+
+    return nameMatch && supplierMatch && batteryTypeMatch;
   });
 
   const handleEdit = (batteryId) => {
@@ -234,11 +239,40 @@ export default function AllBatteries() {
             />
           </div>
 
+          <div style={{ flex: "1", minWidth: "140px" }}>
+            <label
+              style={{
+                fontSize: "0.875rem",
+                fontWeight: "500",
+                display: "block",
+                marginBottom: "0.25rem",
+              }}
+            >
+              Battery Type:
+            </label>
+            <select
+              value={searchBatteryType}
+              onChange={(e) => setSearchBatteryType(e.target.value)}
+              style={{
+                padding: "0.5rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "0.375rem",
+                fontSize: "0.875rem",
+                width: "100%",
+              }}
+            >
+              <option value="">All</option>
+              <option value="lead">Lead</option>
+              <option value="lithium">Lithium</option>
+            </select>
+          </div>
+
           <div>
             <button
               onClick={() => {
                 setSearchName("");
                 setSearchSupplier("");
+                setSearchBatteryType("");
               }}
               style={{
                 padding: "0.5rem 1rem",
@@ -255,7 +289,7 @@ export default function AllBatteries() {
           </div>
         </div>
 
-        {(searchName || searchSupplier) && (
+        {(searchName || searchSupplier || searchBatteryType) && (
           <div
             style={{
               marginTop: "0.5rem",
@@ -270,6 +304,11 @@ export default function AllBatteries() {
             {searchSupplier && (
               <span style={{ marginLeft: "0.5rem" }}>
                 Supplier: "{searchSupplier}"
+              </span>
+            )}
+            {searchBatteryType && (
+              <span style={{ marginLeft: "0.5rem" }}>
+                Type: {searchBatteryType === "lead" ? "Lead" : "Lithium"}
               </span>
             )}
             <span style={{ marginLeft: "0.5rem", fontWeight: "500" }}>
@@ -330,6 +369,17 @@ export default function AllBatteries() {
                   }}
                 >
                   Ampere Value
+                </th>
+                <th
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    padding: "0.75rem",
+                    backgroundColor: "#f9fafb",
+                    textAlign: "center",
+                    fontWeight: "700",
+                  }}
+                >
+                  Battery Type
                 </th>
                 <th
                   style={{
@@ -460,6 +510,20 @@ export default function AllBatteries() {
                       fontWeight: "600",
                     }}
                   >
+                    {battery.batteryType
+                      ? battery.batteryType.charAt(0).toUpperCase() +
+                        battery.batteryType.slice(1)
+                      : "—"}
+                  </td>
+                  <td
+                    style={{
+                      border: "1px solid #e5e7eb",
+                      padding: "0.75rem",
+                      verticalAlign: "middle",
+                      textAlign: "center",
+                      fontWeight: "600",
+                    }}
+                  >
                     {battery.totalSets || 0}
                   </td>
                   <td
@@ -471,8 +535,10 @@ export default function AllBatteries() {
                       fontWeight: "600",
                     }}
                   >
-                    {(battery.batteriesPerSet || 0) * (battery.totalSets || 0) +
-                      (battery.openBatteries || 0)}
+                    {battery.batteryType === "lithium"
+                      ? battery.totalSets || 0
+                      : (battery.batteriesPerSet || 0) * (battery.totalSets || 0) +
+                        (battery.openBatteries || 0)}
                   </td>
                   <td
                     style={{

@@ -917,7 +917,7 @@ export default function AddBattery() {
                 placeholder="Enter batteries per set"
                 min="1"
                 onWheel={(e) => e.target.blur()}
-                disabled={isDuplicate}
+                disabled={isDuplicate || formData.batteryType === "lithium"}
                 autoComplete="off"
                 data-lpignore="true"
               />
@@ -971,7 +971,7 @@ export default function AddBattery() {
                 placeholder="Enter open batteries"
                 min="0"
                 onWheel={(e) => e.target.blur()}
-                disabled={isDuplicate}
+                disabled={isDuplicate || formData.batteryType === "lithium"}
                 autoComplete="off"
                 data-lpignore="true"
               />
