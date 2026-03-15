@@ -223,36 +223,39 @@ export default function AllBills() {
   return (
     <div className="page-content" style={{ minWidth: 0 }}>
       <div className="bills-toolbar">
-        <div className="bills-filter-group">
-          <button
-            type="button"
-            className={`bills-filter-chip ${statusFilter === "all" ? "active" : ""}`}
-            onClick={() => setStatusFilter("all")}
-          >
-            All ({bills.length})
-          </button>
-          <button
-            type="button"
-            className={`bills-filter-chip ${statusFilter === "pending" ? "active" : ""}`}
-            onClick={() => setStatusFilter("pending")}
-          >
-            Pending ({pendingCount})
-          </button>
-          <button
-            type="button"
-            className={`bills-filter-chip ${statusFilter === "cleared" ? "active" : ""}`}
-            onClick={() => setStatusFilter("cleared")}
-          >
-            Cleared ({clearedCount})
-          </button>
-        </div>
         <input
           type="text"
           className="bills-search-input"
-          placeholder="Search by customer, bill no., mobile or registration number"
+          placeholder="Search by customer, bill no., mobile or model"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+        <div className="bills-status-group">
+          <span className="bills-status-label">Status:</span>
+          <div className="bills-filter-group">
+            <button
+              type="button"
+              className={`bills-filter-chip ${statusFilter === "all" ? "active" : ""}`}
+              onClick={() => setStatusFilter("all")}
+            >
+              All ({bills.length})
+            </button>
+            <button
+              type="button"
+              className={`bills-filter-chip ${statusFilter === "pending" ? "active" : ""}`}
+              onClick={() => setStatusFilter("pending")}
+            >
+              Pending ({pendingCount})
+            </button>
+            <button
+              type="button"
+              className={`bills-filter-chip ${statusFilter === "cleared" ? "active" : ""}`}
+              onClick={() => setStatusFilter("cleared")}
+            >
+              Cleared ({clearedCount})
+            </button>
+          </div>
+        </div>
       </div>
 
       {filteredBills.length === 0 ? (
@@ -270,6 +273,9 @@ export default function AllBills() {
             const batteryChargerTags = getBatteryChargerTags(bill);
             const paymentHistory = getPaymentHistory(bill);
             const accessoriesText = getAccessoryDisplay(bill);
+            const oldScootyLabel = (bill.oldScootyExchange || "").trim();
+            const oldScootyPrice = bill.oldScootyExchangePrice || 0;
+            const hasOldScooty = !!oldScootyLabel || oldScootyPrice > 0;
 
             return (
               <div key={bill._id} className="bills-card">
@@ -332,7 +338,7 @@ export default function AllBills() {
                     </div>
                   </div>
 
-                  <div style={{ marginBottom: paymentHistory.length > 0 ? "1rem" : 0, padding: "0.75rem 1rem", backgroundColor: "#f0fdfa", borderRadius: "0.5rem", border: "1px dashed #99f6e4" }}>
+                  <div style={{ marginBottom: hasOldScooty || accessoriesText || paymentHistory.length > 0 ? "1rem" : 0, padding: "0.75rem 1rem", backgroundColor: "#f0fdfa", borderRadius: "0.5rem", border: "1px dashed #99f6e4" }}>
                     <p className="bills-card-label" style={{ marginBottom: "0.5rem" }}>Battery / Charger</p>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
                       {batteryChargerTags.map((tag, idx) => (
@@ -340,6 +346,18 @@ export default function AllBills() {
                       ))}
                     </div>
                   </div>
+
+                  {hasOldScooty && (
+                    <div style={{ marginBottom: accessoriesText || paymentHistory.length > 0 ? "1rem" : 0, padding: "0.75rem 1rem", backgroundColor: "#ecfeff", borderRadius: "0.5rem", border: "1px dashed #67e8f9" }}>
+                      <p className="bills-card-label" style={{ marginBottom: "0.5rem", color: "#0e7490", fontWeight: 600 }}>
+                        Old Scooty Available
+                      </p>
+                      <p className="bills-card-value">
+                        {oldScootyLabel || "—"}
+                        {oldScootyPrice > 0 ? `, Price ₹${oldScootyPrice.toFixed(2)}` : ""}
+                      </p>
+                    </div>
+                  )}
 
                   {accessoriesText && (
                     <div style={{ marginBottom: paymentHistory.length > 0 ? "1rem" : 0, padding: "0.75rem 1rem", backgroundColor: "#eff6ff", borderRadius: "0.5rem", border: "1px dashed #bfdbfe" }}>

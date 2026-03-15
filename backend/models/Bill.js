@@ -44,6 +44,9 @@ const billSchema = new mongoose.Schema(
     // Optional accessories included with this bill
     accessoryIncluded: { type: String, default: "", trim: true },
     accessoryDetails: [accessoryDetailSchema],
+    // Old scooty exchange (optional)
+    oldScootyExchange: { type: String, default: "", trim: true },
+    oldScootyExchangePrice: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
 );

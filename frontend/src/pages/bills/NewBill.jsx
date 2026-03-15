@@ -95,6 +95,16 @@ export default function NewBill() {
   const [paidAmount, setPaidAmount] = useState("");
   const [pendingAmount, setPendingAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash");
+  const [oldScootyAvailable, setOldScootyAvailable] = useState("no"); // "yes" | "no"
+  const [oldScootyPmcNo, setOldScootyPmcNo] = useState("");
+  const [oldScootyWithBattery, setOldScootyWithBattery] = useState("no"); // "yes" | "no"
+  const [oldScootyBatteryType, setOldScootyBatteryType] = useState(""); // "lead" | "lithium"
+  const [oldScootyBatteryCount, setOldScootyBatteryCount] = useState("");
+  const [oldScootyWithCharger, setOldScootyWithCharger] = useState("no"); // "yes" | "no"
+  const [oldScootyChargerType, setOldScootyChargerType] = useState(""); // "lead" | "lithium"
+  const [oldScootyChargerLeadVoltage, setOldScootyChargerLeadVoltage] = useState(""); // "48" | "60" | "72"
+  const [oldScootyChargerLithiumVoltage, setOldScootyChargerLithiumVoltage] = useState("");
+  const [oldScootyExchangePrice, setOldScootyExchangePrice] = useState("");
   const [accessoryQuery, setAccessoryQuery] = useState(""); // optional spare search (name)
   const [accessorySuggestions, setAccessorySuggestions] = useState([]);
   const [showAccessorySuggestions, setShowAccessorySuggestions] = useState(false);
@@ -155,6 +165,21 @@ export default function NewBill() {
   useEffect(() => {
     setSelectedChargerId("");
   }, [chargerTypeForBill]);
+
+  // When old scooty is not available, clear its detailed fields
+  useEffect(() => {
+    if (oldScootyAvailable !== "yes") {
+      setOldScootyPmcNo("");
+      setOldScootyWithBattery("no");
+      setOldScootyBatteryType("");
+      setOldScootyBatteryCount("");
+      setOldScootyWithCharger("no");
+      setOldScootyChargerType("");
+      setOldScootyChargerLeadVoltage("");
+      setOldScootyChargerLithiumVoltage("");
+      setOldScootyExchangePrice("");
+    }
+  }, [oldScootyAvailable]);
 
   // When switching from Custom to a specific charger, clear custom voltage
   useEffect(() => {
@@ -428,6 +453,44 @@ export default function NewBill() {
     }
     setSaving(true);
     try {
+      let oldScootyExchange = "";
+      if (oldScootyAvailable === "yes") {
+        const parts = [];
+        if (oldScootyPmcNo.trim()) {
+          parts.push(`PMC No.: ${oldScootyPmcNo.trim()}`);
+        }
+        if (oldScootyWithBattery === "yes") {
+          const batteryBits = [];
+          batteryBits.push("with battery");
+          if (oldScootyBatteryType) {
+            batteryBits.push(oldScootyBatteryType === "lead" ? "Lead" : "Lithium");
+          }
+          if (oldScootyBatteryType === "lead" && oldScootyBatteryCount.trim()) {
+            batteryBits.push(`${oldScootyBatteryCount.trim()} batteries`);
+          }
+          parts.push(`Battery: ${batteryBits.join(", ")}`);
+        } else {
+          parts.push("Without battery");
+        }
+        if (oldScootyWithCharger === "yes") {
+          const chargerBits = [];
+          chargerBits.push("with charger");
+          if (oldScootyChargerType) {
+            chargerBits.push(oldScootyChargerType === "lead" ? "Lead" : "Lithium");
+          }
+          if (oldScootyChargerType === "lead" && oldScootyChargerLeadVoltage) {
+            chargerBits.push(`${oldScootyChargerLeadVoltage}V`);
+          }
+          if (oldScootyChargerType === "lithium" && oldScootyChargerLithiumVoltage.trim()) {
+            chargerBits.push(oldScootyChargerLithiumVoltage.trim());
+          }
+          parts.push(`Charger: ${chargerBits.join(", ")}`);
+        } else {
+          parts.push("Without charger");
+        }
+        oldScootyExchange = parts.join(" | ");
+      }
+
       const payload = {
         billNo: billNo.trim(),
         billDate: billDate.trim(),
@@ -443,6 +506,8 @@ export default function NewBill() {
         paidAmount: Number(paidAmount) || 0,
         pendingAmount: Number(pendingAmount) || 0,
         paymentMode: paymentMode || "cash",
+        oldScootyExchange: oldScootyExchange.trim(),
+        oldScootyExchangePrice: Number(oldScootyExchangePrice) || 0,
         accessoryIncluded:
           selectedAccessories.length > 0
             ? selectedAccessories.map((a) => a.name).join(", ")
@@ -1174,6 +1239,143 @@ export default function NewBill() {
                   </select>
                 </div>
               </div>
+              <div className="payment-row">
+                <div className="form-group" style={{ flex: "1 1 180px" }}>
+                  <label>Old scooty available?</label>
+                  <select
+                    value={oldScootyAvailable}
+                    onChange={(e) => setOldScootyAvailable(e.target.value)}
+                  >
+                    <option value="no">No</option>
+                    <option value="yes">Yes</option>
+                  </select>
+                </div>
+                <div className="form-group" style={{ flex: "1 1 160px" }}>
+                  <label>Price (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={oldScootyExchangePrice}
+                    onChange={(e) => setOldScootyExchangePrice(e.target.value)}
+                    placeholder="0"
+                    disabled={oldScootyAvailable !== "yes"}
+                  />
+                </div>
+              </div>
+
+              {oldScootyAvailable === "yes" && (
+                <>
+                  <div className="payment-row">
+                    <div className="form-group" style={{ flex: "1 1 220px" }}>
+                      <label>PMC No.</label>
+                      <input
+                        type="text"
+                        value={oldScootyPmcNo}
+                        onChange={(e) => setOldScootyPmcNo(e.target.value)}
+                        placeholder="e.g. PMC-120"
+                      />
+                    </div>
+                    <div className="form-group" style={{ flex: "1 1 220px" }}>
+                      <label>With battery?</label>
+                      <select
+                        value={oldScootyWithBattery}
+                        onChange={(e) => setOldScootyWithBattery(e.target.value)}
+                      >
+                        <option value="no">No</option>
+                        <option value="yes">Yes</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ flex: "1 1 220px" }}>
+                      <label>With charger?</label>
+                      <select
+                        value={oldScootyWithCharger}
+                        onChange={(e) => setOldScootyWithCharger(e.target.value)}
+                      >
+                        <option value="no">No</option>
+                        <option value="yes">Yes</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {oldScootyWithBattery === "yes" && (
+                    <div className="payment-row">
+                      <div className="form-group" style={{ flex: "1 1 220px" }}>
+                        <label>Old scooty battery type</label>
+                        <select
+                          value={oldScootyBatteryType}
+                          onChange={(e) => setOldScootyBatteryType(e.target.value)}
+                        >
+                          <option value="">— Select type —</option>
+                          <option value="lead">Lead</option>
+                          <option value="lithium">Lithium</option>
+                        </select>
+                      </div>
+                      {oldScootyBatteryType === "lead" && (
+                        <div className="form-group" style={{ flex: "1 1 220px" }}>
+                          <label>Number of batteries</label>
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={oldScootyBatteryCount}
+                            onChange={(e) => setOldScootyBatteryCount(e.target.value)}
+                            placeholder="e.g. 4"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {oldScootyWithCharger === "yes" && (
+                    <div className="payment-row">
+                      <div className="form-group" style={{ flex: "1 1 220px" }}>
+                        <label>Old scooty charger type</label>
+                        <select
+                          value={oldScootyChargerType}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setOldScootyChargerType(val);
+                            if (val !== "lead") setOldScootyChargerLeadVoltage("");
+                            if (val !== "lithium") setOldScootyChargerLithiumVoltage("");
+                          }}
+                        >
+                          <option value="">— Select type —</option>
+                          <option value="lead">Lead</option>
+                          <option value="lithium">Lithium</option>
+                        </select>
+                      </div>
+                      {oldScootyChargerType === "lead" && (
+                        <div className="form-group" style={{ flex: "1 1 220px" }}>
+                          <label>Voltage (lead)</label>
+                          <select
+                            value={oldScootyChargerLeadVoltage}
+                            onChange={(e) => setOldScootyChargerLeadVoltage(e.target.value)}
+                          >
+                            <option value="">— Select voltage —</option>
+                            <option value="48">48V</option>
+                            <option value="60">60V</option>
+                            <option value="72">72V</option>
+                          </select>
+                        </div>
+                      )}
+                      {oldScootyChargerType === "lithium" && (
+                        <div className="form-group" style={{ flex: "1 1 220px" }}>
+                          <label>Custom voltage (lithium)</label>
+                          <input
+                            type="text"
+                            value={oldScootyChargerLithiumVoltage}
+                            onChange={(e) =>
+                              setOldScootyChargerLithiumVoltage(e.target.value)
+                            }
+                            placeholder="e.g. 60V, 72V"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
               <div
                 className="form-group"
                 style={{ position: "relative", maxWidth: "440px" }}

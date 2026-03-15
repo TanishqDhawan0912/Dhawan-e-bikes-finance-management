@@ -54,7 +54,11 @@ export default function Bills() {
           <div className="header-content">
             <div className="header-left">
               <h1>{getPageTitle()}</h1>
-              <p>Manage bills for new scooty sales</p>
+              <p>
+                {getPageTitle() === "All Bills"
+                  ? "Review finalized bills with customer, payment and exchange details."
+                  : "Manage bills for new scooty sales"}
+              </p>
             </div>
             <div className="header-right">
               <button
