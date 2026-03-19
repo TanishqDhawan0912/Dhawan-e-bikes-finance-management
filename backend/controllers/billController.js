@@ -25,10 +25,25 @@ const createBill = async (req, res) => {
   try {
     const body = req.body;
     const sellingPrice = Number(body.sellingPrice) || 0;
-    const discount = Number(body.discount) || 0;
     const paidAmount = Number(body.paidAmount) || 0;
-    const netAmount = sellingPrice - discount;
-    const pendingAmount = Math.max(0, netAmount - paidAmount);
+    const pendingAmountFromBody =
+      body.pendingAmount !== undefined ? Number(body.pendingAmount) || 0 : 0;
+    const oldScootyPrice = Number(body.oldScootyExchangePrice) || 0;
+    const netAmountFromBody =
+      body.netAmount !== undefined
+        ? Number(body.netAmount) || 0
+        : paidAmount + pendingAmountFromBody - oldScootyPrice;
+    const netAmount =
+      netAmountFromBody ||
+      paidAmount + pendingAmountFromBody - oldScootyPrice;
+    const discount =
+      body.discount !== undefined
+        ? Number(body.discount) || 0
+        : Math.max(0, sellingPrice - netAmount);
+    const pendingAmount =
+      body.pendingAmount !== undefined
+        ? pendingAmountFromBody
+        : Math.max(0, netAmount - paidAmount - oldScootyPrice);
 
     const bill = new Bill({
       billNo: body.billNo || "",
@@ -68,11 +83,38 @@ const updateBill = async (req, res) => {
     const bill = await Bill.findById(req.params.id);
     if (!bill) return res.status(404).json({ message: "Bill not found" });
 
-    const sellingPrice = Number(body.sellingPrice) !== undefined ? Number(body.sellingPrice) : bill.sellingPrice;
-    const discount = Number(body.discount) !== undefined ? Number(body.discount) : bill.discount;
-    const paidAmount = Number(body.paidAmount) !== undefined ? Number(body.paidAmount) : bill.paidAmount;
-    const netAmount = sellingPrice - discount;
-    const pendingAmount = Math.max(0, netAmount - paidAmount);
+    const sellingPrice =
+      body.sellingPrice !== undefined
+        ? Number(body.sellingPrice) || 0
+        : bill.sellingPrice;
+    const paidAmount =
+      body.paidAmount !== undefined
+        ? Number(body.paidAmount) || 0
+        : bill.paidAmount;
+    const oldScootyPrice =
+      body.oldScootyExchangePrice !== undefined
+        ? Number(body.oldScootyExchangePrice) || 0
+        : bill.oldScootyExchangePrice || 0;
+    const pendingAmountFromBody =
+      body.pendingAmount !== undefined
+        ? Number(body.pendingAmount) || 0
+        : bill.pendingAmount || 0;
+    const netAmountFromBody =
+      body.netAmount !== undefined
+        ? Number(body.netAmount) || 0
+        : bill.netAmount ||
+          paidAmount + pendingAmountFromBody - oldScootyPrice;
+    const netAmount =
+      netAmountFromBody ||
+      paidAmount + pendingAmountFromBody - oldScootyPrice;
+    const discount =
+      body.discount !== undefined
+        ? Number(body.discount) || 0
+        : Math.max(0, sellingPrice - netAmount);
+    const pendingAmount =
+      body.pendingAmount !== undefined
+        ? pendingAmountFromBody
+        : Math.max(0, netAmount - paidAmount - oldScootyPrice);
 
     const updates = {
       billNo: body.billNo !== undefined ? body.billNo : bill.billNo,

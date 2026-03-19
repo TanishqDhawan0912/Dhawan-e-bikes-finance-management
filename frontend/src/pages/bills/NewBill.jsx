@@ -102,12 +102,17 @@ export default function NewBill() {
   const [oldScootyBatteryCount, setOldScootyBatteryCount] = useState("");
   const [oldScootyWithCharger, setOldScootyWithCharger] = useState("no"); // "yes" | "no"
   const [oldScootyChargerType, setOldScootyChargerType] = useState(""); // "lead" | "lithium"
-  const [oldScootyChargerLeadVoltage, setOldScootyChargerLeadVoltage] = useState(""); // "48" | "60" | "72"
-  const [oldScootyChargerLithiumVoltage, setOldScootyChargerLithiumVoltage] = useState("");
+  const [oldScootyChargerLeadVoltage, setOldScootyChargerLeadVoltage] =
+    useState(""); // "48" | "60" | "72"
+  const [oldScootyChargerLithiumVoltage, setOldScootyChargerLithiumVoltage] =
+    useState("");
+   const [oldScootyChargerWorking, setOldScootyChargerWorking] =
+    useState("working"); // "working" | "notWorking"
   const [oldScootyExchangePrice, setOldScootyExchangePrice] = useState("");
   const [accessoryQuery, setAccessoryQuery] = useState(""); // optional spare search (name)
   const [accessorySuggestions, setAccessorySuggestions] = useState([]);
-  const [showAccessorySuggestions, setShowAccessorySuggestions] = useState(false);
+  const [showAccessorySuggestions, setShowAccessorySuggestions] =
+    useState(false);
   const [selectedAccessories, setSelectedAccessories] = useState([]); // array of spare objects
   const [accessorySelectedIndex, setAccessorySelectedIndex] = useState(-1);
 
@@ -156,7 +161,9 @@ export default function NewBill() {
 
   // When battery type is chosen, default charger type to the same (user can still change it)
   useEffect(() => {
-    if (batteryTypeForBill && !chargerTypeForBill && withCharger) {
+    // Auto-sync charger type with battery type.
+    // User can override manually; this will re-sync only when battery type changes again.
+    if (batteryTypeForBill && withCharger) {
       setChargerTypeForBill(batteryTypeForBill);
     }
   }, [batteryTypeForBill, chargerTypeForBill, withCharger]);
@@ -177,6 +184,7 @@ export default function NewBill() {
       setOldScootyChargerType("");
       setOldScootyChargerLeadVoltage("");
       setOldScootyChargerLithiumVoltage("");
+      setOldScootyChargerWorking("working");
       setOldScootyExchangePrice("");
     }
   }, [oldScootyAvailable]);
@@ -207,9 +215,11 @@ export default function NewBill() {
           const data = await modelsRes.json();
           const list = Array.isArray(data)
             ? data
-            : (data.data && Array.isArray(data.data)
-              ? data.data
-              : (data.models && Array.isArray(data.models) ? data.models : []));
+            : data.data && Array.isArray(data.data)
+            ? data.data
+            : data.models && Array.isArray(data.models)
+            ? data.models
+            : [];
           setModels(list);
         }
         if (batteriesRes.ok) {
@@ -234,14 +244,21 @@ export default function NewBill() {
       (colorQuantities || []).forEach((cq) => {
         const c = (cq.color || "").trim();
         if (!c) return;
-        const existing = target.find((x) => x.color.toLowerCase() === c.toLowerCase());
+        const existing = target.find(
+          (x) => x.color.toLowerCase() === c.toLowerCase()
+        );
         if (existing) existing.quantity += cq.quantity || 0;
         else target.push({ color: c, quantity: cq.quantity || 0 });
       });
     };
 
-    if (Array.isArray(selectedModel.description) && selectedModel.description.length > 0) {
-      const tags = selectedModel.description.map((d) => (d || "").trim()).filter(Boolean);
+    if (
+      Array.isArray(selectedModel.description) &&
+      selectedModel.description.length > 0
+    ) {
+      const tags = selectedModel.description
+        .map((d) => (d || "").trim())
+        .filter(Boolean);
       const key = JSON.stringify([...tags].sort());
       const colors = [];
       addColors(colors, selectedModel.colorQuantities);
@@ -250,7 +267,9 @@ export default function NewBill() {
     }
 
     (selectedModel.stockEntries || []).forEach((entry) => {
-      const entryTags = (entry.description || []).map((d) => (d || "").trim()).filter(Boolean);
+      const entryTags = (entry.description || [])
+        .map((d) => (d || "").trim())
+        .filter(Boolean);
       if (entryTags.length === 0) return;
       const key = JSON.stringify([...entryTags].sort());
       if (keyToIndex[key] !== undefined) {
@@ -269,7 +288,9 @@ export default function NewBill() {
   useEffect(() => {
     if (!selectedModel || !descriptionVariant) return;
     const found = descriptionVariantGroups.some(
-      (g) => g.tags.join(", ") === descriptionVariant || g.tags.includes(descriptionVariant)
+      (g) =>
+        g.tags.join(", ") === descriptionVariant ||
+        g.tags.includes(descriptionVariant)
     );
     if (!found && descriptionVariantGroups.length > 0) {
       const firstKey = descriptionVariantGroups[0].tags.join(", ");
@@ -284,8 +305,14 @@ export default function NewBill() {
       : models
           .filter(
             (m) =>
-              (m.modelName && m.modelName.toLowerCase().includes(modelPurchased.trim().toLowerCase())) ||
-              (m.company && m.company.toLowerCase().includes(modelPurchased.trim().toLowerCase()))
+              (m.modelName &&
+                m.modelName
+                  .toLowerCase()
+                  .includes(modelPurchased.trim().toLowerCase())) ||
+              (m.company &&
+                m.company
+                  .toLowerCase()
+                  .includes(modelPurchased.trim().toLowerCase()))
           )
           .slice(0, 3);
 
@@ -335,18 +362,27 @@ export default function NewBill() {
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setModelSuggestionsOpen(true);
-      const next = modelSelectedIndexRef.current < 0 ? 0 : (modelSelectedIndexRef.current >= len - 1 ? 0 : modelSelectedIndexRef.current + 1);
+      const next =
+        modelSelectedIndexRef.current < 0
+          ? 0
+          : modelSelectedIndexRef.current >= len - 1
+          ? 0
+          : modelSelectedIndexRef.current + 1;
       modelSelectedIndexRef.current = next;
       setModelSelectedIndex(next);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setModelSuggestionsOpen(true);
-      const next = modelSelectedIndexRef.current <= 0 ? len - 1 : modelSelectedIndexRef.current - 1;
+      const next =
+        modelSelectedIndexRef.current <= 0
+          ? len - 1
+          : modelSelectedIndexRef.current - 1;
       modelSelectedIndexRef.current = next;
       setModelSelectedIndex(next);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const idx = modelSelectedIndexRef.current >= 0 ? modelSelectedIndexRef.current : 0;
+      const idx =
+        modelSelectedIndexRef.current >= 0 ? modelSelectedIndexRef.current : 0;
       if (modelSuggestions[idx]) {
         handleSelectModelSuggestion(modelSuggestions[idx]);
       }
@@ -357,17 +393,27 @@ export default function NewBill() {
     }
   };
 
-  const selectedBattery = batteries.find((b) => b._id === selectedBatteryId) || null;
-  const selectedCharger = chargers.find((c) => c._id === selectedChargerId) || null;
+  const selectedBattery =
+    batteries.find((b) => b._id === selectedBatteryId) || null;
+  const selectedCharger =
+    chargers.find((c) => c._id === selectedChargerId) || null;
 
   // Sync selling price from selected model when model details are set
   useEffect(() => {
-    if (selectedModel && selectedModel.sellingPrice != null && selectedModel.sellingPrice !== "") {
+    if (
+      selectedModel &&
+      selectedModel.sellingPrice != null &&
+      selectedModel.sellingPrice !== ""
+    ) {
       setSellingPrice(String(selectedModel.sellingPrice));
     }
   }, [selectedModel?.modelName, selectedModel?.sellingPrice]);
 
-  const netAmount = (Number(paidAmount) || 0) + (Number(pendingAmount) || 0);
+  const oldScootyPriceNumber = Number(oldScootyExchangePrice) || 0;
+  const netAmount =
+    (Number(paidAmount) || 0) +
+    (Number(pendingAmount) || 0) -
+    oldScootyPriceNumber;
   const discount = Math.max(0, (Number(sellingPrice) || 0) - netAmount);
 
   const isCustomerDetailsComplete =
@@ -387,8 +433,12 @@ export default function NewBill() {
     if (customerName.trim() === "") reasons.push("Customer Name is required.");
     const mobileDigits = mobile.replace(/\D/g, "");
     if (mobileDigits.length !== 10) {
-      if (mobileDigits.length === 0) reasons.push("Mobile No. is required (10 digits).");
-      else reasons.push(`Mobile No. must be exactly 10 digits (currently ${mobileDigits.length}).`);
+      if (mobileDigits.length === 0)
+        reasons.push("Mobile No. is required (10 digits).");
+      else
+        reasons.push(
+          `Mobile No. must be exactly 10 digits (currently ${mobileDigits.length}).`
+        );
     }
     return reasons.length ? reasons.join(" ") : null;
   };
@@ -405,8 +455,10 @@ export default function NewBill() {
   const isModelTabComplete = Boolean(
     modelPurchased.trim() && descriptionVariant.trim() && modelColor.trim()
   );
-  const batteryVoltageToCount = { "48": 4, "60": 5, "72": 6 };
-  const batteryRequiredCount = batteryVoltage ? batteryVoltageToCount[batteryVoltage] : 0;
+  const batteryVoltageToCount = { 48: 4, 60: 5, 72: 6 };
+  const batteryRequiredCount = batteryVoltage
+    ? batteryVoltageToCount[batteryVoltage]
+    : 0;
   const isLead = batteryTypeForBill === "lead";
   const isBatteryTabComplete =
     !withBattery ||
@@ -463,7 +515,9 @@ export default function NewBill() {
           const batteryBits = [];
           batteryBits.push("with battery");
           if (oldScootyBatteryType) {
-            batteryBits.push(oldScootyBatteryType === "lead" ? "Lead" : "Lithium");
+            batteryBits.push(
+              oldScootyBatteryType === "lead" ? "Lead" : "Lithium"
+            );
           }
           if (oldScootyBatteryType === "lead" && oldScootyBatteryCount.trim()) {
             batteryBits.push(`${oldScootyBatteryCount.trim()} batteries`);
@@ -476,14 +530,22 @@ export default function NewBill() {
           const chargerBits = [];
           chargerBits.push("with charger");
           if (oldScootyChargerType) {
-            chargerBits.push(oldScootyChargerType === "lead" ? "Lead" : "Lithium");
+            chargerBits.push(
+              oldScootyChargerType === "lead" ? "Lead" : "Lithium"
+            );
           }
           if (oldScootyChargerType === "lead" && oldScootyChargerLeadVoltage) {
             chargerBits.push(`${oldScootyChargerLeadVoltage}V`);
           }
-          if (oldScootyChargerType === "lithium" && oldScootyChargerLithiumVoltage.trim()) {
+          if (
+            oldScootyChargerType === "lithium" &&
+            oldScootyChargerLithiumVoltage.trim()
+          ) {
             chargerBits.push(oldScootyChargerLithiumVoltage.trim());
           }
+          chargerBits.push(
+            oldScootyChargerWorking === "working" ? "Working" : "Not working"
+          );
           parts.push(`Charger: ${chargerBits.join(", ")}`);
         } else {
           parts.push("Without charger");
@@ -501,8 +563,17 @@ export default function NewBill() {
         descriptionVariant: descriptionVariant.trim(),
         modelColor: modelColor.trim(),
         sellingPrice: Number(sellingPrice) || 0,
-        discount: Math.max(0, (Number(sellingPrice) || 0) - ((Number(paidAmount) || 0) + (Number(pendingAmount) || 0))),
-        netAmount: (Number(paidAmount) || 0) + (Number(pendingAmount) || 0),
+        discount: Math.max(
+          0,
+          (Number(sellingPrice) || 0) -
+            ((Number(paidAmount) || 0) +
+              (Number(pendingAmount) || 0) -
+              (Number(oldScootyExchangePrice) || 0))
+        ),
+        netAmount:
+          (Number(paidAmount) || 0) +
+          (Number(pendingAmount) || 0) -
+          (Number(oldScootyExchangePrice) || 0),
         paidAmount: Number(paidAmount) || 0,
         pendingAmount: Number(pendingAmount) || 0,
         paymentMode: paymentMode || "cash",
@@ -545,9 +616,7 @@ export default function NewBill() {
   return (
     <div className="page-content">
       <form onSubmit={handleSubmit} className="bill-form-tabs-wrapper">
-        {error && (
-          <p className="bill-form-error">{error}</p>
-        )}
+        {error && <p className="bill-form-error">{error}</p>}
 
         {/* Main tabs */}
         <div className="bill-tabs">
@@ -568,9 +637,14 @@ export default function NewBill() {
           <div className="form-section">
             <h3>Customer & Bill Details</h3>
             <div className="form-section-inner">
-              <div className="form-row" style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
+              <div
+                className="form-row"
+                style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}
+              >
                 <div className="form-group" style={{ flex: "1 1 200px" }}>
-                  <label>Bill No. <span className="required">*</span></label>
+                  <label>
+                    Bill No. <span className="required">*</span>
+                  </label>
                   <input
                     type="text"
                     value={billNo}
@@ -579,7 +653,9 @@ export default function NewBill() {
                   />
                 </div>
                 <div className="form-group" style={{ flex: "1 1 200px" }}>
-                  <label>Bill Date <span className="required">*</span></label>
+                  <label>
+                    Bill Date <span className="required">*</span>
+                  </label>
                   <DatePicker
                     value={billDate}
                     onChange={setBillDate}
@@ -588,9 +664,14 @@ export default function NewBill() {
                   />
                 </div>
               </div>
-              <div className="form-row" style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
+              <div
+                className="form-row"
+                style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}
+              >
                 <div className="form-group" style={{ flex: "1 1 200px" }}>
-                  <label>Customer Name <span className="required">*</span></label>
+                  <label>
+                    Customer Name <span className="required">*</span>
+                  </label>
                   <input
                     type="text"
                     value={customerName}
@@ -599,7 +680,9 @@ export default function NewBill() {
                   />
                 </div>
                 <div className="form-group" style={{ flex: "1 1 200px" }}>
-                  <label>Mobile No. <span className="required">*</span></label>
+                  <label>
+                    Mobile No. <span className="required">*</span>
+                  </label>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -629,12 +712,23 @@ export default function NewBill() {
                   {selectModelWarning}
                 </div>
               )}
-              <div className="bill-form-actions" style={{ borderTop: "none", paddingTop: 0 }}>
+              <div
+                className="bill-form-actions"
+                style={{ borderTop: "none", paddingTop: 0 }}
+              >
                 <button
                   type="button"
-                  className={`btn ${isCustomerDetailsComplete ? "btn-primary" : "btn-primary btn-disabled"}`}
+                  className={`btn ${
+                    isCustomerDetailsComplete
+                      ? "btn-primary"
+                      : "btn-primary btn-disabled"
+                  }`}
                   onClick={handleSelectModelClick}
-                  title={!isCustomerDetailsComplete ? "Fill all required fields to continue" : undefined}
+                  title={
+                    !isCustomerDetailsComplete
+                      ? "Fill all required fields to continue"
+                      : undefined
+                  }
                 >
                   Select Model →
                 </button>
@@ -651,7 +745,9 @@ export default function NewBill() {
                 <button
                   key={tab.id}
                   type="button"
-                  className={`bill-subtab ${modelSubTab === tab.id ? "active" : ""} ${isSubtabComplete(tab.id) ? "complete" : ""}`}
+                  className={`bill-subtab ${
+                    modelSubTab === tab.id ? "active" : ""
+                  } ${isSubtabComplete(tab.id) ? "complete" : ""}`}
                   onClick={() => setModelSubTab(tab.id)}
                 >
                   {tab.label}
@@ -664,7 +760,9 @@ export default function NewBill() {
                 <h3>Model Name & Specifications</h3>
                 <div className="form-section-inner">
                   <div className="form-group" ref={modelSuggestionsRef}>
-                    <label>Model Name <span className="required">*</span></label>
+                    <label>
+                      Model Name <span className="required">*</span>
+                    </label>
                     <div className="model-name-autocomplete">
                       <input
                         ref={modelInputRef}
@@ -673,7 +771,8 @@ export default function NewBill() {
                         onChange={(e) => {
                           const v = e.target.value;
                           setModelPurchased(v);
-                          if (selectedModel && v !== selectedModel.modelName) setDescriptionVariant("");
+                          if (selectedModel && v !== selectedModel.modelName)
+                            setDescriptionVariant("");
                           setModelSuggestionsOpen(true);
                         }}
                         onFocus={() => setModelSuggestionsOpen(true)}
@@ -684,8 +783,12 @@ export default function NewBill() {
                       {modelPurchased.trim() !== "" &&
                         modelSuggestions.length === 0 &&
                         models.length > 0 && (
-                          <div className="model-suggestions-empty" role="status">
-                            No models found matching &quot;{modelPurchased}&quot;
+                          <div
+                            className="model-suggestions-empty"
+                            role="status"
+                          >
+                            No models found matching &quot;{modelPurchased}
+                            &quot;
                           </div>
                         )}
                       {modelSuggestionsOpen && modelSuggestions.length > 0 && (
@@ -699,15 +802,26 @@ export default function NewBill() {
                               key={m._id}
                               role="option"
                               aria-selected={modelSelectedIndex === index}
-                              className={`model-suggestion-item ${modelSelectedIndex === index ? "model-suggestion-item-selected" : ""}`}
+                              className={`model-suggestion-item ${
+                                modelSelectedIndex === index
+                                  ? "model-suggestion-item-selected"
+                                  : ""
+                              }`}
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 handleSelectModelSuggestion(m);
                               }}
                               onMouseEnter={() => setModelSelectedIndex(index)}
                             >
-                              <span className="model-suggestion-name">{m.modelName}</span>
-                              {m.company && <span className="model-suggestion-company"> ({m.company})</span>}
+                              <span className="model-suggestion-name">
+                                {m.modelName}
+                              </span>
+                              {m.company && (
+                                <span className="model-suggestion-company">
+                                  {" "}
+                                  ({m.company})
+                                </span>
+                              )}
                             </li>
                           ))}
                         </ul>
@@ -722,7 +836,9 @@ export default function NewBill() {
                           <select
                             className="bill-description-variant-select"
                             value={descriptionVariant}
-                            onChange={(e) => setDescriptionVariant(e.target.value)}
+                            onChange={(e) =>
+                              setDescriptionVariant(e.target.value)
+                            }
                           >
                             <option value="">Select description variant</option>
                             {descriptionVariantGroups.map((group) => {
@@ -735,7 +851,10 @@ export default function NewBill() {
                             })}
                           </select>
                           {descriptionVariant ? (
-                            <div className="form-group" style={{ marginTop: "0.75rem" }}>
+                            <div
+                              className="form-group"
+                              style={{ marginTop: "0.75rem" }}
+                            >
                               <label>Description selected</label>
                               <input
                                 type="text"
@@ -745,44 +864,72 @@ export default function NewBill() {
                               />
                             </div>
                           ) : null}
-                          {descriptionVariant && (() => {
-                            const selectedGroup = descriptionVariantGroups.find(
-                              (g) => g.tags.join(", ") === descriptionVariant
-                            );
-                            if (!selectedGroup || selectedGroup.colors.length === 0) return null;
-                            return (
-                              <div className="bill-description-group-colors">
-                                <span className="bill-description-group-colors-label">Colors available for this variant (click to select):</span>
-                                <div className="bill-colors-available">
-                                  {selectedGroup.colors.map((c, i) => (
-                                    <button
-                                      key={i}
-                                      type="button"
-                                      className={`bill-color-chip bill-color-chip-clickable ${modelColor.trim().toLowerCase() === c.color.toLowerCase() ? "bill-color-chip-selected" : ""}`}
-                                      onClick={() => setModelColor(c.color)}
-                                    >
-                                      <span
-                                        className="bill-color-swatch"
-                                        style={{ backgroundColor: getColorHex(c.color) }}
-                                        title={c.color}
-                                      />
-                                      <span>{c.color} ({c.quantity})</span>
-                                    </button>
-                                  ))}
+                          {descriptionVariant &&
+                            (() => {
+                              const selectedGroup =
+                                descriptionVariantGroups.find(
+                                  (g) =>
+                                    g.tags.join(", ") === descriptionVariant
+                                );
+                              if (
+                                !selectedGroup ||
+                                selectedGroup.colors.length === 0
+                              )
+                                return null;
+                              return (
+                                <div className="bill-description-group-colors">
+                                  <span className="bill-description-group-colors-label">
+                                    Colors available for this variant (click to
+                                    select):
+                                  </span>
+                                  <div className="bill-colors-available">
+                                    {selectedGroup.colors.map((c, i) => (
+                                      <button
+                                        key={i}
+                                        type="button"
+                                        className={`bill-color-chip bill-color-chip-clickable ${
+                                          modelColor.trim().toLowerCase() ===
+                                          c.color.toLowerCase()
+                                            ? "bill-color-chip-selected"
+                                            : ""
+                                        }`}
+                                        onClick={() => setModelColor(c.color)}
+                                      >
+                                        <span
+                                          className="bill-color-swatch"
+                                          style={{
+                                            backgroundColor: getColorHex(
+                                              c.color
+                                            ),
+                                          }}
+                                          title={c.color}
+                                        />
+                                        <span>
+                                          {c.color} ({c.quantity})
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })()}
+                              );
+                            })()}
                         </>
                       ) : (
-                        <p className="bill-specs-empty">No description variants for this model. Add descriptions in model stock entries.</p>
+                        <p className="bill-specs-empty">
+                          No description variants for this model. Add
+                          descriptions in model stock entries.
+                        </p>
                       )
                     ) : (
-                      <p className="bill-colors-hint">Select a model above to see description variants.</p>
+                      <p className="bill-colors-hint">
+                        Select a model above to see description variants.
+                      </p>
                     )}
                   </div>
                   <div className="form-group">
-                    <label>Color selected <span className="required">*</span></label>
+                    <label>
+                      Color selected <span className="required">*</span>
+                    </label>
                     <input
                       type="text"
                       value={modelColor}
@@ -790,6 +937,22 @@ export default function NewBill() {
                       placeholder="e.g. Black, Red"
                     />
                   </div>
+                </div>
+                <div
+                  className="form-group"
+                  style={{
+                    marginTop: "0.75rem",
+                    display: "flex",
+                    justifyContent: "flex-end",
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="btn btn-secondary bill-select-battery-button"
+                    onClick={() => setModelSubTab("battery")}
+                  >
+                    Select battery →
+                  </button>
                 </div>
               </div>
             )}
@@ -814,7 +977,9 @@ export default function NewBill() {
                         <label>Battery type</label>
                         <select
                           value={batteryTypeForBill}
-                          onChange={(e) => setBatteryTypeForBill(e.target.value)}
+                          onChange={(e) =>
+                            setBatteryTypeForBill(e.target.value)
+                          }
                           className="battery-type-select"
                         >
                           <option value="">— Select type —</option>
@@ -829,7 +994,9 @@ export default function NewBill() {
                               <label>Voltage</label>
                               <select
                                 value={batteryVoltage}
-                                onChange={(e) => setBatteryVoltage(e.target.value)}
+                                onChange={(e) =>
+                                  setBatteryVoltage(e.target.value)
+                                }
                                 className="battery-type-select"
                               >
                                 <option value="">— Select voltage —</option>
@@ -839,36 +1006,51 @@ export default function NewBill() {
                               </select>
                             </div>
                           )}
-                          {(batteryTypeForBill === "lithium" || (isLead && batteryVoltage)) && (
+                          {(batteryTypeForBill === "lithium" ||
+                            (isLead && batteryVoltage)) && (
                             <div className="form-group">
                               <label>Select Battery</label>
                               {(() => {
-                                const availableBatteries = batteries.filter((b) => {
-                                  if (b.batteryType && b.batteryType !== batteryTypeForBill)
-                                    return false;
-                                  if (batteryTypeForBill === "lithium") {
-                                    // Lithium: only show if in stock (total sets > 0)
-                                    return (b.totalSets || 0) > 0;
+                                const availableBatteries = batteries.filter(
+                                  (b) => {
+                                    if (
+                                      b.batteryType &&
+                                      b.batteryType !== batteryTypeForBill
+                                    )
+                                      return false;
+                                    if (batteryTypeForBill === "lithium") {
+                                      // Lithium: only show if in stock (total sets > 0)
+                                      return (b.totalSets || 0) > 0;
+                                    }
+                                    const stock =
+                                      (b.totalSets || 0) *
+                                        (b.batteriesPerSet || 0) +
+                                      (b.openBatteries || 0);
+                                    return stock >= batteryRequiredCount;
                                   }
-                                  const stock =
-                                    (b.totalSets || 0) * (b.batteriesPerSet || 0) +
-                                    (b.openBatteries || 0);
-                                  return stock >= batteryRequiredCount;
-                                });
+                                );
                                 return (
                                   <>
                                     <select
                                       value={selectedBatteryId}
-                                      onChange={(e) => setSelectedBatteryId(e.target.value)}
+                                      onChange={(e) =>
+                                        setSelectedBatteryId(e.target.value)
+                                      }
                                     >
-                                      <option value="">— Select battery —</option>
+                                      <option value="">
+                                        — Select battery —
+                                      </option>
                                       {batteryTypeForBill === "lithium" && (
-                                        <option value="custom">— Custom —</option>
+                                        <option value="custom">
+                                          — Custom —
+                                        </option>
                                       )}
                                       {availableBatteries.map((b) => (
                                         <option key={b._id} value={b._id}>
                                           {b.name}
-                                          {b.ampereValue ? ` (${b.ampereValue}A)` : ""}
+                                          {b.ampereValue
+                                            ? ` (${b.ampereValue}A)`
+                                            : ""}
                                         </option>
                                       ))}
                                     </select>
@@ -885,9 +1067,15 @@ export default function NewBill() {
                             </div>
                           )}
                           {batteryTypeForBill === "lithium" &&
-                            (selectedBatteryId === "custom" || selectedBattery) && (
+                            (selectedBatteryId === "custom" ||
+                              selectedBattery) && (
                               <div className="form-group">
-                                <label>Voltage {selectedBatteryId === "custom" ? "(optional)" : ""}</label>
+                                <label>
+                                  Voltage{" "}
+                                  {selectedBatteryId === "custom"
+                                    ? "(optional)"
+                                    : ""}
+                                </label>
                                 <input
                                   type="text"
                                   value={
@@ -906,27 +1094,35 @@ export default function NewBill() {
                                 />
                               </div>
                             )}
-                          {(selectedBatteryId === "custom" || selectedBattery) && (
+                          {(selectedBatteryId === "custom" ||
+                            selectedBattery) && (
                             <div className="form-group">
                               <label>Battery warranty</label>
                               <select
                                 value={batteryWarranty}
-                                onChange={(e) => setBatteryWarranty(e.target.value)}
+                                onChange={(e) =>
+                                  setBatteryWarranty(e.target.value)
+                                }
                                 className="form-control"
                                 style={{ maxWidth: "200px" }}
                               >
                                 <option value="with">With warranty</option>
-                                <option value="without">Without warranty</option>
+                                <option value="without">
+                                  Without warranty
+                                </option>
                               </select>
                             </div>
                           )}
-                          {(selectedBatteryId === "custom" || selectedBattery) && (
+                          {(selectedBatteryId === "custom" ||
+                            selectedBattery) && (
                             <div className="form-group">
                               <label>Battery numbers</label>
                               <input
                                 type="text"
                                 value={batteryNumbers}
-                                onChange={(e) => setBatteryNumbers(e.target.value)}
+                                onChange={(e) =>
+                                  setBatteryNumbers(e.target.value)
+                                }
                                 placeholder="Enter battery numbers"
                                 className="form-control"
                               />
@@ -936,21 +1132,26 @@ export default function NewBill() {
                       )}
                     </>
                   )}
-                  {selectedBatteryId === "custom" && batteryTypeForBill === "lithium" && (
-                    <div className="bill-detail-card">
-                      <h4>Battery details</h4>
-                      <dl>
-                        <dt>Name</dt>
-                        <dd>Custom</dd>
-                        <dt>Voltage</dt>
-                        <dd>{customLithiumVoltage.trim() || "—"}</dd>
-                        <dt>Warranty</dt>
-                        <dd>{batteryWarranty === "with" ? "With warranty" : "Without warranty"}</dd>
-                        <dt>Battery numbers</dt>
-                        <dd>{batteryNumbers.trim() || "—"}</dd>
-                      </dl>
-                    </div>
-                  )}
+                  {selectedBatteryId === "custom" &&
+                    batteryTypeForBill === "lithium" && (
+                      <div className="bill-detail-card">
+                        <h4>Battery details</h4>
+                        <dl>
+                          <dt>Name</dt>
+                          <dd>Custom</dd>
+                          <dt>Voltage</dt>
+                          <dd>{customLithiumVoltage.trim() || "—"}</dd>
+                          <dt>Warranty</dt>
+                          <dd>
+                            {batteryWarranty === "with"
+                              ? "With warranty"
+                              : "Without warranty"}
+                          </dd>
+                          <dt>Battery numbers</dt>
+                          <dd>{batteryNumbers.trim() || "—"}</dd>
+                        </dl>
+                      </div>
+                    )}
                   {selectedBattery && (
                     <div className="bill-detail-card">
                       <h4>Battery details</h4>
@@ -959,35 +1160,60 @@ export default function NewBill() {
                         <dd>{selectedBattery.name}</dd>
                         <dt>Ampere / Type</dt>
                         <dd>{selectedBattery.ampereValue || "—"}</dd>
-                        {batteryTypeForBill === "lithium" && customLithiumVoltage.trim() && (
-                          <>
-                            <dt>Voltage</dt>
-                            <dd>{customLithiumVoltage.trim()}</dd>
-                          </>
-                        )}
+                        {batteryTypeForBill === "lithium" &&
+                          customLithiumVoltage.trim() && (
+                            <>
+                              <dt>Voltage</dt>
+                              <dd>{customLithiumVoltage.trim()}</dd>
+                            </>
+                          )}
                         {isLead && batteryVoltage && (
                           <>
                             <dt>Voltage / Batteries used</dt>
-                            <dd>{batteryVoltage}V ({batteryRequiredCount} batteries)</dd>
+                            <dd>
+                              {batteryVoltage}V ({batteryRequiredCount}{" "}
+                              batteries)
+                            </dd>
                           </>
                         )}
-                        <dt>Batteries per set</dt>
-                        <dd>{selectedBattery.batteriesPerSet ?? "—"}</dd>
                         <dt>Warranty</dt>
-                        <dd>{batteryWarranty === "with" ? "With warranty" : "Without warranty"}</dd>
+                        <dd>
+                          {batteryWarranty === "with"
+                            ? "With warranty"
+                            : "Without warranty"}
+                        </dd>
                         <dt>Battery numbers</dt>
                         <dd>{batteryNumbers.trim() || "—"}</dd>
                         <dt>Selling price</dt>
                         <dd>₹{selectedBattery.sellingPrice}</dd>
-                        {selectedBattery.supplierName && (
-                          <>
-                            <dt>Supplier</dt>
-                            <dd>{selectedBattery.supplierName}</dd>
-                          </>
-                        )}
                       </dl>
                     </div>
                   )}
+                  <div
+                    className="form-group local-model-nav-actions"
+                    style={{
+                      marginTop: "0.75rem",
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      gap: "0.75rem",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="btn btn-secondary bill-select-battery-button"
+                      style={{ marginRight: "auto" }}
+                      onClick={() => setModelSubTab("model")}
+                    >
+                      ← Back to model
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary bill-select-battery-button"
+                      onClick={() => setModelSubTab("charger")}
+                    >
+                      Select charger →
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1012,7 +1238,9 @@ export default function NewBill() {
                         <label>Charger type</label>
                         <select
                           value={chargerTypeForBill}
-                          onChange={(e) => setChargerTypeForBill(e.target.value)}
+                          onChange={(e) =>
+                            setChargerTypeForBill(e.target.value)
+                          }
                           className="battery-type-select"
                         >
                           <option value="">— Select type —</option>
@@ -1025,14 +1253,18 @@ export default function NewBill() {
                           <label>Select Charger</label>
                           <select
                             value={selectedChargerId}
-                            onChange={(e) => setSelectedChargerId(e.target.value)}
+                            onChange={(e) =>
+                              setSelectedChargerId(e.target.value)
+                            }
                           >
                             <option value="">— Select charger —</option>
                             <option value="custom">— Custom —</option>
                             {chargers
                               .filter((c) => {
                                 if ((c.quantity || 0) <= 0) return false;
-                                const type = (c.batteryType || "").toLowerCase().trim();
+                                const type = (c.batteryType || "")
+                                  .toLowerCase()
+                                  .trim();
                                 if (!type) return true; // no type = show in both
                                 return type === chargerTypeForBill;
                               })
@@ -1045,12 +1277,15 @@ export default function NewBill() {
                           </select>
                           {chargers.filter((c) => {
                             if ((c.quantity || 0) <= 0) return false;
-                            const type = (c.batteryType || "").toLowerCase().trim();
+                            const type = (c.batteryType || "")
+                              .toLowerCase()
+                              .trim();
                             if (!type) return true;
                             return type === chargerTypeForBill;
                           }).length === 0 && (
                             <p className="form-help text-muted">
-                              No chargers in stock for this type. Add stock or choose another type.
+                              No chargers in stock for this type. Add stock or
+                              choose another type.
                             </p>
                           )}
                         </div>
@@ -1058,7 +1293,12 @@ export default function NewBill() {
                       {(selectedChargerId === "custom" || selectedCharger) && (
                         <>
                           <div className="form-group">
-                            <label>Voltage {selectedChargerId === "custom" ? "(optional)" : ""}</label>
+                            <label>
+                              Voltage{" "}
+                              {selectedChargerId === "custom"
+                                ? "(optional)"
+                                : ""}
+                            </label>
                             <input
                               type="text"
                               value={
@@ -1080,7 +1320,9 @@ export default function NewBill() {
                             <label>Charger warranty</label>
                             <select
                               value={chargerWarranty}
-                              onChange={(e) => setChargerWarranty(e.target.value)}
+                              onChange={(e) =>
+                                setChargerWarranty(e.target.value)
+                              }
                               className="form-control"
                               style={{ maxWidth: "200px" }}
                             >
@@ -1101,7 +1343,11 @@ export default function NewBill() {
                         <dt>Voltage</dt>
                         <dd>{customChargerVoltage.trim() || "—"}</dd>
                         <dt>Warranty</dt>
-                        <dd>{chargerWarranty === "with" ? "With warranty" : "Without warranty"}</dd>
+                        <dd>
+                          {chargerWarranty === "with"
+                            ? "With warranty"
+                            : "Without warranty"}
+                        </dd>
                       </dl>
                     </div>
                   )}
@@ -1116,7 +1362,11 @@ export default function NewBill() {
                         <dt>Voltage</dt>
                         <dd>{selectedCharger.voltage || "—"}</dd>
                         <dt>Warranty</dt>
-                        <dd>{chargerWarranty === "with" ? "With warranty" : "Without warranty"}</dd>
+                        <dd>
+                          {chargerWarranty === "with"
+                            ? "With warranty"
+                            : "Without warranty"}
+                        </dd>
                         <dt>Selling price</dt>
                         <dd>₹{selectedCharger.sellingPrice}</dd>
                         {selectedCharger.supplierName && (
@@ -1128,25 +1378,53 @@ export default function NewBill() {
                       </dl>
                     </div>
                   )}
+
+                      <div
+                        className="form-group local-model-nav-actions"
+                        style={{
+                          marginTop: "0.75rem",
+                          display: "flex",
+                          justifyContent: "flex-start",
+                          gap: "0.75rem",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="btn btn-secondary bill-select-battery-button"
+                          onClick={() => setModelSubTab("battery")}
+                        >
+                          ← Back to battery
+                        </button>
+                      </div>
                 </div>
               </div>
             )}
 
-            <div className="bill-form-actions" style={{ justifyContent: "space-between", marginTop: "1rem" }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setActiveTab("customer")}
-              >
-                ← Back
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => setActiveTab("payment")}
-              >
-                Go to Payment →
-              </button>
+            <div
+              className="bill-form-actions"
+              style={{ justifyContent: "space-between", marginTop: "1rem" }}
+            >
+              {modelSubTab === "model" && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setActiveTab("customer")}
+                >
+                  ← Back
+                </button>
+              )}
+              {modelSubTab === "charger" ? (
+                <>
+                  <div style={{ minWidth: "160px" }} />
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setActiveTab("payment")}
+                  >
+                    Go to Payment →
+                  </button>
+                </>
+              ) : null}
             </div>
           </>
         )}
@@ -1157,14 +1435,35 @@ export default function NewBill() {
             <h3>Payment Details</h3>
             <div className="form-section-inner">
               {selectedModel && (
-                <div className="bill-model-price-info" style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "8px" }}>
-                  <div style={{ fontWeight: "600", color: "#0c4a6e", marginBottom: "0.25rem" }}>
+                <div
+                  className="bill-model-price-info"
+                  style={{
+                    marginBottom: "1rem",
+                    padding: "0.75rem 1rem",
+                    background: "#f0f9ff",
+                    border: "1px solid #bae6fd",
+                    borderRadius: "8px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: "600",
+                      color: "#0c4a6e",
+                      marginBottom: "0.25rem",
+                    }}
+                  >
                     Model selling price
                   </div>
                   <div style={{ fontSize: "0.95rem", color: "#075985" }}>
                     ₹{(selectedModel.sellingPrice ?? 0).toLocaleString("en-IN")}
                   </div>
-                  <div style={{ fontSize: "0.9rem", color: "#0369a1", marginTop: "0.25rem" }}>
+                  <div
+                    style={{
+                      fontSize: "0.9rem",
+                      color: "#0369a1",
+                      marginTop: "0.25rem",
+                    }}
+                  >
                     Price set for{" "}
                     {selectedModel.batteriesPerSet ??
                       selectedModel.stockEntries?.[0]?.batteriesPerSet ??
@@ -1182,7 +1481,11 @@ export default function NewBill() {
                     step={1}
                     value={sellingPrice}
                     onChange={(e) => setSellingPrice(e.target.value)}
-                    placeholder={selectedModel ? (selectedModel.sellingPrice ?? 0).toString() : "0"}
+                    placeholder={
+                      selectedModel
+                        ? (selectedModel.sellingPrice ?? 0).toString()
+                        : "0"
+                    }
                   />
                 </div>
                 <div className="form-group" style={{ flex: "1 1 160px" }}>
@@ -1239,150 +1542,225 @@ export default function NewBill() {
                   </select>
                 </div>
               </div>
-              <div className="payment-row">
-                <div className="form-group" style={{ flex: "1 1 180px" }}>
-                  <label>Old scooty available?</label>
-                  <select
-                    value={oldScootyAvailable}
-                    onChange={(e) => setOldScootyAvailable(e.target.value)}
-                  >
-                    <option value="no">No</option>
-                    <option value="yes">Yes</option>
-                  </select>
+              <div className="old-scooty-section">
+                <div className="old-scooty-section-header">
+                  <span>Old scooty available</span>
                 </div>
-                <div className="form-group" style={{ flex: "1 1 160px" }}>
-                  <label>Price (₹)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={oldScootyExchangePrice}
-                    onChange={(e) => setOldScootyExchangePrice(e.target.value)}
-                    placeholder="0"
-                    disabled={oldScootyAvailable !== "yes"}
-                  />
-                </div>
-              </div>
-
-              {oldScootyAvailable === "yes" && (
-                <>
-                  <div className="payment-row">
-                    <div className="form-group" style={{ flex: "1 1 220px" }}>
-                      <label>PMC No.</label>
-                      <input
-                        type="text"
-                        value={oldScootyPmcNo}
-                        onChange={(e) => setOldScootyPmcNo(e.target.value)}
-                        placeholder="e.g. PMC-120"
-                      />
-                    </div>
-                    <div className="form-group" style={{ flex: "1 1 220px" }}>
-                      <label>With battery?</label>
-                      <select
-                        value={oldScootyWithBattery}
-                        onChange={(e) => setOldScootyWithBattery(e.target.value)}
-                      >
-                        <option value="no">No</option>
-                        <option value="yes">Yes</option>
-                      </select>
-                    </div>
-                    <div className="form-group" style={{ flex: "1 1 220px" }}>
-                      <label>With charger?</label>
-                      <select
-                        value={oldScootyWithCharger}
-                        onChange={(e) => setOldScootyWithCharger(e.target.value)}
-                      >
-                        <option value="no">No</option>
-                        <option value="yes">Yes</option>
-                      </select>
-                    </div>
+                <div className="payment-row">
+                  <div className="form-group" style={{ flex: "1 1 180px" }}>
+                    <label>Old scooty available?</label>
+                    <select
+                      value={oldScootyAvailable}
+                      onChange={(e) => setOldScootyAvailable(e.target.value)}
+                    >
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
+                    </select>
                   </div>
+                  <div className="form-group" style={{ flex: "1 1 160px" }}>
+                    <label>Price (₹)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={oldScootyExchangePrice}
+                      onChange={(e) => setOldScootyExchangePrice(e.target.value)}
+                      placeholder="0"
+                      disabled={oldScootyAvailable !== "yes"}
+                    />
+                  </div>
+                </div>
 
-                  {oldScootyWithBattery === "yes" && (
+                {oldScootyAvailable === "yes" && (
+                  <>
                     <div className="payment-row">
                       <div className="form-group" style={{ flex: "1 1 220px" }}>
-                        <label>Old scooty battery type</label>
-                        <select
-                          value={oldScootyBatteryType}
-                          onChange={(e) => setOldScootyBatteryType(e.target.value)}
-                        >
-                          <option value="">— Select type —</option>
-                          <option value="lead">Lead</option>
-                          <option value="lithium">Lithium</option>
-                        </select>
+                        <label>PMC No.</label>
+                        <input
+                          type="text"
+                          value={oldScootyPmcNo}
+                          onChange={(e) => setOldScootyPmcNo(e.target.value)}
+                          placeholder="e.g. PMC-120"
+                        />
                       </div>
-                      {oldScootyBatteryType === "lead" && (
-                        <div className="form-group" style={{ flex: "1 1 220px" }}>
-                          <label>Number of batteries</label>
-                          <input
-                            type="number"
-                            min={1}
-                            step={1}
-                            value={oldScootyBatteryCount}
-                            onChange={(e) => setOldScootyBatteryCount(e.target.value)}
-                            placeholder="e.g. 4"
-                          />
-                        </div>
-                      )}
                     </div>
-                  )}
 
-                  {oldScootyWithCharger === "yes" && (
-                    <div className="payment-row">
-                      <div className="form-group" style={{ flex: "1 1 220px" }}>
-                        <label>Old scooty charger type</label>
-                        <select
-                          value={oldScootyChargerType}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setOldScootyChargerType(val);
-                            if (val !== "lead") setOldScootyChargerLeadVoltage("");
-                            if (val !== "lithium") setOldScootyChargerLithiumVoltage("");
-                          }}
-                        >
-                          <option value="">— Select type —</option>
-                          <option value="lead">Lead</option>
-                          <option value="lithium">Lithium</option>
-                        </select>
+                    {/* Battery subbox */}
+                    <div className="old-scooty-subsection">
+                      <div className="old-scooty-subsection-header">
+                        Battery details
                       </div>
-                      {oldScootyChargerType === "lead" && (
-                        <div className="form-group" style={{ flex: "1 1 220px" }}>
-                          <label>Voltage (lead)</label>
+                      <div className="payment-row" style={{ marginBottom: 0 }}>
+                        <div
+                          className="form-group"
+                          style={{ flex: "1 1 220px" }}
+                        >
+                          <label>With battery?</label>
                           <select
-                            value={oldScootyChargerLeadVoltage}
-                            onChange={(e) => setOldScootyChargerLeadVoltage(e.target.value)}
+                            value={oldScootyWithBattery}
+                            onChange={(e) =>
+                              setOldScootyWithBattery(e.target.value)
+                            }
                           >
-                            <option value="">— Select voltage —</option>
-                            <option value="48">48V</option>
-                            <option value="60">60V</option>
-                            <option value="72">72V</option>
+                            <option value="no">No</option>
+                            <option value="yes">Yes</option>
                           </select>
                         </div>
-                      )}
-                      {oldScootyChargerType === "lithium" && (
-                        <div className="form-group" style={{ flex: "1 1 220px" }}>
-                          <label>Custom voltage (lithium)</label>
-                          <input
-                            type="text"
-                            value={oldScootyChargerLithiumVoltage}
-                            onChange={(e) =>
-                              setOldScootyChargerLithiumVoltage(e.target.value)
-                            }
-                            placeholder="e.g. 60V, 72V"
-                          />
-                        </div>
-                      )}
+                        {oldScootyWithBattery === "yes" && (
+                          <>
+                            <div
+                              className="form-group"
+                              style={{ flex: "1 1 220px" }}
+                            >
+                              <label>Old scooty battery type</label>
+                              <select
+                                value={oldScootyBatteryType}
+                                onChange={(e) =>
+                                  setOldScootyBatteryType(e.target.value)
+                                }
+                              >
+                                <option value="">— Select type —</option>
+                                <option value="lead">Lead</option>
+                                <option value="lithium">Lithium</option>
+                              </select>
+                            </div>
+                            {oldScootyBatteryType === "lead" && (
+                              <div
+                                className="form-group"
+                                style={{ flex: "1 1 220px" }}
+                              >
+                                <label>Number of batteries</label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  value={oldScootyBatteryCount}
+                                  onChange={(e) =>
+                                    setOldScootyBatteryCount(e.target.value)
+                                  }
+                                  placeholder="e.g. 4"
+                                />
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </>
-              )}
+
+                    {/* Charger subbox */}
+                    <div className="old-scooty-subsection">
+                      <div className="old-scooty-subsection-header">
+                        Charger details
+                      </div>
+                      <div className="payment-row" style={{ marginBottom: 0 }}>
+                        <div
+                          className="form-group"
+                          style={{ flex: "1 1 220px" }}
+                        >
+                          <label>With charger?</label>
+                          <select
+                            value={oldScootyWithCharger}
+                            onChange={(e) =>
+                              setOldScootyWithCharger(e.target.value)
+                            }
+                          >
+                            <option value="no">No</option>
+                            <option value="yes">Yes</option>
+                          </select>
+                        </div>
+                        {oldScootyWithCharger === "yes" && (
+                          <>
+                            <div
+                              className="form-group"
+                              style={{ flex: "1 1 220px" }}
+                            >
+                              <label>Old scooty charger type</label>
+                              <select
+                                value={oldScootyChargerType}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setOldScootyChargerType(val);
+                                  if (val !== "lead")
+                                    setOldScootyChargerLeadVoltage("");
+                                  if (val !== "lithium")
+                                    setOldScootyChargerLithiumVoltage("");
+                                }}
+                              >
+                                <option value="">— Select type —</option>
+                                <option value="lead">Lead</option>
+                                <option value="lithium">Lithium</option>
+                              </select>
+                            </div>
+                            <div
+                              className="form-group"
+                              style={{ flex: "1 1 220px" }}
+                            >
+                              <label>Charger status</label>
+                              <select
+                                value={oldScootyChargerWorking}
+                                onChange={(e) =>
+                                  setOldScootyChargerWorking(e.target.value)
+                                }
+                              >
+                                <option value="working">Working</option>
+                                <option value="notWorking">Not working</option>
+                              </select>
+                            </div>
+                            {oldScootyChargerType === "lead" && (
+                              <div
+                                className="form-group"
+                                style={{ flex: "1 1 220px" }}
+                              >
+                                <label>Voltage (lead)</label>
+                                <select
+                                  value={oldScootyChargerLeadVoltage}
+                                  onChange={(e) =>
+                                    setOldScootyChargerLeadVoltage(
+                                      e.target.value
+                                    )
+                                  }
+                                >
+                                  <option value="">— Select voltage —</option>
+                                  <option value="48">48V</option>
+                                  <option value="60">60V</option>
+                                  <option value="72">72V</option>
+                                </select>
+                              </div>
+                            )}
+                            {oldScootyChargerType === "lithium" && (
+                              <div
+                                className="form-group"
+                                style={{ flex: "1 1 220px" }}
+                              >
+                                <label>Custom voltage (lithium)</label>
+                                <input
+                                  type="text"
+                                  value={oldScootyChargerLithiumVoltage}
+                                  onChange={(e) =>
+                                    setOldScootyChargerLithiumVoltage(
+                                      e.target.value
+                                    )
+                                  }
+                                  placeholder="e.g. 60V, 72V"
+                                />
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
               <div
                 className="form-group"
                 style={{ position: "relative", maxWidth: "440px" }}
               >
                 <label>
                   Any accessory included{" "}
-                  <span className="text-muted" style={{ fontWeight: 400 }}>(optional)</span>
+                  <span className="text-muted" style={{ fontWeight: 400 }}>
+                    (optional)
+                  </span>
                 </label>
                 <input
                   type="text"
@@ -1404,7 +1782,10 @@ export default function NewBill() {
                       );
                       const data = await res.json();
                       if (res.ok) {
-                        const suggestions = (data.suggestions || []).slice(0, 3);
+                        const suggestions = (data.suggestions || []).slice(
+                          0,
+                          3
+                        );
                         setAccessorySuggestions(suggestions);
                         setAccessorySelectedIndex(suggestions.length ? 0 : -1);
                         setShowAccessorySuggestions(suggestions.length > 0);
@@ -1420,17 +1801,25 @@ export default function NewBill() {
                     }
                   }}
                   onKeyDown={async (e) => {
-                    if (!showAccessorySuggestions || accessorySuggestions.length === 0) return;
+                    if (
+                      !showAccessorySuggestions ||
+                      accessorySuggestions.length === 0
+                    )
+                      return;
                     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                       e.preventDefault();
                       setAccessorySelectedIndex((prev) => {
                         if (accessorySuggestions.length === 0) return -1;
                         if (prev === -1) return 0;
                         if (e.key === "ArrowDown") {
-                          return prev >= accessorySuggestions.length - 1 ? 0 : prev + 1;
+                          return prev >= accessorySuggestions.length - 1
+                            ? 0
+                            : prev + 1;
                         }
                         // ArrowUp
-                        return prev <= 0 ? accessorySuggestions.length - 1 : prev - 1;
+                        return prev <= 0
+                          ? accessorySuggestions.length - 1
+                          : prev - 1;
                       });
                     } else if (e.key === "Enter") {
                       e.preventDefault();
@@ -1471,77 +1860,88 @@ export default function NewBill() {
                   }}
                   placeholder="Search accessory from spares (e.g. helmet, charger cable)"
                 />
-                {showAccessorySuggestions && accessorySuggestions.length > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      right: 0,
-                      background: "#ffffff",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "0.5rem",
-                      boxShadow: "0 10px 25px rgba(15, 23, 42, 0.15)",
-                      marginTop: 0,
-                      zIndex: 1000,
-                      maxHeight: "220px",
-                      overflowY: "auto",
-                    }}
-                  >
-                    {accessorySuggestions.map((name, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={async () => {
-                          setAccessoryQuery("");
-                          setShowAccessorySuggestions(false);
-                          try {
-                            // Fetch full spare details by name via search
-                            const res = await fetch(
-                              `${API}/spares?search=${encodeURIComponent(name)}`
-                            );
-                            const data = await res.json();
-                            if (res.ok && Array.isArray(data) && data.length > 0) {
-                              const spare = data[0];
-                              setSelectedAccessories((prev) => {
-                                const exists = prev.some(
-                                  (p) =>
-                                    (p._id && spare._id && p._id === spare._id) ||
-                                    (p.name || "").toLowerCase() ===
-                                      (spare.name || "").toLowerCase()
-                                );
-                                return exists ? prev : [...prev, spare];
-                              });
-                            } else {
+                {showAccessorySuggestions &&
+                  accessorySuggestions.length > 0 && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: 0,
+                        right: 0,
+                        background: "#ffffff",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "0.5rem",
+                        boxShadow: "0 10px 25px rgba(15, 23, 42, 0.15)",
+                        marginTop: 0,
+                        zIndex: 1000,
+                        maxHeight: "220px",
+                        overflowY: "auto",
+                      }}
+                    >
+                      {accessorySuggestions.map((name, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={async () => {
+                            setAccessoryQuery("");
+                            setShowAccessorySuggestions(false);
+                            try {
+                              // Fetch full spare details by name via search
+                              const res = await fetch(
+                                `${API}/spares?search=${encodeURIComponent(
+                                  name
+                                )}`
+                              );
+                              const data = await res.json();
+                              if (
+                                res.ok &&
+                                Array.isArray(data) &&
+                                data.length > 0
+                              ) {
+                                const spare = data[0];
+                                setSelectedAccessories((prev) => {
+                                  const exists = prev.some(
+                                    (p) =>
+                                      (p._id &&
+                                        spare._id &&
+                                        p._id === spare._id) ||
+                                      (p.name || "").toLowerCase() ===
+                                        (spare.name || "").toLowerCase()
+                                  );
+                                  return exists ? prev : [...prev, spare];
+                                });
+                              } else {
+                                setSelectedAccessories((prev) => prev);
+                              }
+                            } catch {
                               setSelectedAccessories((prev) => prev);
                             }
-                          } catch {
-                            setSelectedAccessories((prev) => prev);
-                          }
-                        }}
-                        style={{
-                          display: "block",
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "0.5rem 0.75rem",
-                          border: "none",
-                          background:
-                            idx === accessorySelectedIndex ? "#eff6ff" : "white",
-                          cursor: "pointer",
-                          fontSize: "0.9rem",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "#eff6ff";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = "white";
-                        }}
-                      >
-                        {name}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                          }}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            textAlign: "left",
+                            padding: "0.5rem 0.75rem",
+                            border: "none",
+                            background:
+                              idx === accessorySelectedIndex
+                                ? "#eff6ff"
+                                : "white",
+                            cursor: "pointer",
+                            fontSize: "0.9rem",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "#eff6ff";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "white";
+                          }}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
               </div>
               {selectedAccessories.length > 0 && (
                 <div
@@ -1590,8 +1990,7 @@ export default function NewBill() {
                         onClick={() => {
                           setSelectedAccessories((prev) =>
                             prev.filter(
-                              (p) =>
-                                (p._id || p.name) !== (acc._id || acc.name)
+                              (p) => (p._id || p.name) !== (acc._id || acc.name)
                             )
                           );
                         }}

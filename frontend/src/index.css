@@ -638,6 +638,19 @@ button {
   border-color: #047857;
 }
 
+.bill-select-battery-button {
+  border-color: #22c55e !important;
+  color: #15803d !important;
+  background-color: #dcfce7 !important;
+  border: 1px solid #22c55e !important;
+  font-weight: 500;
+  box-shadow: 0 1px 4px rgba(34, 197, 94, 0.25);
+}
+
+.bill-select-battery-button:hover {
+  background: #bbf7d0 !important;
+}
+
 .form-section-inner {
   padding: 0 1.5rem 1.5rem;
 }
@@ -975,6 +988,19 @@ button {
   padding-top: 1.25rem;
 }
 
+/* Keep Battery/Charger layout consistent with Model section.
+   Do not pin the local navigation buttons using flex positioning. */
+.battery-details-section .form-section-inner,
+.charger-details-section .form-section-inner {
+  display: block;
+  min-height: auto;
+}
+
+.battery-details-section .local-model-nav-actions,
+.charger-details-section .local-model-nav-actions {
+  margin-top: initial;
+}
+
 /* Payment section */
 .payment-section .form-section-inner {
   padding-top: 1.5rem;
@@ -1010,6 +1036,40 @@ button {
 
 .payment-section .net-amount-group label {
   font-weight: 600;
+}
+
+.old-scooty-section {
+  margin-top: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  padding: 0.85rem 1rem 0.75rem;
+}
+
+.old-scooty-section-header {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #4b5563;
+  margin-bottom: 0.5rem;
+}
+
+.old-scooty-subsection {
+  margin-top: 0.5rem;
+  border-radius: 0.75rem;
+  border: 1px dashed #d1d5db;
+  background: #f9fafb;
+  padding: 0.75rem 1rem 0.5rem;
+}
+
+.old-scooty-subsection-header {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #4b5563;
+  margin-bottom: 0.35rem;
 }
 
 .form-help.text-muted {
