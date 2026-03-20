@@ -61,9 +61,20 @@ const createBill = async (req, res) => {
       pendingAmount,
       paymentMode: body.paymentMode || "cash",
       paymentHistory: Array.isArray(body.paymentHistory) ? body.paymentHistory : paidAmount > 0 ? [{ amount: paidAmount, date: body.billDate || new Date().toISOString().split("T")[0], time: "", paymentMode: body.paymentMode || "cash" }] : [],
+      upiId: body.upiId || "",
+      upiTransactionId: body.upiTransactionId || "",
+      upiTransactionDate: body.upiTransactionDate || "",
       warranty: body.warranty || "None",
       withBattery: body.withBattery !== false,
       withCharger: body.withCharger !== false,
+      batteryId: body.batteryId || "",
+      batteryName: body.batteryName || "",
+      batteryTypeForBill: body.batteryTypeForBill || "",
+      batteryVoltageForBill: body.batteryVoltageForBill || "",
+      chargerId: body.chargerId || "",
+      chargerName: body.chargerName || "",
+      chargerTypeForBill: body.chargerTypeForBill || "",
+      chargerVoltageForBill: body.chargerVoltageForBill || "",
       accessoryIncluded: body.accessoryIncluded || "",
       accessoryDetails: Array.isArray(body.accessoryDetails) ? body.accessoryDetails : [],
       oldScootyExchange: body.oldScootyExchange || "",
@@ -132,8 +143,37 @@ const updateBill = async (req, res) => {
       pendingAmount,
       paymentMode: body.paymentMode !== undefined ? body.paymentMode : bill.paymentMode,
       warranty: body.warranty !== undefined ? body.warranty : bill.warranty,
+      upiId: body.upiId !== undefined ? body.upiId : bill.upiId,
+      upiTransactionId:
+        body.upiTransactionId !== undefined
+          ? body.upiTransactionId
+          : bill.upiTransactionId,
+      upiTransactionDate:
+        body.upiTransactionDate !== undefined
+          ? body.upiTransactionDate
+          : bill.upiTransactionDate,
       withBattery: body.withBattery !== undefined ? body.withBattery : bill.withBattery,
       withCharger: body.withCharger !== undefined ? body.withCharger : bill.withCharger,
+      batteryId: body.batteryId !== undefined ? body.batteryId : bill.batteryId,
+      batteryName: body.batteryName !== undefined ? body.batteryName : bill.batteryName,
+      batteryTypeForBill:
+        body.batteryTypeForBill !== undefined
+          ? body.batteryTypeForBill
+          : bill.batteryTypeForBill,
+      batteryVoltageForBill:
+        body.batteryVoltageForBill !== undefined
+          ? body.batteryVoltageForBill
+          : bill.batteryVoltageForBill,
+      chargerId: body.chargerId !== undefined ? body.chargerId : bill.chargerId,
+      chargerName: body.chargerName !== undefined ? body.chargerName : bill.chargerName,
+      chargerTypeForBill:
+        body.chargerTypeForBill !== undefined
+          ? body.chargerTypeForBill
+          : bill.chargerTypeForBill,
+      chargerVoltageForBill:
+        body.chargerVoltageForBill !== undefined
+          ? body.chargerVoltageForBill
+          : bill.chargerVoltageForBill,
     };
     if (Array.isArray(body.paymentHistory)) updates.paymentHistory = body.paymentHistory;
     if (body.accessoryIncluded !== undefined) updates.accessoryIncluded = body.accessoryIncluded;

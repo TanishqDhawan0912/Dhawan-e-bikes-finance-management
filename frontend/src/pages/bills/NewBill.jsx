@@ -43,7 +43,11 @@ function getColorHex(name) {
   return COLOR_NAME_TO_HEX[key] || "#94a3b8";
 }
 
-export default function NewBill() {
+export default function NewBill({
+  mode = "create",
+  initialBill = null,
+  billId = null,
+} = {}) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("customer");
   const [modelSubTab, setModelSubTab] = useState("model");
@@ -66,6 +70,7 @@ export default function NewBill() {
   const [modelPurchased, setModelPurchased] = useState("");
   const [descriptionVariant, setDescriptionVariant] = useState("");
   const [modelColor, setModelColor] = useState("");
+  const [modelWarranty, setModelWarranty] = useState(false); // true = With warranty, false = Without warranty
   const [selectedModel, setSelectedModel] = useState(null);
   const [modelSuggestionsOpen, setModelSuggestionsOpen] = useState(false);
   const [modelSelectedIndex, setModelSelectedIndex] = useState(-1);
@@ -80,7 +85,6 @@ export default function NewBill() {
   const [batteryTypeForBill, setBatteryTypeForBill] = useState(""); // "lead" | "lithium"
   const [batteryVoltage, setBatteryVoltage] = useState(""); // "48" | "60" | "72" → 4, 5, 6 batteries
   const [customLithiumVoltage, setCustomLithiumVoltage] = useState(""); // free text e.g. "72V" for lithium
-  const [batteryWarranty, setBatteryWarranty] = useState("with"); // "with" | "without" for battery on this bill
   const [batteryNumbers, setBatteryNumbers] = useState(""); // free text, any characters
 
   // Charger (selected for this bill)
@@ -88,13 +92,15 @@ export default function NewBill() {
   const [withCharger, setWithCharger] = useState(true);
   const [chargerTypeForBill, setChargerTypeForBill] = useState(""); // "lead" | "lithium"
   const [customChargerVoltage, setCustomChargerVoltage] = useState("");
-  const [chargerWarranty, setChargerWarranty] = useState("with"); // "with" | "without"
 
   // Payment
   const [sellingPrice, setSellingPrice] = useState("");
   const [paidAmount, setPaidAmount] = useState("");
   const [pendingAmount, setPendingAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash");
+  const [upiId, setUpiId] = useState("");
+  const [upiTransactionId, setUpiTransactionId] = useState("");
+  const [upiTransactionDate, setUpiTransactionDate] = useState("");
   const [oldScootyAvailable, setOldScootyAvailable] = useState("no"); // "yes" | "no"
   const [oldScootyPmcNo, setOldScootyPmcNo] = useState("");
   const [oldScootyWithBattery, setOldScootyWithBattery] = useState("no"); // "yes" | "no"
@@ -115,6 +121,173 @@ export default function NewBill() {
     useState(false);
   const [selectedAccessories, setSelectedAccessories] = useState([]); // array of spare objects
   const [accessorySelectedIndex, setAccessorySelectedIndex] = useState(-1);
+
+  // Prevent accidental value changes when user scrolls over focused inputs
+  // (e.g., mouse wheel incrementing number fields).
+  const handleWheelCapture = (e) => {
+    const t = e.target;
+    if (!t || typeof t !== "object") return;
+    const tag = t.tagName ? String(t.tagName).toLowerCase() : "";
+    if (tag === "input" || tag === "select" || tag === "textarea") {
+      if (typeof t.blur === "function") t.blur();
+    }
+  };
+
+  // If payment mode is not UPI, clear UPI fields so we don't accidentally submit them.
+  useEffect(() => {
+    if (paymentMode !== "upi") {
+      setUpiId("");
+      setUpiTransactionId("");
+      setUpiTransactionDate("");
+    }
+  }, [paymentMode]);
+
+  // Prefill form fields when editing an existing bill.
+  useEffect(() => {
+    if (mode !== "edit" || !initialBill) return;
+
+    const b = initialBill;
+
+    setBillNo(b.billNo || "");
+    setBillDate(b.billDate || "");
+    setCustomerName(b.customerName || "");
+    setMobile(b.mobile || "");
+    setAddress(b.address || "");
+
+    setModelPurchased(b.modelPurchased || "");
+    setDescriptionVariant(b.descriptionVariant || "");
+    setModelColor(b.modelColor || "");
+
+    // Warranty is stored as string in backend: "With warranty" or "No warranty"
+    const warrantyStr = (b.warranty || "").toString().toLowerCase();
+    setModelWarranty(warrantyStr.includes("with warranty"));
+
+    setWithBattery(b.withBattery !== undefined ? b.withBattery : true);
+    setWithCharger(b.withCharger !== undefined ? b.withCharger : true);
+
+    // Prefill new battery / charger snapshot (used for edit mode + All Bills display)
+    setSelectedBatteryId(b.batteryId || "");
+    setSelectedChargerId(b.chargerId || "");
+
+    setBatteryTypeForBill(b.batteryTypeForBill || "");
+    setChargerTypeForBill(b.chargerTypeForBill || "");
+
+    const leadVoltageMatch =
+      (b.batteryVoltageForBill || "").toString().match(/\b(48|60|72)\b/i);
+    if (leadVoltageMatch && leadVoltageMatch[1]) {
+      setBatteryVoltage(leadVoltageMatch[1]);
+    } else {
+      setBatteryVoltage("");
+    }
+    // Lithium voltage can be a free-text field like "72V"
+    setCustomLithiumVoltage(b.batteryVoltageForBill || "");
+
+    setCustomChargerVoltage(b.chargerVoltageForBill || "");
+
+    setSellingPrice(String(b.sellingPrice ?? 0));
+    setPaidAmount(String(b.paidAmount ?? 0));
+    setPendingAmount(String(b.pendingAmount ?? 0));
+    setPaymentMode(b.paymentMode || "cash");
+
+    setUpiId(b.upiId || "");
+    setUpiTransactionId(b.upiTransactionId || "");
+    setUpiTransactionDate(b.upiTransactionDate || "");
+
+    const oldScootyText = (b.oldScootyExchange || "").toString().trim();
+    const oldScootyPrice = Number(b.oldScootyExchangePrice ?? 0);
+    const hasOldScooty = !!oldScootyText || oldScootyPrice > 0;
+    setOldScootyAvailable(hasOldScooty ? "yes" : "no");
+    setOldScootyExchangePrice(String(oldScootyPrice ?? 0));
+
+    // Parse old scooty exchange string built by handleSubmit in this same component.
+    // Example:
+    // "PMC No.: 101 | Battery: with battery, Lead, 5 batteries | Charger: with charger, Lead, 60V, Working"
+    if (hasOldScooty) {
+      const pmcMatch = oldScootyText.match(/PMC No\.\s*:\s*([^|]+)/i);
+      setOldScootyPmcNo(pmcMatch ? pmcMatch[1].trim() : "");
+
+      const batteryMatch = oldScootyText.match(
+        /Battery:\s*([^|]+?)(?=\s*\|\s*Charger:|$)/i
+      );
+      const batteryPart = batteryMatch ? batteryMatch[1].trim() : "";
+
+      if (batteryPart) {
+        setOldScootyWithBattery(/with battery/i.test(batteryPart) ? "yes" : "no");
+        setOldScootyBatteryType(
+          /Lead/i.test(batteryPart)
+            ? "lead"
+            : /Lithium/i.test(batteryPart)
+            ? "lithium"
+            : ""
+        );
+        const countMatch = batteryPart.match(/(\d+)\s+batteries?/i);
+        setOldScootyBatteryCount(countMatch ? countMatch[1].trim() : "");
+      } else {
+        setOldScootyWithBattery("no");
+        setOldScootyBatteryType("");
+        setOldScootyBatteryCount("");
+      }
+
+      const chargerMatch = oldScootyText.match(
+        /Charger:\s*([^|]+?)(?=\s*\|\s*|$)/i
+      );
+      // The above lookahead is imperfect; fallback to splitting on "Charger:".
+      const chargerPart = chargerMatch
+        ? chargerMatch[1].trim()
+        : oldScootyText.split(/Charger:/i)[1]
+        ? oldScootyText.split(/Charger:/i)[1].trim()
+        : "";
+
+      if (chargerPart) {
+        setOldScootyWithCharger(/with charger/i.test(chargerPart) ? "yes" : "no");
+        setOldScootyChargerType(
+          /Lead/i.test(chargerPart)
+            ? "lead"
+            : /Lithium/i.test(chargerPart)
+            ? "lithium"
+            : ""
+        );
+
+        const isNotWorking = /Not working/i.test(chargerPart);
+        setOldScootyChargerWorking(isNotWorking ? "notWorking" : "working");
+
+        const voltageMatch = chargerPart.match(/(\d+)\s*V/i);
+        if (/Lead/i.test(chargerPart) && voltageMatch) {
+          setOldScootyChargerLeadVoltage(voltageMatch[1].trim());
+        } else {
+          setOldScootyChargerLeadVoltage("");
+        }
+
+        // For lithium, stored as "48V/60V/72V" (usually already includes V)
+        const lithiumVoltageMatch = chargerPart.match(/(\d+\s*V)/i);
+        if (/Lithium/i.test(chargerPart) && lithiumVoltageMatch) {
+          setOldScootyChargerLithiumVoltage(
+            lithiumVoltageMatch[1].replace(/\s+/g, "")
+          );
+        } else {
+          setOldScootyChargerLithiumVoltage("");
+        }
+      } else {
+        setOldScootyWithCharger("no");
+        setOldScootyChargerType("");
+        setOldScootyChargerLeadVoltage("");
+        setOldScootyChargerLithiumVoltage("");
+        setOldScootyChargerWorking("working");
+      }
+    }
+  }, [mode, initialBill]);
+
+  // After models are fetched, try to re-create selectedModel for a nicer edit experience.
+  useEffect(() => {
+    if (mode !== "edit" || !initialBill) return;
+    if (!Array.isArray(models) || models.length === 0) return;
+
+    const match =
+      models.find((m) => m.modelName === initialBill.modelPurchased) ||
+      null;
+
+    setSelectedModel(match);
+  }, [mode, initialBill, models]);
 
   // When "Battery available" is unchecked, clear battery type, voltage and selection
   useEffect(() => {
@@ -137,11 +310,6 @@ export default function NewBill() {
     if (selectedBatteryId && selectedBatteryId !== "custom") {
       setCustomLithiumVoltage("");
     }
-  }, [selectedBatteryId]);
-
-  // Reset battery warranty to default when selection changes
-  useEffect(() => {
-    if (selectedBatteryId) setBatteryWarranty("with");
   }, [selectedBatteryId]);
 
   // When switching to Lithium, clear lead voltage; when switching away, clear custom lithium voltage
@@ -194,11 +362,6 @@ export default function NewBill() {
     if (selectedChargerId && selectedChargerId !== "custom") {
       setCustomChargerVoltage("");
     }
-  }, [selectedChargerId]);
-
-  // Reset charger warranty to default when selection changes
-  useEffect(() => {
-    if (selectedChargerId) setChargerWarranty("with");
   }, [selectedChargerId]);
 
   useEffect(() => {
@@ -503,6 +666,10 @@ export default function NewBill() {
       setError("Model Color is required.");
       return;
     }
+    if (mode === "edit" && !billId) {
+      setError("Bill id is missing for edit.");
+      return;
+    }
     setSaving(true);
     try {
       let oldScootyExchange = "";
@@ -553,6 +720,37 @@ export default function NewBill() {
         oldScootyExchange = parts.join(" | ");
       }
 
+      const getVoltageFromName = (name) => {
+        if (!name) return "";
+        const str = String(name);
+        // Try to capture patterns like "60V" from battery/chgaer names
+        const m = str.match(/(\d+\s*V)/i);
+        if (m && m[1]) return m[1].replace(/\s+/g, "");
+        // Fallback: capture just 48/60/72 and append V
+        const n = str.match(/\b(48|60|72)\b/i);
+        if (n && n[1]) return `${n[1]}V`;
+        return "";
+      };
+
+      const batteryVoltageForBillValue =
+        batteryTypeForBill === "lead"
+          ? batteryVoltage
+            ? `${batteryVoltage}V`
+            : ""
+          : customLithiumVoltage.trim() ||
+            getVoltageFromName(selectedBattery?.name || "");
+
+      const chargerVoltageForBillValue =
+        selectedChargerId === "custom"
+          ? customChargerVoltage.trim()
+          : selectedCharger?.voltage || "";
+
+      const batteryNameForBill =
+        selectedBatteryId === "custom" ? "Custom" : selectedBattery?.name || "";
+
+      const chargerNameForBill =
+        selectedChargerId === "custom" ? "Custom" : selectedCharger?.name || "";
+
       const payload = {
         billNo: billNo.trim(),
         billDate: billDate.trim(),
@@ -577,6 +775,20 @@ export default function NewBill() {
         paidAmount: Number(paidAmount) || 0,
         pendingAmount: Number(pendingAmount) || 0,
         paymentMode: paymentMode || "cash",
+        warranty: modelWarranty ? "With warranty" : "No warranty",
+        upiId: paymentMode === "upi" ? upiId.trim() : "",
+        upiTransactionId:
+          paymentMode === "upi" ? upiTransactionId.trim() : "",
+        upiTransactionDate:
+          paymentMode === "upi" ? upiTransactionDate.trim() : "",
+        batteryId: withBattery ? selectedBatteryId : "",
+        batteryName: withBattery ? batteryNameForBill : "",
+        batteryTypeForBill: withBattery ? batteryTypeForBill : "",
+        batteryVoltageForBill: withBattery ? batteryVoltageForBillValue || "" : "",
+        chargerId: withCharger ? selectedChargerId : "",
+        chargerName: withCharger ? chargerNameForBill : "",
+        chargerTypeForBill: withCharger ? chargerTypeForBill : "",
+        chargerVoltageForBill: withCharger ? chargerVoltageForBillValue || "" : "",
         oldScootyExchange: oldScootyExchange.trim(),
         oldScootyExchangePrice: Number(oldScootyExchangePrice) || 0,
         accessoryIncluded:
@@ -595,16 +807,24 @@ export default function NewBill() {
         withBattery: withBattery,
         withCharger: withCharger,
       };
-      const res = await fetch(`${API}/bills`, {
-        method: "POST",
+      const isEdit = mode === "edit";
+      const res = await fetch(
+        isEdit ? `${API}/bills/${billId}` : `${API}/bills`,
+        {
+          method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      });
+        }
+      );
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || data.error || "Failed to create bill");
+        throw new Error(
+          data.message ||
+            data.error ||
+            (isEdit ? "Failed to update bill" : "Failed to create bill")
+        );
       }
-      alert("Bill created successfully.");
+      alert(isEdit ? "Bill updated successfully." : "Bill created successfully.");
       navigate("/bills/all");
     } catch (err) {
       setError(err.message || "Failed to save.");
@@ -615,7 +835,11 @@ export default function NewBill() {
 
   return (
     <div className="page-content">
-      <form onSubmit={handleSubmit} className="bill-form-tabs-wrapper">
+      <form
+        onSubmit={handleSubmit}
+        onWheelCapture={handleWheelCapture}
+        className="bill-form-tabs-wrapper"
+      >
         {error && <p className="bill-form-error">{error}</p>}
 
         {/* Main tabs */}
@@ -937,6 +1161,20 @@ export default function NewBill() {
                       placeholder="e.g. Black, Red"
                     />
                   </div>
+
+                  <div className="form-group">
+                    <label>Warranty status</label>
+                    <select
+                      value={modelWarranty ? "with" : "no"}
+                      onChange={(e) =>
+                        setModelWarranty(e.target.value === "with")
+                      }
+                      style={{ maxWidth: "280px" }}
+                    >
+                      <option value="with">With warranty</option>
+                      <option value="no">No warranty</option>
+                    </select>
+                  </div>
                 </div>
                 <div
                   className="form-group"
@@ -1097,25 +1335,6 @@ export default function NewBill() {
                           {(selectedBatteryId === "custom" ||
                             selectedBattery) && (
                             <div className="form-group">
-                              <label>Battery warranty</label>
-                              <select
-                                value={batteryWarranty}
-                                onChange={(e) =>
-                                  setBatteryWarranty(e.target.value)
-                                }
-                                className="form-control"
-                                style={{ maxWidth: "200px" }}
-                              >
-                                <option value="with">With warranty</option>
-                                <option value="without">
-                                  Without warranty
-                                </option>
-                              </select>
-                            </div>
-                          )}
-                          {(selectedBatteryId === "custom" ||
-                            selectedBattery) && (
-                            <div className="form-group">
                               <label>Battery numbers</label>
                               <input
                                 type="text"
@@ -1143,9 +1362,7 @@ export default function NewBill() {
                           <dd>{customLithiumVoltage.trim() || "—"}</dd>
                           <dt>Warranty</dt>
                           <dd>
-                            {batteryWarranty === "with"
-                              ? "With warranty"
-                              : "Without warranty"}
+                            {modelWarranty ? "With warranty" : "No warranty"}
                           </dd>
                           <dt>Battery numbers</dt>
                           <dd>{batteryNumbers.trim() || "—"}</dd>
@@ -1178,14 +1395,10 @@ export default function NewBill() {
                         )}
                         <dt>Warranty</dt>
                         <dd>
-                          {batteryWarranty === "with"
-                            ? "With warranty"
-                            : "Without warranty"}
+                          {modelWarranty ? "With warranty" : "No warranty"}
                         </dd>
                         <dt>Battery numbers</dt>
                         <dd>{batteryNumbers.trim() || "—"}</dd>
-                        <dt>Selling price</dt>
-                        <dd>₹{selectedBattery.sellingPrice}</dd>
                       </dl>
                     </div>
                   )}
@@ -1316,20 +1529,7 @@ export default function NewBill() {
                               readOnly={selectedChargerId !== "custom"}
                             />
                           </div>
-                          <div className="form-group">
-                            <label>Charger warranty</label>
-                            <select
-                              value={chargerWarranty}
-                              onChange={(e) =>
-                                setChargerWarranty(e.target.value)
-                              }
-                              className="form-control"
-                              style={{ maxWidth: "200px" }}
-                            >
-                              <option value="with">With warranty</option>
-                              <option value="without">Without warranty</option>
-                            </select>
-                          </div>
+                          {/* Warranty is now selected once in Model Details (single warranty status) */}
                         </>
                       )}
                     </>
@@ -1344,9 +1544,7 @@ export default function NewBill() {
                         <dd>{customChargerVoltage.trim() || "—"}</dd>
                         <dt>Warranty</dt>
                         <dd>
-                          {chargerWarranty === "with"
-                            ? "With warranty"
-                            : "Without warranty"}
+                          {modelWarranty ? "With warranty" : "No warranty"}
                         </dd>
                       </dl>
                     </div>
@@ -1363,12 +1561,8 @@ export default function NewBill() {
                         <dd>{selectedCharger.voltage || "—"}</dd>
                         <dt>Warranty</dt>
                         <dd>
-                          {chargerWarranty === "with"
-                            ? "With warranty"
-                            : "Without warranty"}
+                          {modelWarranty ? "With warranty" : "No warranty"}
                         </dd>
-                        <dt>Selling price</dt>
-                        <dd>₹{selectedCharger.sellingPrice}</dd>
                         {selectedCharger.supplierName && (
                           <>
                             <dt>Supplier</dt>
@@ -1542,6 +1736,44 @@ export default function NewBill() {
                   </select>
                 </div>
               </div>
+
+              {paymentMode === "upi" && (
+                <div className="bill-detail-card" style={{ marginTop: "1rem" }}>
+                  <h4>UPI details</h4>
+                  <div className="payment-row" style={{ marginBottom: 0 }}>
+                    <div className="form-group" style={{ flex: "1 1 220px" }}>
+                      <label>UPI ID</label>
+                      <input
+                        type="text"
+                        value={upiId}
+                        onChange={(e) => setUpiId(e.target.value)}
+                        placeholder="e.g. name@bank"
+                      />
+                    </div>
+                    <div className="form-group" style={{ flex: "1 1 220px" }}>
+                      <label>UTR / Transaction ID</label>
+                      <input
+                        type="text"
+                        value={upiTransactionId}
+                        onChange={(e) =>
+                          setUpiTransactionId(e.target.value)
+                        }
+                        placeholder="e.g. UTR-XXXX / Txn ID"
+                      />
+                    </div>
+                    <div className="form-group" style={{ flex: "1 1 160px" }}>
+                      <label>Transaction Date (optional)</label>
+                      <input
+                        type="date"
+                        value={upiTransactionDate}
+                        onChange={(e) =>
+                          setUpiTransactionDate(e.target.value)
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="old-scooty-section">
                 <div className="old-scooty-section-header">
                   <span>Old scooty available</span>

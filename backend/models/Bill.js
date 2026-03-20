@@ -36,11 +36,28 @@ const billSchema = new mongoose.Schema(
     pendingAmount: { type: Number, default: 0, min: 0 },
     paymentMode: { type: String, enum: ["cash", "upi"], default: "cash" },
     paymentHistory: [paymentEntrySchema],
+    // Optional UPI metadata (only collected when paymentMode === "upi")
+    upiId: { type: String, default: "", trim: true },
+    upiTransactionId: { type: String, default: "", trim: true },
+    upiTransactionDate: { type: String, default: "", trim: true },
     // Warranty (e.g. "Battery, Charger, Motor, Controller" or "None")
     warranty: { type: String, default: "None", trim: true },
     // Optional flags for display
     withBattery: { type: Boolean, default: true },
     withCharger: { type: Boolean, default: true },
+
+    // Snapshot of selected Battery/Charger details for display in All Bills
+    // (because we don't re-fetch inventory data in the list page)
+    batteryId: { type: String, default: "", trim: true },
+    batteryName: { type: String, default: "", trim: true },
+    batteryTypeForBill: { type: String, default: "", trim: true },
+    batteryVoltageForBill: { type: String, default: "", trim: true },
+
+    chargerId: { type: String, default: "", trim: true },
+    chargerName: { type: String, default: "", trim: true },
+    chargerTypeForBill: { type: String, default: "", trim: true },
+    chargerVoltageForBill: { type: String, default: "", trim: true },
+
     // Optional accessories included with this bill
     accessoryIncluded: { type: String, default: "", trim: true },
     accessoryDetails: [accessoryDetailSchema],

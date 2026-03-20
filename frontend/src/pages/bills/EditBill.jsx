@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import NewBill from "./NewBill";
 
 const API = "http://localhost:5000/api";
 
@@ -181,64 +182,6 @@ export default function EditBill() {
   }
 
   return (
-    <div className="page-content">
-      <form onSubmit={handleSubmit} style={{ maxWidth: "720px" }}>
-        {error && <p style={{ color: "#dc2626", fontSize: "0.875rem", marginBottom: "1rem" }}>{error}</p>}
-
-        <div className="bills-form-section">
-          <h2 className="bills-form-section-title">Customer & Bill Details</h2>
-          <div className="bills-form-grid">
-            <div className="bills-form-group">
-              <label className="bills-form-label">Customer Name <span className="required">*</span></label>
-              <input type="text" className="bills-form-input" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
-            </div>
-            <div className="bills-form-group">
-              <label className="bills-form-label">Bill Date <span className="required">*</span></label>
-              <input type="text" className="bills-form-input" value={billDate} onChange={(e) => setBillDate(e.target.value)} placeholder="e.g. 26/02/2026" />
-            </div>
-            <div className="bills-form-group">
-              <label className="bills-form-label">Mobile No. <span className="required">*</span></label>
-              <input type="text" className="bills-form-input" value={mobile} onChange={(e) => setMobile(e.target.value)} />
-            </div>
-            <div className="bills-form-group">
-              <label className="bills-form-label">Bill No. <span className="required">*</span></label>
-              <input type="text" className="bills-form-input" value={billNo} onChange={(e) => setBillNo(e.target.value)} />
-            </div>
-            <div className="bills-form-group full-width">
-              <label className="bills-form-label">Address</label>
-              <textarea className="bills-form-input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Address" style={{ minHeight: "84px", resize: "vertical" }} />
-            </div>
-          </div>
-        </div>
-
-        <div className="bills-form-section">
-          <h2 className="bills-form-section-title">Model Details</h2>
-          <div className="bills-form-grid">
-            <div className="bills-form-group">
-              <label className="bills-form-label">Model Purchased <span className="required">*</span></label>
-              <input type="text" className="bills-form-input" value={modelPurchased} onChange={(e) => setModelPurchased(e.target.value)} placeholder="e.g. Single Light (Evey)" />
-            </div>
-            <div className="bills-form-group">
-              <label className="bills-form-label">Description Variant</label>
-              <select className="bills-form-input" value={descriptionVariant} onChange={(e) => setDescriptionVariant(e.target.value)} style={{ appearance: "auto" }}>
-                <option value="">Select description</option>
-                {models.map((m) => (
-                  <option key={m._id} value={m.modelName}>{m.modelName}{m.company ? ` (${m.company})` : ""}</option>
-                ))}
-              </select>
-            </div>
-            <div className="bills-form-group">
-              <label className="bills-form-label">Model Color <span className="required">*</span></label>
-              <input type="text" className="bills-form-input" value={modelColor} onChange={(e) => setModelColor(e.target.value)} placeholder="e.g. black" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bills-form-actions">
-          <button type="submit" className="bills-btn-primary" disabled={saving}>{saving ? "Saving..." : "Save Changes"}</button>
-          <button type="button" className="bills-btn-secondary" onClick={() => navigate("/bills/all")}>Cancel</button>
-        </div>
-      </form>
-    </div>
+    <NewBill mode="edit" initialBill={bill} billId={id} />
   );
 }

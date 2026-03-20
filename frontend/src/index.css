@@ -543,6 +543,238 @@ button {
   color: #b91c1c;
 }
 
+.bills-payment-delete-btn {
+  border-radius: 999px;
+  border: 1px solid #fecaca;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #b91c1c;
+  background: #fef2f2;
+  cursor: pointer;
+  transition: transform 0.05s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.bills-payment-delete-btn:hover:not(:disabled) {
+  background: #fee2e2;
+  box-shadow: 0 1px 6px rgba(220, 38, 38, 0.15);
+}
+
+.bills-payment-delete-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Payment history delete confirmation modal */
+.payment-delete-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 10000;
+}
+
+.payment-delete-modal {
+  width: 100%;
+  max-width: 520px;
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 15px 50px rgba(2, 6, 23, 0.25);
+  padding: 1.25rem;
+}
+
+.payment-delete-modal h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #111827;
+}
+
+.payment-delete-modal p {
+  margin: 0 0 1rem 0;
+  color: #374151;
+  font-size: 0.95rem;
+}
+
+.payment-delete-modal-details {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.payment-delete-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.payment-delete-btn-confirm {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  border-radius: 999px;
+  padding: 0.4rem 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s ease, box-shadow 0.12s ease,
+    transform 0.05s ease;
+}
+
+.payment-delete-btn-confirm:hover:not(:disabled) {
+  background: #fee2e2;
+  box-shadow: 0 2px 12px rgba(220, 38, 38, 0.18);
+}
+
+.payment-delete-btn-confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.payment-delete-btn-cancel {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  border-radius: 999px;
+  padding: 0.4rem 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.payment-delete-btn-cancel:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+/* Password input eye toggle (Delete bill modal) */
+.bills-password-input-wrap {
+  position: relative;
+}
+
+.bills-password-input {
+  width: 100%;
+  padding-right: 2.75rem !important;
+}
+
+.bills-eye-toggle {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0.2rem;
+  color: #6b7280;
+}
+
+.bills-eye-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+.bills-eye-toggle:hover {
+  color: #111827;
+}
+
+/* Delete bill modal (used by AllBills) */
+.bills-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 10000;
+}
+
+.bills-modal {
+  width: 100%;
+  max-width: 520px;
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 15px 50px rgba(2, 6, 23, 0.25);
+  padding: 1.25rem;
+}
+
+.bills-modal h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #111827;
+}
+
+.bills-modal p {
+  margin: 0 0 1rem 0;
+  color: #374151;
+  font-size: 0.95rem;
+}
+
+.bills-modal input[type="password"],
+.bills-modal input[type="text"],
+.bills-modal input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+}
+
+.bills-modal-error {
+  color: #dc2626;
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem 0;
+}
+
+.bills-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.bills-btn-primary {
+  background: #2563eb;
+  border: 1px solid #2563eb;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 0.4rem 1.1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.bills-btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.bills-btn-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.bills-btn-secondary {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  border-radius: 999px;
+  padding: 0.4rem 1.1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.bills-btn-secondary:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
 .bill-form-error {
   color: #dc2626;
   font-size: 0.875rem;
@@ -980,7 +1212,7 @@ button {
 /* Bill form – professional checkbox */
 /* Battery Details section – extra top spacing */
 .battery-details-section {
-  margin-top: 1.5rem;
+  margin-top: 2rem;
 }
 
 .battery-details-section .form-section-inner,
@@ -988,17 +1220,21 @@ button {
   padding-top: 1.25rem;
 }
 
-/* Keep Battery/Charger layout consistent with Model section.
-   Do not pin the local navigation buttons using flex positioning. */
-.battery-details-section .form-section-inner,
-.charger-details-section .form-section-inner {
-  display: block;
-  min-height: auto;
+/* Charger Details uses the same spacing as Battery for consistent layout */
+.charger-details-section {
+  margin-top: 2rem;
 }
 
+/* Local nav under Model Details: same top gap as Model “Select battery” row */
 .battery-details-section .local-model-nav-actions,
 .charger-details-section .local-model-nav-actions {
-  margin-top: initial;
+  margin-top: 1.25rem;
+}
+
+/* Make local navigation buttons (Back/Select ...) a bit taller */
+.battery-details-section .local-model-nav-actions .btn,
+.charger-details-section .local-model-nav-actions .btn {
+  margin-top: 0.5rem;
 }
 
 /* Payment section */

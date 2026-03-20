@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import BillPrintView from "../../components/BillPrintView";
 
 const API = "http://localhost:5000/api";
 
@@ -66,13 +65,19 @@ export default function AllBills() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | pending | cleared
-  const [printingBill, setPrintingBill] = useState(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [billToDelete, setBillToDelete] = useState(null);
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [validatingPassword, setValidatingPassword] = useState(false);
   const [deletingPaymentIndex, setDeletingPaymentIndex] = useState({ id: null, index: null });
+  const [showPaymentDeleteModal, setShowPaymentDeleteModal] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState({
+    bill: null,
+    idx: null,
+    pay: null,
+  });
 
   useEffect(() => {
     fetchBills();
@@ -128,6 +133,7 @@ export default function AllBills() {
   const handleDeleteClick = (bill) => {
     setBillToDelete(bill);
     setShowPasswordModal(true);
+    setShowPassword(false);
     setPassword("");
     setPasswordError("");
   };
@@ -203,8 +209,56 @@ export default function AllBills() {
 
   const getBatteryChargerTags = (bill) => {
     const tags = [];
-    tags.push(bill.withBattery !== false ? "With battery" : "Without battery");
-    tags.push(bill.withCharger !== false ? "With charger" : "Without charger");
+
+    const formatType = (t) => {
+      if (!t) return "";
+      const s = String(t).trim();
+      if (!s) return "";
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    };
+
+    // Battery badge
+    if (bill.withBattery === false) {
+      tags.push("Without battery");
+    } else if (
+      bill.batteryName ||
+      bill.batteryTypeForBill ||
+      bill.batteryVoltageForBill
+    ) {
+      const batteryBits = [];
+      if (bill.batteryName) batteryBits.push(bill.batteryName);
+      const t = formatType(bill.batteryTypeForBill);
+      if (t && bill.batteryVoltageForBill)
+        batteryBits.push(`${t} ${bill.batteryVoltageForBill}`);
+      else if (t) batteryBits.push(t);
+      else if (bill.batteryVoltageForBill) batteryBits.push(bill.batteryVoltageForBill);
+
+      tags.push(`Battery: ${batteryBits.join(" • ")}`);
+    } else {
+      tags.push("With battery");
+    }
+
+    // Charger badge
+    if (bill.withCharger === false) {
+      tags.push("Without charger");
+    } else if (
+      bill.chargerName ||
+      bill.chargerTypeForBill ||
+      bill.chargerVoltageForBill
+    ) {
+      const chargerBits = [];
+      if (bill.chargerName) chargerBits.push(bill.chargerName);
+      const t = formatType(bill.chargerTypeForBill);
+      if (t && bill.chargerVoltageForBill)
+        chargerBits.push(`${t} ${bill.chargerVoltageForBill}`);
+      else if (t) chargerBits.push(t);
+      else if (bill.chargerVoltageForBill) chargerBits.push(bill.chargerVoltageForBill);
+
+      tags.push(`Charger: ${chargerBits.join(" • ")}`);
+    } else {
+      tags.push("With charger");
+    }
+
     return tags;
   };
 
@@ -378,9 +432,12 @@ export default function AllBills() {
                             </span>
                             <button
                               type="button"
-                              onClick={() => handleDeletePayment(bill, idx)}
+                              onClick={() => {
+                                setPaymentToDelete({ bill, idx, pay });
+                                setShowPaymentDeleteModal(true);
+                              }}
                               disabled={deletingPaymentIndex.id === bill._id && deletingPaymentIndex.index === idx}
-                              style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem", fontWeight: 500, color: "#dc2626", background: "none", border: "none", cursor: deletingPaymentIndex.id === bill._id ? "not-allowed" : "pointer" }}
+                              className="bills-payment-delete-btn"
                             >
                               Delete
                             </button>
@@ -394,7 +451,6 @@ export default function AllBills() {
                 <div className="bills-card-footer">
                   <span>Created: {formatDateTimeCreated(bill.createdAt)}</span>
                   <div className="bills-card-actions">
-                    <button type="button" className="bills-action-print" onClick={() => setPrintingBill(bill)}>Print</button>
                     <button type="button" className="bills-action-edit" onClick={() => handleEdit(bill)}>Edit</button>
                     <button type="button" className="bills-action-delete" onClick={() => handleDeleteClick(bill)}>Delete</button>
                   </div>
@@ -421,12 +477,32 @@ export default function AllBills() {
             <h3>Delete bill</h3>
             <p>Enter admin password to delete this bill.</p>
             <form onSubmit={handlePasswordSubmit}>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Admin password"
-              />
+              <div className="bills-password-input-wrap">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Admin password"
+                  className="bills-password-input"
+                />
+                <button
+                  type="button"
+                  className="bills-eye-toggle"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? (
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm10 5a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
+                      <path d="M4.1 4.1 19.9 19.9" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm10 5a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
               {passwordError && <p className="bills-modal-error">{passwordError}</p>}
               <div className="bills-form-actions">
                 <button type="submit" className="bills-btn-primary" disabled={validatingPassword} style={{ background: "#dc2626", boxShadow: "0 2px 8px rgba(220,38,38,0.3)" }}>
@@ -450,13 +526,75 @@ export default function AllBills() {
         </div>
       )}
 
-      {printingBill && (
-        <BillPrintView
-          bill={printingBill}
-          onClose={() => setPrintingBill(null)}
-          onPrint={() => window.print()}
-        />
+      {showPaymentDeleteModal && paymentToDelete.bill && (
+        <div
+          className="payment-delete-modal-overlay"
+          onClick={() => {
+            setShowPaymentDeleteModal(false);
+            setPaymentToDelete({ bill: null, idx: null, pay: null });
+          }}
+        >
+          <div
+            className="payment-delete-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>Delete payment history</h3>
+            <p>Are you sure you want to delete this payment entry?</p>
+
+            {paymentToDelete.pay && (
+              <div className="payment-delete-modal-details">
+                <div style={{ fontWeight: 700, marginBottom: "0.25rem" }}>
+                  ₹{(paymentToDelete.pay.amount || 0).toFixed(2)} on{" "}
+                  {formatDateShort(paymentToDelete.pay.date)}
+                </div>
+                {formatPaymentTime(paymentToDelete.pay.time) ? (
+                  <div style={{ color: "#475569", fontSize: "0.9rem" }}>
+                    {formatPaymentTime(paymentToDelete.pay.time)}
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            <div className="payment-delete-modal-actions">
+              <button
+                type="button"
+                className="payment-delete-btn-cancel"
+                onClick={() => {
+                  setShowPaymentDeleteModal(false);
+                  setPaymentToDelete({ bill: null, idx: null, pay: null });
+                }}
+                disabled={
+                  deletingPaymentIndex.id === paymentToDelete.bill._id &&
+                  deletingPaymentIndex.index === paymentToDelete.idx
+                }
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="payment-delete-btn-confirm"
+                disabled={
+                  deletingPaymentIndex.id === paymentToDelete.bill._id &&
+                  deletingPaymentIndex.index === paymentToDelete.idx
+                }
+                onClick={async () => {
+                  const { bill, idx } = paymentToDelete;
+                  setShowPaymentDeleteModal(false);
+                  setPaymentToDelete({ bill: null, idx: null, pay: null });
+                  if (!bill || idx == null) return;
+                  await handleDeletePayment(bill, idx);
+                }}
+              >
+                {deletingPaymentIndex.id === paymentToDelete.bill._id &&
+                deletingPaymentIndex.index === paymentToDelete.idx
+                  ? "Deleting..."
+                  : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
+
     </div>
   );
 }
