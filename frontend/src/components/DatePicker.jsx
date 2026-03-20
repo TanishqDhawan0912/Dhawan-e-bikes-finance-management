@@ -183,7 +183,7 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/yyyy"
   const accentLight = isModern ? "#eef2ff" : "#eff6ff";
 
   return (
-    <div className={`date-picker-root ${className}`.trim()} style={{ position: "relative", width: "100%", zIndex: isOpen ? 9999 : "auto" }}>
+    <div className={`date-picker-root ${className}`.trim()} style={{ position: "relative", width: "100%", zIndex: isOpen ? 10001 : "auto" }}>
       <div className={isModern ? "date-picker-input-wrap-modern" : ""} style={{ position: "relative", width: "100%" }}>
         <input
           ref={inputRef}
@@ -216,14 +216,29 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/yyyy"
           className={dropdownClass}
           style={{
             position: "fixed",
-            top: inputRef.current ? `${inputRef.current.getBoundingClientRect().bottom + 8}px` : "50%",
+            top: (() => {
+              if (!inputRef.current) return "50%";
+              const rect = inputRef.current.getBoundingClientRect();
+              const preferredBelowTop = rect.bottom + 8;
+              const spaceBelow = window.innerHeight - preferredBelowTop;
+              // If not enough space below, show dropdown above input.
+              const placeAbove = spaceBelow < 260 && rect.top > 260;
+              return `${placeAbove ? rect.top - 8 : preferredBelowTop}px`;
+            })(),
             left: inputRef.current ? `${inputRef.current.getBoundingClientRect().left}px` : "50%",
-            transform: inputRef.current ? "none" : "translate(-50%, -50%)",
+            transform: (() => {
+              if (!inputRef.current) return "translate(-50%, -50%)";
+              const rect = inputRef.current.getBoundingClientRect();
+              const preferredBelowTop = rect.bottom + 8;
+              const spaceBelow = window.innerHeight - preferredBelowTop;
+              const placeAbove = spaceBelow < 260 && rect.top > 260;
+              return placeAbove ? "translateY(-100%)" : "none";
+            })(),
             backgroundColor: "white",
             borderRadius: isModern ? "12px" : "0.5rem",
             boxShadow: isModern ? "0 25px 50px -12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05)" : "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
             border: "1px solid #e5e7eb",
-            zIndex: 9999,
+            zIndex: 10001,
             padding: isModern ? "1.25rem" : "1rem",
             minWidth: "300px",
           }}

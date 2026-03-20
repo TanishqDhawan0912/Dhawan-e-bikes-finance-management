@@ -17,6 +17,14 @@ const accessoryDetailSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const serviceEntrySchema = new mongoose.Schema(
+  {
+    serviceNumber: { type: String, default: "", trim: true },
+    date: { type: String, default: "", trim: true },
+  },
+  { _id: false }
+);
+
 const billSchema = new mongoose.Schema(
   {
     billNo: { type: String, required: true, trim: true },
@@ -64,6 +72,9 @@ const billSchema = new mongoose.Schema(
     // Old scooty exchange (optional)
     oldScootyExchange: { type: String, default: "", trim: true },
     oldScootyExchangePrice: { type: Number, default: 0, min: 0 },
+
+    // Service management (up to 3 free services for a sold scooty)
+    services: { type: [serviceEntrySchema], default: [] },
   },
   { timestamps: true }
 );

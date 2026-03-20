@@ -45,6 +45,16 @@ const createBill = async (req, res) => {
         ? pendingAmountFromBody
         : Math.max(0, netAmount - paidAmount - oldScootyPrice);
 
+    const sanitizedServices = Array.isArray(body.services)
+      ? body.services
+          .slice(0, 3)
+          .map((s) => ({
+            serviceNumber: (s?.serviceNumber ?? s?.serviceNo ?? "").toString().trim(),
+            date: (s?.date ?? "").toString().trim(),
+          }))
+          .filter((s) => s.date)
+      : [];
+
     const bill = new Bill({
       billNo: body.billNo || "",
       billDate: body.billDate || "",
@@ -79,6 +89,7 @@ const createBill = async (req, res) => {
       accessoryDetails: Array.isArray(body.accessoryDetails) ? body.accessoryDetails : [],
       oldScootyExchange: body.oldScootyExchange || "",
       oldScootyExchangePrice: Number(body.oldScootyExchangePrice) || 0,
+      services: sanitizedServices,
     });
     const created = await bill.save();
     res.status(201).json(created);
@@ -127,6 +138,16 @@ const updateBill = async (req, res) => {
         ? pendingAmountFromBody
         : Math.max(0, netAmount - paidAmount - oldScootyPrice);
 
+    const sanitizedServices = Array.isArray(body.services)
+      ? body.services
+          .slice(0, 3)
+          .map((s) => ({
+            serviceNumber: (s?.serviceNumber ?? s?.serviceNo ?? "").toString().trim(),
+            date: (s?.date ?? "").toString().trim(),
+          }))
+          .filter((s) => s.date)
+      : [];
+
     const updates = {
       billNo: body.billNo !== undefined ? body.billNo : bill.billNo,
       billDate: body.billDate !== undefined ? body.billDate : bill.billDate,
@@ -174,6 +195,7 @@ const updateBill = async (req, res) => {
         body.chargerVoltageForBill !== undefined
           ? body.chargerVoltageForBill
           : bill.chargerVoltageForBill,
+      services: body.services !== undefined ? sanitizedServices : bill.services,
     };
     if (Array.isArray(body.paymentHistory)) updates.paymentHistory = body.paymentHistory;
     if (body.accessoryIncluded !== undefined) updates.accessoryIncluded = body.accessoryIncluded;

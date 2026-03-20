@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import DatePicker from "../../components/DatePicker";
 
 const API = "http://localhost:5000/api";
 
@@ -39,6 +40,34 @@ function formatPaymentTime(timeStr) {
   return timeStr;
 }
 
+function billDateToISO(billDate) {
+  if (!billDate) return null;
+  const s = String(billDate).trim();
+  if (!s) return null;
+
+  // Already ISO-ish
+  if (s.includes("-")) return s.slice(0, 10);
+
+  // Legacy dd/mm/yyyy
+  if (s.includes("/")) {
+    const parts = s.split("/");
+    if (parts.length === 3) {
+      const [dd, mm, yyyy] = parts;
+      if (!yyyy || !mm || !dd) return null;
+      return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+    }
+  }
+
+  return null;
+}
+
+function serviceDateToInput(dateStr) {
+  // For <input type="date"> we need yyyy-mm-dd.
+  // Accept both yyyy-mm-dd and legacy dd/mm/yyyy.
+  const iso = billDateToISO(dateStr);
+  return iso || "";
+}
+
 function getModelDisplay(bill) {
   if (!bill) return "—";
   const parts = [bill.modelPurchased, bill.descriptionVariant ? `(${bill.descriptionVariant})` : "", bill.modelColor ? `(${bill.modelColor})` : ""].filter(Boolean);
@@ -65,6 +94,19 @@ export default function AllBills() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | pending | cleared
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  // Service management (stored as part of the Bill; up to 3 entries)
+  const [serviceModalOpen, setServiceModalOpen] = useState(false);
+  const [serviceModalBill, setServiceModalBill] = useState(null);
+  const [serviceModalEntries, setServiceModalEntries] = useState([
+    { serviceNumber: "", date: "" },
+    { serviceNumber: "", date: "" },
+    { serviceNumber: "", date: "" },
+  ]);
+  const [serviceSaving, setServiceSaving] = useState(false);
+
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [billToDelete, setBillToDelete] = useState(null);
   const [password, setPassword] = useState("");
@@ -121,6 +163,15 @@ export default function AllBills() {
       (statusFilter === "pending" && (bill.pendingAmount || 0) > 0) ||
       (statusFilter === "cleared" && (bill.pendingAmount || 0) === 0);
     if (!matchStatus) return false;
+
+    // Date range filter
+    if (dateFrom || dateTo) {
+      const iso = billDateToISO(bill.billDate);
+      if (!iso) return false;
+      if (dateFrom && iso < dateFrom) return false;
+      if (dateTo && iso > dateTo) return false;
+    }
+
     if (!search.trim()) return true;
     const s = search.toLowerCase();
     const billNo = (bill.billNo || "").toLowerCase();
@@ -223,6 +274,65 @@ export default function AllBills() {
     setClearPendingPaymentMode((bill.paymentMode || "cash") || "cash");
     setClearPendingDate(getTodayISO());
     setShowClearPendingModal(true);
+  };
+
+  const handleOpenServiceMenu = (bill) => {
+    setServiceModalBill(bill);
+    setServiceModalOpen(true);
+
+    const entries = Array.isArray(bill.services) ? bill.services : [];
+    const nextEntries = Array.from({ length: 3 }, (_, i) => {
+      const e = entries[i] || {};
+      const fallbackNumber = `SVC-${i + 1}`;
+      const existingNumber = String(e.serviceNumber ?? e.serviceNo ?? "").trim();
+      return {
+        serviceNumber: existingNumber || fallbackNumber,
+        date: serviceDateToInput(e.date ?? ""),
+      };
+    });
+    setServiceModalEntries(nextEntries);
+  };
+
+  const handleSaveServices = async () => {
+    const bill = serviceModalBill;
+    if (!bill) return;
+
+    const sanitizedServices = Array.isArray(serviceModalEntries)
+      ? serviceModalEntries
+          .map((e) => ({
+            serviceNumber: String(e.serviceNumber ?? "").trim(),
+            date: String(e.date ?? "").trim(),
+          }))
+          .filter((s) => s.date)
+          .slice(0, 3)
+      : [];
+
+    setServiceSaving(true);
+    try {
+      const res = await fetch(`${API}/bills/${bill._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ services: sanitizedServices }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || "Failed to save services");
+      }
+
+      setServiceModalOpen(false);
+      setServiceModalBill(null);
+      setServiceModalEntries([
+        { serviceNumber: "", date: "" },
+        { serviceNumber: "", date: "" },
+        { serviceNumber: "", date: "" },
+      ]);
+      fetchBills();
+    } catch (err) {
+      alert("Error saving service details: " + (err.message || "Unknown error"));
+    } finally {
+      setServiceSaving(false);
+    }
   };
 
   const handleClearPending = async () => {
@@ -372,6 +482,46 @@ export default function AllBills() {
             </button>
           </div>
         </div>
+
+        <div className="bills-date-filter-row">
+          <div className="bills-date-filter-label">Date:</div>
+          <div className="bills-date-filter-controls">
+            <label className="bills-date-filter-field">
+              <span>From</span>
+              <div style={{ width: 160 }}>
+                <DatePicker
+                  value={dateFrom}
+                  onChange={(v) => setDateFrom(v)}
+                  className="date-picker-modern"
+                  placeholder="dd/mm/yyyy"
+                />
+              </div>
+            </label>
+            <label className="bills-date-filter-field">
+              <span>To</span>
+              <div style={{ width: 160 }}>
+                <DatePicker
+                  value={dateTo}
+                  onChange={(v) => setDateTo(v)}
+                  className="date-picker-modern"
+                  placeholder="dd/mm/yyyy"
+                />
+              </div>
+            </label>
+            {(dateFrom || dateTo) && (
+              <button
+                type="button"
+                className="bills-date-filter-reset"
+                onClick={() => {
+                  setDateFrom("");
+                  setDateTo("");
+                }}
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {filteredBills.length === 0 ? (
@@ -392,6 +542,8 @@ export default function AllBills() {
             const oldScootyLabel = (bill.oldScootyExchange || "").trim();
             const oldScootyPrice = bill.oldScootyExchangePrice || 0;
             const hasOldScooty = !!oldScootyLabel || oldScootyPrice > 0;
+
+            // Bill-owned services are edited in the Service modal.
 
             return (
               <div key={bill._id} className="bills-card">
@@ -513,6 +665,15 @@ export default function AllBills() {
                 <div className="bills-card-footer">
                   <span>Created: {formatDateTimeCreated(bill.createdAt)}</span>
                   <div className="bills-card-actions">
+                      <button
+                        type="button"
+                        className="bills-action-service"
+                        onClick={() => handleOpenServiceMenu(bill)}
+                        disabled={serviceSaving}
+                        title="Service management"
+                      >
+                        Service
+                      </button>
                       {totals.pending > 0 && (
                         <button
                           type="button"
@@ -691,12 +852,14 @@ export default function AllBills() {
 
             <div className="bills-modal-field">
               <label className="bills-modal-label">Payment date</label>
-              <input
-                className="bills-modal-control"
-                type="date"
-                value={clearPendingDate}
-                onChange={(e) => setClearPendingDate(e.target.value)}
-              />
+              <div style={{ width: "100%" }}>
+                <DatePicker
+                  value={clearPendingDate}
+                  onChange={(v) => setClearPendingDate(v)}
+                  className="date-picker-modern"
+                  placeholder="dd/mm/yyyy"
+                />
+              </div>
             </div>
 
             <div className="bills-form-actions">
@@ -721,6 +884,78 @@ export default function AllBills() {
                 }}
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {serviceModalOpen && serviceModalBill && (
+        <div
+          className="bills-modal-overlay"
+          onClick={() => {
+            if (serviceSaving) return;
+            setServiceModalOpen(false);
+            setServiceModalBill(null);
+            setServiceModalEntries([
+              { serviceNumber: "", date: "" },
+              { serviceNumber: "", date: "" },
+              { serviceNumber: "", date: "" },
+            ]);
+          }}
+        >
+          <div className="bills-modal bills-service-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Service Management</h3>
+            <p>Add up to 3 free services for this bill.</p>
+
+            <div className="bills-service-entries">
+              {serviceModalEntries.map((entry, idx) => (
+                <div key={idx} className="bills-service-entry">
+                  <div className="bills-service-entry-title">Service {idx + 1}</div>
+                  <div className="bills-service-entry-controls">
+                    <div style={{ width: 160 }}>
+                      <DatePicker
+                        value={entry.date}
+                        onChange={(v) => {
+                          setServiceModalEntries((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], date: v };
+                            return next;
+                          });
+                        }}
+                        className="date-picker-modern"
+                        placeholder="dd/mm/yyyy"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="bills-form-actions">
+              <button
+                type="button"
+                className="bills-btn-secondary"
+                onClick={() => {
+                  if (serviceSaving) return;
+                  setServiceModalOpen(false);
+                  setServiceModalBill(null);
+                  setServiceModalEntries([
+                    { serviceNumber: "", date: "" },
+                    { serviceNumber: "", date: "" },
+                    { serviceNumber: "", date: "" },
+                  ]);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="bills-btn-primary"
+                onClick={handleSaveServices}
+                disabled={serviceSaving}
+              >
+                {serviceSaving ? "Saving..." : "Save Services"}
               </button>
             </div>
           </div>

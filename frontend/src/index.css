@@ -385,6 +385,61 @@ button {
   flex-wrap: wrap;
 }
 
+.bills-date-filter-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.bills-date-filter-label {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.bills-date-filter-controls {
+  display: inline-flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.bills-date-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.bills-date-filter-field input[type="date"] {
+  width: 160px;
+  padding: 0.45rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  font-size: 0.9rem;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.bills-date-filter-reset {
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #4b5563;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.bills-date-filter-reset:hover {
+  background: #eef2ff;
+  border-color: #6366f1;
+  color: #4f46e5;
+}
+
 .bills-filter-chip {
   padding: 0.4rem 0.9rem;
   border-radius: 999px;
@@ -502,7 +557,7 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 0.75rem;
+  margin-top: 1.25rem;
   font-size: 0.8rem;
   color: #6b7280;
   gap: 0.75rem;
@@ -511,18 +566,26 @@ button {
 
 .bills-card-actions {
   display: inline-flex;
-  gap: 0.5rem;
+  gap: 0.65rem;
 }
 
 .bills-action-print,
 .bills-action-edit,
-.bills-action-delete {
-  border-radius: 999px;
+.bills-action-delete,
+.bills-action-service {
+  border-radius: 10px;
   border: 1px solid transparent;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 500;
+  padding: 0.45rem 0.95rem;
+  font-size: 0.93rem;
+  font-weight: 850;
   cursor: pointer;
+  min-height: 2.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  box-shadow: 0 1px 6px rgba(2, 6, 23, 0.08);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
 }
 
 .bills-action-print {
@@ -541,6 +604,63 @@ button {
   background: #fef2f2;
   border-color: #fecaca;
   color: #b91c1c;
+}
+
+.bills-action-service {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.bills-action-print:hover:not(:disabled),
+.bills-action-edit:hover:not(:disabled),
+.bills-action-delete:hover:not(:disabled),
+.bills-action-service:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.14);
+}
+
+.bills-action-print:disabled,
+.bills-action-edit:disabled,
+.bills-action-delete:disabled,
+.bills-action-service:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+  box-shadow: none;
+}
+
+.bills-action-print:hover:not(:disabled) {
+  background: #3b82f6;
+  border-color: #1d4ed8;
+  color: #ffffff;
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.35);
+}
+
+.bills-action-edit:hover:not(:disabled) {
+  background: #a7f3d0;
+  border-color: #4ade80;
+  color: #065f46;
+}
+
+.bills-action-delete:hover:not(:disabled) {
+  background: #fecaca;
+  border-color: #fca5a5;
+  color: #7f1d1d;
+}
+
+.bills-action-service:hover:not(:disabled) {
+  background: #3b82f6;
+  border-color: #1d4ed8;
+  color: #ffffff;
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.35);
+}
+
+.bills-action-service-meta {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #1d4ed8;
+  opacity: 0.95;
 }
 
 .bills-payment-delete-btn {
@@ -704,6 +824,11 @@ button {
   padding: 1.25rem;
 }
 
+.bills-service-modal {
+  max-height: 78vh;
+  overflow: auto;
+}
+
 .bills-modal h3 {
   margin: 0 0 0.5rem 0;
   font-size: 1.1rem;
@@ -715,6 +840,51 @@ button {
   margin: 0 0 1rem 0;
   color: #374151;
   font-size: 0.95rem;
+}
+
+.bills-service-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.bills-service-entry {
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 0.65rem 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.bills-service-entry-title {
+  font-weight: 900;
+  color: #111827;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.bills-service-entry-controls {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.bills-service-entry-controls .bills-modal-control {
+  margin-bottom: 0; /* override .bills-modal input[type=...] margin */
+}
+
+.bills-service-input {
+  width: 220px;
+}
+
+.bills-service-date {
+  width: 160px;
 }
 
 .bills-pending-summary {
@@ -805,6 +975,14 @@ button {
   margin-bottom: 0.75rem;
 }
 
+.bills-service-modal .bills-service-entry-controls .bills-modal-control {
+  margin-bottom: 0 !important;
+}
+
+.bills-service-modal .bills-service-date {
+  width: 160px !important;
+}
+
 .bills-modal-error {
   color: #dc2626;
   font-size: 0.9rem;
@@ -874,18 +1052,33 @@ button {
 
 .bills-action-settle {
   background: #fef3c7;
-  border-color: #fcd34d;
+  border-color: #fbbf24;
   color: #92400e;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 600;
+  border-radius: 10px;
+  border: 1px solid #fcd34d;
+  padding: 0.45rem 0.95rem;
+  font-size: 0.93rem;
+  font-weight: 850;
   cursor: pointer;
+  min-height: 2.1rem;
+  box-shadow: 0 1px 6px rgba(2, 6, 23, 0.08);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease,
+    border-color 0.12s ease, color 0.12s ease;
+}
+
+.bills-action-settle:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+  box-shadow: none;
 }
 
 .bills-action-settle:hover {
-  background: #fef08a;
+  background: #f59e0b;
+  border-color: #d97706;
+  color: #111827;
+  box-shadow: 0 12px 30px rgba(217, 119, 6, 0.22);
+  transform: translateY(-1px);
 }
 
 .bill-form-error {
