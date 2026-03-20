@@ -72,6 +72,14 @@ export default function AllBills() {
   const [passwordError, setPasswordError] = useState("");
   const [validatingPassword, setValidatingPassword] = useState(false);
   const [deletingPaymentIndex, setDeletingPaymentIndex] = useState({ id: null, index: null });
+
+  const getTodayISO = () => new Date().toISOString().split("T")[0];
+
+  const [showClearPendingModal, setShowClearPendingModal] = useState(false);
+  const [billToClearPending, setBillToClearPending] = useState(null);
+  const [clearPendingAmount, setClearPendingAmount] = useState(0);
+  const [clearPendingPaymentMode, setClearPendingPaymentMode] = useState("cash");
+  const [clearPendingDate, setClearPendingDate] = useState(getTodayISO());
   const [showPaymentDeleteModal, setShowPaymentDeleteModal] = useState(false);
   const [paymentToDelete, setPaymentToDelete] = useState({
     bill: null,
@@ -204,6 +212,60 @@ export default function AllBills() {
       alert("Error removing payment: " + err.message);
     } finally {
       setDeletingPaymentIndex({ id: null, index: null });
+    }
+  };
+
+  const handleOpenClearPending = (bill) => {
+    const pendingAmount = bill.pendingAmount || 0;
+    if (pendingAmount <= 0) return;
+    setBillToClearPending(bill);
+    setClearPendingAmount(pendingAmount);
+    setClearPendingPaymentMode((bill.paymentMode || "cash") || "cash");
+    setClearPendingDate(getTodayISO());
+    setShowClearPendingModal(true);
+  };
+
+  const handleClearPending = async () => {
+    const bill = billToClearPending;
+    if (!bill) return;
+    const currentPending = Number(bill.pendingAmount) || 0;
+    const amountToClear = Number(clearPendingAmount) || 0;
+    if (amountToClear <= 0) return;
+    if (amountToClear > currentPending) return;
+
+    const history = Array.isArray(bill.paymentHistory)
+      ? [...bill.paymentHistory]
+      : [];
+
+    const newPaid = (Number(bill.paidAmount) || 0) + amountToClear;
+    const newPending = Math.max(0, currentPending - amountToClear);
+    const newPaymentHistory = [
+      ...history,
+      {
+        amount: amountToClear,
+        date: clearPendingDate,
+        time: "",
+        paymentMode: clearPendingPaymentMode || "cash",
+      },
+    ];
+
+    try {
+      const res = await fetch(`${API}/bills/${bill._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentHistory: newPaymentHistory,
+          paidAmount: newPaid,
+          pendingAmount: newPending,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to clear pending");
+      setShowClearPendingModal(false);
+      setBillToClearPending(null);
+      setClearPendingAmount(0);
+      fetchBills();
+    } catch (err) {
+      alert("Error clearing pending: " + (err.message || "Unknown error"));
     }
   };
 
@@ -451,8 +513,29 @@ export default function AllBills() {
                 <div className="bills-card-footer">
                   <span>Created: {formatDateTimeCreated(bill.createdAt)}</span>
                   <div className="bills-card-actions">
-                    <button type="button" className="bills-action-edit" onClick={() => handleEdit(bill)}>Edit</button>
-                    <button type="button" className="bills-action-delete" onClick={() => handleDeleteClick(bill)}>Delete</button>
+                      {totals.pending > 0 && (
+                        <button
+                          type="button"
+                          className="bills-action-settle"
+                          onClick={() => handleOpenClearPending(bill)}
+                        >
+                          Clear Pending
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="bills-action-edit"
+                        onClick={() => handleEdit(bill)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="bills-action-delete"
+                        onClick={() => handleDeleteClick(bill)}
+                      >
+                        Delete
+                      </button>
                   </div>
                 </div>
               </div>
@@ -522,6 +605,124 @@ export default function AllBills() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showClearPendingModal && billToClearPending && (
+        <div
+          className="bills-modal-overlay"
+          onClick={() => {
+            setShowClearPendingModal(false);
+            setBillToClearPending(null);
+          }}
+        >
+          <div
+            className="bills-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>Clear pending payment</h3>
+            <div className="bills-pending-summary">
+              <span className="bills-pending-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10Z" fill="none" stroke="currentColor" strokeWidth="2" />
+                  <path d="M12 6v6l4 2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+              <div className="bills-pending-summary-text">
+                <div className="bills-pending-summary-label">
+                  Pending amount to clear
+                </div>
+                <div className="bills-pending-summary-amount">
+                  ₹{Number(billToClearPending.pendingAmount || 0).toFixed(2)}
+                </div>
+              </div>
+            </div>
+
+            {(() => {
+              const currentPending = Number(billToClearPending.pendingAmount || 0);
+              const amountToClear = Number(clearPendingAmount) || 0;
+              const remainingAfter = Math.max(0, currentPending - amountToClear);
+              const totalPaidAfter =
+                (Number(billToClearPending.paidAmount) || 0) + amountToClear;
+              const canClear = amountToClear > 0 && amountToClear <= currentPending;
+              return (
+                <div style={{ margin: "0 0 1rem 0" }}>
+                  <div style={{ fontSize: "0.9rem", color: "#374151", marginBottom: "0.35rem" }}>
+                    Remaining pending after this:{" "}
+                    <b style={{ color: "#0e7490" }}>₹{remainingAfter.toFixed(2)}</b>
+                  </div>
+                  <div style={{ fontSize: "0.9rem", color: "#475569" }}>
+                    Total paid after this:{" "}
+                    <b style={{ color: "#15803d" }}>₹{totalPaidAfter.toFixed(2)}</b>
+                  </div>
+                  {!canClear && amountToClear > 0 && (
+                    <div style={{ marginTop: "0.5rem", color: "#dc2626", fontSize: "0.85rem", fontWeight: 600 }}>
+                      Enter an amount between 1 and ₹{currentPending.toFixed(2)}.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            <div className="bills-modal-field">
+              <label className="bills-modal-label">Amount (₹)</label>
+              <input
+                className="bills-modal-control"
+                type="number"
+                value={clearPendingAmount}
+                min={0}
+                step={1}
+                onChange={(e) => setClearPendingAmount(e.target.value)}
+              />
+            </div>
+
+            <div className="bills-modal-field">
+              <label className="bills-modal-label">Payment mode</label>
+              <select
+                value={clearPendingPaymentMode}
+                onChange={(e) => setClearPendingPaymentMode(e.target.value)}
+                className="bills-modal-control"
+              >
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+              </select>
+            </div>
+
+            <div className="bills-modal-field">
+              <label className="bills-modal-label">Payment date</label>
+              <input
+                className="bills-modal-control"
+                type="date"
+                value={clearPendingDate}
+                onChange={(e) => setClearPendingDate(e.target.value)}
+              />
+            </div>
+
+            <div className="bills-form-actions">
+              <button
+                type="button"
+                className="bills-btn-success"
+                onClick={handleClearPending}
+                disabled={
+                  !(Number(clearPendingAmount) > 0) ||
+                  Number(clearPendingAmount) >
+                    Number(billToClearPending?.pendingAmount || 0)
+                }
+              >
+                Clear Pending
+              </button>
+              <button
+                type="button"
+                className="bills-btn-secondary"
+                onClick={() => {
+                  setShowClearPendingModal(false);
+                  setBillToClearPending(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

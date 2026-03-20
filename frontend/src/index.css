@@ -717,6 +717,83 @@ button {
   font-size: 0.95rem;
 }
 
+.bills-pending-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 0 0 1.25rem 0;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  box-shadow: 0 6px 18px rgba(8, 145, 178, 0.08);
+}
+
+.bills-pending-summary-icon {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #cffafe;
+  color: #0e7490;
+  flex-shrink: 0;
+}
+
+.bills-pending-summary-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.bills-pending-summary-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.bills-pending-summary-label {
+  font-weight: 800;
+  color: #0f766e;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.bills-pending-summary-amount {
+  font-weight: 900;
+  color: #0b3b46;
+  font-size: 1.1rem;
+}
+
+.bills-modal-field {
+  margin-bottom: 1rem;
+}
+
+.bills-modal-label {
+  display: block;
+  font-weight: 800;
+  margin-bottom: 0.45rem;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.bills-modal-control {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  font-size: 0.95rem;
+  background: #ffffff;
+}
+
+.bills-modal select.bills-modal-control {
+  appearance: auto;
+}
+
+.bills-modal input[readonly] {
+  background: #f3f4f6;
+  cursor: not-allowed;
+}
+
 .bills-modal input[type="password"],
 .bills-modal input[type="text"],
 .bills-modal input {
@@ -773,6 +850,42 @@ button {
 
 .bills-btn-secondary:hover:not(:disabled) {
   background: #f9fafb;
+}
+
+.bills-btn-success {
+  background: #10b981;
+  border: 1px solid #10b981;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 0.45rem 1.1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.bills-btn-success:hover:not(:disabled) {
+  background: #059669;
+  border-color: #059669;
+}
+
+.bills-btn-success:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.bills-action-settle {
+  background: #fef3c7;
+  border-color: #fcd34d;
+  color: #92400e;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bills-action-settle:hover {
+  background: #fef08a;
 }
 
 .bill-form-error {

@@ -122,6 +122,9 @@ export default function NewBill({
   const [selectedAccessories, setSelectedAccessories] = useState([]); // array of spare objects
   const [accessorySelectedIndex, setAccessorySelectedIndex] = useState(-1);
 
+  // Guard so edit prefill values don't get overwritten by "clear fields" effects.
+  const prefillInProgressRef = useRef(false);
+
   // Prevent accidental value changes when user scrolls over focused inputs
   // (e.g., mouse wheel incrementing number fields).
   const handleWheelCapture = (e) => {
@@ -145,6 +148,8 @@ export default function NewBill({
   // Prefill form fields when editing an existing bill.
   useEffect(() => {
     if (mode !== "edit" || !initialBill) return;
+
+    prefillInProgressRef.current = true;
 
     const b = initialBill;
 
@@ -199,82 +204,94 @@ export default function NewBill({
     setOldScootyAvailable(hasOldScooty ? "yes" : "no");
     setOldScootyExchangePrice(String(oldScootyPrice ?? 0));
 
+    // If this bill already has payment/old-scooty info, show Payment tab by default in edit mode.
+    const hasPayment =
+      (Number(b.pendingAmount) || 0) > 0 ||
+      (Number(b.paidAmount) || 0) > 0 ||
+      (Array.isArray(b.paymentHistory) && b.paymentHistory.length > 0);
+    if (hasOldScooty || hasPayment) setActiveTab("payment");
+
     // Parse old scooty exchange string built by handleSubmit in this same component.
     // Example:
     // "PMC No.: 101 | Battery: with battery, Lead, 5 batteries | Charger: with charger, Lead, 60V, Working"
     if (hasOldScooty) {
-      const pmcMatch = oldScootyText.match(/PMC No\.\s*:\s*([^|]+)/i);
+      // More tolerant: match first number after "PMC"
+      const pmcMatch = oldScootyText.match(/PMC[^0-9]*([0-9]+)/i);
       setOldScootyPmcNo(pmcMatch ? pmcMatch[1].trim() : "");
 
-      const batteryMatch = oldScootyText.match(
-        /Battery:\s*([^|]+?)(?=\s*\|\s*Charger:|$)/i
+      // Split into segments using markers (more tolerant than lookaheads)
+      const batterySegMatch = oldScootyText.match(
+        /Battery:\s*([\s\S]*?)(?=Charger:|$)/i
       );
-      const batteryPart = batteryMatch ? batteryMatch[1].trim() : "";
+      const batterySeg = batterySegMatch ? batterySegMatch[1].trim() : "";
 
-      if (batteryPart) {
-        setOldScootyWithBattery(/with battery/i.test(batteryPart) ? "yes" : "no");
-        setOldScootyBatteryType(
-          /Lead/i.test(batteryPart)
-            ? "lead"
-            : /Lithium/i.test(batteryPart)
-            ? "lithium"
-            : ""
-        );
-        const countMatch = batteryPart.match(/(\d+)\s+batteries?/i);
-        setOldScootyBatteryCount(countMatch ? countMatch[1].trim() : "");
-      } else {
-        setOldScootyWithBattery("no");
-        setOldScootyBatteryType("");
-        setOldScootyBatteryCount("");
-      }
-
-      const chargerMatch = oldScootyText.match(
-        /Charger:\s*([^|]+?)(?=\s*\|\s*|$)/i
+      const chargerSegMatch = oldScootyText.match(
+        /Charger:\s*([\s\S]*?)(?=Price\s*₹|Price\s*:|$)/i
       );
-      // The above lookahead is imperfect; fallback to splitting on "Charger:".
-      const chargerPart = chargerMatch
-        ? chargerMatch[1].trim()
-        : oldScootyText.split(/Charger:/i)[1]
-        ? oldScootyText.split(/Charger:/i)[1].trim()
+      const chargerSeg = chargerSegMatch ? chargerSegMatch[1].trim() : "";
+
+      // Avoid being too strict on "Battery:" formatting; the exchange string
+      // always contains either "with battery" or "without battery".
+      const batteryWith =
+        /with\s*battery/i.test(oldScootyText) &&
+        !/without\s*battery/i.test(oldScootyText);
+      const batterySrcForParsing = batterySeg || oldScootyText;
+      setOldScootyWithBattery(batteryWith ? "yes" : "no");
+
+      const batteryType = /Lead/i.test(batterySrcForParsing)
+        ? "lead"
+        : /Lithium/i.test(batterySrcForParsing)
+        ? "lithium"
         : "";
+      setOldScootyBatteryType(batteryWith ? batteryType : "");
 
-      if (chargerPart) {
-        setOldScootyWithCharger(/with charger/i.test(chargerPart) ? "yes" : "no");
-        setOldScootyChargerType(
-          /Lead/i.test(chargerPart)
-            ? "lead"
-            : /Lithium/i.test(chargerPart)
-            ? "lithium"
-            : ""
-        );
+      // Match "5 battery" or "5 batteries"
+      const countMatch = batterySrcForParsing.match(/(\d+)\s+batter(?:y|ies)/i);
+      setOldScootyBatteryCount(
+        batteryWith && countMatch ? countMatch[1].trim() : ""
+      );
 
-        const isNotWorking = /Not working/i.test(chargerPart);
-        setOldScootyChargerWorking(isNotWorking ? "notWorking" : "working");
+      const chargerWith =
+        /with\s*charger/i.test(oldScootyText) &&
+        !/without\s*charger/i.test(oldScootyText);
+      const chargerSrcForParsing = chargerSeg || oldScootyText;
+      setOldScootyWithCharger(chargerWith ? "yes" : "no");
 
-        const voltageMatch = chargerPart.match(/(\d+)\s*V/i);
-        if (/Lead/i.test(chargerPart) && voltageMatch) {
-          setOldScootyChargerLeadVoltage(voltageMatch[1].trim());
-        } else {
-          setOldScootyChargerLeadVoltage("");
-        }
+      const chargerType = /Lead/i.test(chargerSrcForParsing)
+        ? "lead"
+        : /Lithium/i.test(chargerSrcForParsing)
+        ? "lithium"
+        : "";
+      setOldScootyChargerType(chargerWith ? chargerType : "");
 
-        // For lithium, stored as "48V/60V/72V" (usually already includes V)
-        const lithiumVoltageMatch = chargerPart.match(/(\d+\s*V)/i);
-        if (/Lithium/i.test(chargerPart) && lithiumVoltageMatch) {
-          setOldScootyChargerLithiumVoltage(
-            lithiumVoltageMatch[1].replace(/\s+/g, "")
-          );
-        } else {
-          setOldScootyChargerLithiumVoltage("");
-        }
-      } else {
-        setOldScootyWithCharger("no");
-        setOldScootyChargerType("");
-        setOldScootyChargerLeadVoltage("");
-        setOldScootyChargerLithiumVoltage("");
-        setOldScootyChargerWorking("working");
-      }
+      setOldScootyChargerWorking(
+        chargerWith
+          ? /Not working/i.test(chargerSrcForParsing)
+            ? "notWorking"
+            : "working"
+          : "working"
+      );
+
+      const leadVoltageMatch = chargerSrcForParsing.match(/(\d+)\s*V/i);
+      setOldScootyChargerLeadVoltage(
+        chargerWith && chargerType === "lead" && leadVoltageMatch
+          ? leadVoltageMatch[1].trim()
+          : ""
+      );
+
+      const lithiumVoltageMatch = chargerSrcForParsing.match(/(\d+\s*V)/i);
+      setOldScootyChargerLithiumVoltage(
+        chargerWith && chargerType === "lithium" && lithiumVoltageMatch
+          ? lithiumVoltageMatch[1].replace(/\s+/g, "")
+          : ""
+      );
     }
+
+    // Release guard on next tick so the "clear fields" effect
+    // doesn't overwrite prefilled values in the same commit.
+    setTimeout(() => {
+      prefillInProgressRef.current = false;
+    }, 0);
   }, [mode, initialBill]);
 
   // After models are fetched, try to re-create selectedModel for a nicer edit experience.
@@ -343,6 +360,7 @@ export default function NewBill({
 
   // When old scooty is not available, clear its detailed fields
   useEffect(() => {
+    if (prefillInProgressRef.current) return;
     if (oldScootyAvailable !== "yes") {
       setOldScootyPmcNo("");
       setOldScootyWithBattery("no");
