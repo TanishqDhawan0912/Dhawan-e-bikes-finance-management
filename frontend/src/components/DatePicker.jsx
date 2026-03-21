@@ -2,7 +2,14 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { FaCalendarAlt } from "react-icons/fa";
 
-export default function DatePicker({ value, onChange, placeholder = "dd/mm/yyyy", style = {}, className = "" }) {
+export default function DatePicker({
+  value,
+  onChange,
+  placeholder = "dd/mm/yyyy",
+  style = {},
+  className = "",
+  showCalendarIcon = true,
+}) {
   const isModern = className.includes("date-picker-modern");
   const [isOpen, setIsOpen] = useState(false);
   const [displayValue, setDisplayValue] = useState("");
@@ -90,6 +97,11 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/yyyy"
     // Limit to dd/mm/yyyy format (10 characters)
     if (formatted.length <= 10) {
       setDisplayValue(formatted);
+      if (!formatted.trim()) {
+        setSelectedDate(null);
+        if (onChange) onChange("");
+        return;
+      }
       const parsed = parseDateFromDisplay(formatted);
       if (parsed) {
         const date = new Date(parsed);
@@ -102,6 +114,15 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/yyyy"
         }
       }
     }
+  };
+
+  const handleClearClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDisplayValue("");
+    setSelectedDate(null);
+    setIsOpen(false);
+    if (onChange) onChange("");
   };
 
   const handleInputClick = () => {
@@ -184,7 +205,20 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/yyyy"
 
   return (
     <div className={`date-picker-root ${className}`.trim()} style={{ position: "relative", width: "100%", zIndex: isOpen ? 10001 : "auto" }}>
-      <div className={isModern ? "date-picker-input-wrap-modern" : ""} style={{ position: "relative", width: "100%" }}>
+      <div
+        className={
+          isModern
+            ? [
+                "date-picker-input-wrap-modern",
+                displayValue ? "date-picker-wrap-has-value" : "",
+                !showCalendarIcon ? "date-picker-no-calendar" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")
+            : ""
+        }
+        style={{ position: "relative", width: "100%" }}
+      >
         <input
           ref={inputRef}
           type="text"
@@ -196,19 +230,33 @@ export default function DatePicker({ value, onChange, placeholder = "dd/mm/yyyy"
           className={isModern ? "date-picker-input-modern" : ""}
           style={{
             width: "100%",
-            padding: isModern ? "0.6rem 2.5rem 0.6rem 0.85rem" : "0.5rem",
+            minWidth: 0,
+            padding: isModern ? "0.55rem 0.7rem" : "0.5rem",
             borderRadius: isModern ? "0.5rem" : "0.375rem",
             border: "1px solid #e5e7eb",
-            fontSize: "1rem",
+            fontSize: isModern ? "0.9rem" : "1rem",
             cursor: "pointer",
+            boxSizing: "border-box",
             ...style,
           }}
         />
-        {isModern && (
+        {isModern && displayValue ? (
+          <button
+            type="button"
+            className="date-picker-clear-modern"
+            aria-label="Clear date"
+            title="Clear date"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={handleClearClick}
+          >
+            ×
+          </button>
+        ) : null}
+        {isModern && showCalendarIcon ? (
           <span className="date-picker-icon" aria-hidden="true">
             <FaCalendarAlt />
           </span>
-        )}
+        ) : null}
       </div>
       {isOpen && createPortal(
         <div

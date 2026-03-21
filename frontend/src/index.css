@@ -366,6 +366,67 @@ button {
   margin-bottom: 1.5rem;
 }
 
+/* Search + bill date clustered on the left, directly next to each other */
+.bills-toolbar-top-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.65rem 0.75rem;
+  width: 100%;
+}
+
+.bills-search-wrap {
+  position: relative;
+  flex: 1 1 200px;
+  min-width: 0;
+  max-width: min(520px, 100%);
+}
+
+.bills-search-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bills-toolbar-date-block {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+  padding: 0.4rem 0.65rem 0.4rem 0.85rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+}
+
+.bills-toolbar-date-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.bills-toolbar-date-picker {
+  width: 188px;
+  min-width: 188px;
+}
+
+.bills-toolbar-date-picker .date-picker-input-modern {
+  margin: 0;
+}
+
 .bills-status-group {
   display: flex;
   justify-content: flex-end;
@@ -385,26 +446,7 @@ button {
   flex-wrap: wrap;
 }
 
-.bills-date-filter-row {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.bills-date-filter-label {
-  font-size: 0.85rem;
-  color: #6b7280;
-}
-
-.bills-date-filter-controls {
-  display: inline-flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  align-items: flex-end;
-}
-
+/* Legacy date filter field (unused on All Bills; kept for other forms if needed) */
 .bills-date-filter-field {
   display: flex;
   flex-direction: column;
@@ -421,23 +463,6 @@ button {
   font-size: 0.9rem;
   background: #ffffff;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-}
-
-.bills-date-filter-reset {
-  padding: 0.45rem 0.85rem;
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
-  color: #4b5563;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.bills-date-filter-reset:hover {
-  background: #eef2ff;
-  border-color: #6366f1;
-  color: #4f46e5;
 }
 
 .bills-filter-chip {
@@ -459,12 +484,23 @@ button {
 
 .bills-search-input {
   width: 100%;
-  max-width: 480px;
-  padding: 0.55rem 0.9rem;
+  padding: 0.55rem 0.9rem 0.55rem 2.65rem;
   border-radius: 999px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e2e8f0;
   font-size: 0.9rem;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bills-search-input:hover {
+  border-color: #cbd5e1;
+}
+
+.bills-search-input:focus {
+  outline: none;
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 
 .bills-empty-state {
@@ -485,9 +521,12 @@ button {
 .bills-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 0.75rem;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  flex-wrap: wrap;
 }
 
 .bills-card-title {
@@ -495,17 +534,30 @@ button {
   font-size: 1.05rem;
   font-weight: 600;
   color: #111827;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.bills-card-meta {
-  display: flex;
+.bills-card-header-meta {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: flex-end;
   flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.bills-card-header-payment {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #0f766e;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 .bills-card-body {
   margin-bottom: 0.75rem;
+  padding-top: 1.15rem;
 }
 
 .bills-card-grid {
@@ -558,10 +610,23 @@ button {
   justify-content: space-between;
   align-items: center;
   margin-top: 1.25rem;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+}
+
+.bills-card-footer-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bills-card-footer-created {
   font-size: 0.8rem;
   color: #6b7280;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  line-height: 1.35;
 }
 
 .bills-card-actions {
@@ -829,6 +894,17 @@ button {
   overflow: auto;
 }
 
+/* One row per service: label left, date right — vertically centered */
+.bills-service-modal .bills-service-entry {
+  align-items: center;
+  min-height: 3rem;
+}
+
+.bills-service-modal .bills-service-entry-controls {
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .bills-modal h3 {
   margin: 0 0 0.5rem 0;
   font-size: 1.1rem;
@@ -873,6 +949,8 @@ button {
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
+  flex: 1;
+  min-width: 0;
 }
 
 .bills-service-entry-controls .bills-modal-control {
@@ -981,6 +1059,25 @@ button {
 
 .bills-service-modal .bills-service-date {
   width: 160px !important;
+}
+
+/* DatePicker uses <input type="text">; .bills-modal input adds margin-bottom and breaks row alignment */
+.bills-service-modal .date-picker-input-modern {
+  margin: 0 !important;
+}
+
+.bills-service-modal .date-picker-root.date-picker-modern {
+  display: flex;
+  align-items: center;
+}
+
+.bills-service-modal .bills-service-date-wrap {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  max-width: 280px;
 }
 
 .bills-modal-error {
@@ -1682,16 +1779,68 @@ button {
 
 .date-picker-input-wrap-modern {
   position: relative;
+  display: grid;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  /* Input | [clear] | calendar — no overlap with date text */
+  grid-template-columns: 1fr auto;
+}
+
+.date-picker-input-wrap-modern.date-picker-wrap-has-value {
+  grid-template-columns: 1fr auto auto;
+}
+
+/* No trailing calendar icon: input only, or input + clear */
+.date-picker-input-wrap-modern.date-picker-no-calendar:not(.date-picker-wrap-has-value) {
+  grid-template-columns: 1fr;
+}
+
+.date-picker-input-wrap-modern.date-picker-no-calendar.date-picker-wrap-has-value {
+  grid-template-columns: 1fr auto;
+}
+
+.date-picker-input-wrap-modern .date-picker-input-modern {
+  min-width: 0;
 }
 
 .date-picker-input-wrap-modern .date-picker-icon {
-  position: absolute;
-  right: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
+  position: static;
+  transform: none;
   color: #6366f1;
   font-size: 1rem;
   pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.date-picker-clear-modern {
+  position: static;
+  transform: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: #6b7280;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.date-picker-clear-modern:hover {
+  background: #e5e7eb;
+  color: #111827;
 }
 
 .date-picker-input-modern:focus {

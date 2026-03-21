@@ -1,5 +1,9 @@
 const OldCharger = require("../models/OldCharger");
 const OldChargerSummary = require("../models/OldChargerSummary");
+const {
+  adjustOldChargerSummaryByStatusDelta,
+  summaryKeyForVoltage,
+} = require("../utils/oldChargerSummaryAdjust");
 
 // @desc    Create a new old charger entry
 // @route   POST /api/old-chargers
@@ -58,6 +62,11 @@ const createOldCharger = async (req, res) => {
     });
 
     const created = await oldCharger.save();
+    await adjustOldChargerSummaryByStatusDelta(
+      summaryKeyForVoltage(voltageNorm),
+      statusNorm,
+      1
+    );
     return res.status(201).json(created);
   } catch (error) {
     console.error("Error creating old charger:", error);
@@ -95,6 +104,11 @@ const deleteOldCharger = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: "Old charger entry not found" });
     }
+    await adjustOldChargerSummaryByStatusDelta(
+      summaryKeyForVoltage(deleted.voltage),
+      deleted.status,
+      -1
+    );
     return res.status(200).json({ message: "Deleted", id: deleted._id });
   } catch (error) {
     console.error("Error deleting old charger:", error);

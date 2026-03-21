@@ -55,6 +55,42 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
       const loadParts = async () => {
         const partsWithDetails = await Promise.all(
           jobcard.parts.map(async (part) => {
+            // Custom / non-inventory lines (e.g. old charger sale) have no spareId — do not call spares API or fields get dropped.
+            if (!part.spareId || part.isCustom) {
+              return {
+                id: part.spareId || part._id || part.id || `custom-${part.spareName || "part"}`,
+                name: part.spareName,
+                price: Number(part.price || 0),
+                quantity: 0,
+                selectedQuantity: Number(part.quantity || 1),
+                selectedColor: part.selectedColor || null,
+                inventoryQuantity: 0,
+                hasColors: false,
+                colorQuantity: [],
+                availableColors: [],
+                isCustom: true,
+                partType: part.partType || "sales",
+                salesType: part.salesType || null,
+                scrapAvailable: part.scrapAvailable || false,
+                scrapQuantity: Number(part.scrapQuantity || 0),
+                scrapPricePerUnit: Number(part.scrapPricePerUnit || 0),
+                batteryOldNew: part.batteryOldNew || null,
+                chargerOldNew: part.chargerOldNew || null,
+                batteryType: part.batteryType || null,
+                voltage: part.voltage || null,
+                ampereValue: part.ampereValue || null,
+                warrantyStatus: part.warrantyStatus || null,
+                replacementType: part.replacementType || null,
+                replacementFromCompany: part.replacementFromCompany || false,
+                oldChargerName: part.oldChargerName || null,
+                oldChargerVoltage: part.oldChargerVoltage || null,
+                oldChargerWorking: part.oldChargerWorking || null,
+                oldChargerAvailable:
+                  part.oldChargerAvailable === true ||
+                  part.oldChargerAvailable === "true",
+                priceAlreadyNet: true,
+              };
+            }
             try {
               const response = await fetch(`http://localhost:5000/api/spares/${part.spareId}`);
               if (response.ok) {
@@ -114,6 +150,7 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
                   hasColors: hasColors,
                   colorQuantity: aggregatedColorQuantity,
                   availableColors: availableColors,
+                  isCustom: false,
                   partType: part.partType || jobcard?.jobcardType || "service",
                   // Preserve sales-related fields
                   salesType: part.salesType || null,
@@ -121,8 +158,19 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
                   scrapQuantity: Number(part.scrapQuantity || 0),
                   scrapPricePerUnit: Number(part.scrapPricePerUnit || 0),
                   batteryOldNew: part.batteryOldNew || null,
+                  chargerOldNew: part.chargerOldNew || null,
+                  batteryType: part.batteryType || null,
+                  voltage: part.voltage || null,
                   ampereValue: part.ampereValue || null,
                   warrantyStatus: part.warrantyStatus || null,
+                  replacementType: part.replacementType || null,
+                  replacementFromCompany: part.replacementFromCompany || false,
+                  oldChargerName: part.oldChargerName || null,
+                  oldChargerVoltage: part.oldChargerVoltage || null,
+                  oldChargerWorking: part.oldChargerWorking || null,
+                  oldChargerAvailable:
+                    part.oldChargerAvailable === true ||
+                    part.oldChargerAvailable === "true",
                   // Price from DB is already net per unit; don't deduct scrap again
                   priceAlreadyNet: true,
                 };
@@ -134,7 +182,7 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
             }
             // Fallback if fetch fails
             const fallbackPart = {
-              id: part.spareId,
+              id: part.spareId || part._id || part.id,
               name: part.spareName,
               price: Number(part.price || 0),
               quantity: 0,
@@ -144,6 +192,7 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
               hasColors: false,
               colorQuantity: [],
               availableColors: [],
+              isCustom: Boolean(part.isCustom),
               partType: part.partType || jobcard?.jobcardType || "service",
               // Preserve sales-related fields
               salesType: part.salesType || null,
@@ -151,8 +200,19 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
               scrapQuantity: Number(part.scrapQuantity || 0),
               scrapPricePerUnit: Number(part.scrapPricePerUnit || 0),
               batteryOldNew: part.batteryOldNew || null,
+              chargerOldNew: part.chargerOldNew || null,
+              batteryType: part.batteryType || null,
+              voltage: part.voltage || null,
               ampereValue: part.ampereValue || null,
               warrantyStatus: part.warrantyStatus || null,
+              replacementType: part.replacementType || null,
+              replacementFromCompany: part.replacementFromCompany || false,
+              oldChargerName: part.oldChargerName || null,
+              oldChargerVoltage: part.oldChargerVoltage || null,
+              oldChargerWorking: part.oldChargerWorking || null,
+              oldChargerAvailable:
+                part.oldChargerAvailable === true ||
+                part.oldChargerAvailable === "true",
               // Price from DB is already net per unit; don't deduct scrap again
               priceAlreadyNet: true,
             };

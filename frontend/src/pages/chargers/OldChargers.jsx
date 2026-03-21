@@ -52,9 +52,13 @@ export default function OldChargers() {
   }));
   const skipSaveSummaryRef = useRef(true);
 
+  /** Summary uses text + numeric mode (not type=number) so mouse wheel / trackpad never steps values. */
+  const parseSummaryInt = (raw) =>
+    Math.max(0, parseInt(String(raw ?? "").replace(/\D/g, ""), 10) || 0);
+
   // Editable numeric box handlers: Total = Work + Not; changing Total only changes Not
   const handleTotalChange = (v, e) => {
-    const num = Math.max(0, parseInt(e.target.value, 10) || 0);
+    const num = parseSummaryInt(e.target.value);
     setVoltageStats((prev) => {
       const s = prev[v] || { total: 0, working: 0, notWorking: 0 };
       const working = s.working ?? 0;
@@ -63,7 +67,7 @@ export default function OldChargers() {
     });
   };
   const handleWorkChange = (v, e) => {
-    const num = Math.max(0, parseInt(e.target.value, 10) || 0);
+    const num = parseSummaryInt(e.target.value);
     setVoltageStats((prev) => {
       const s = prev[v] || { total: 0, working: 0, notWorking: 0 };
       const notWorking = s.notWorking ?? 0;
@@ -72,12 +76,38 @@ export default function OldChargers() {
     });
   };
   const handleNotChange = (v, e) => {
-    const num = Math.max(0, parseInt(e.target.value, 10) || 0);
+    const num = parseSummaryInt(e.target.value);
     setVoltageStats((prev) => {
       const s = prev[v] || { total: 0, working: 0, notWorking: 0 };
       const working = s.working ?? 0;
       const total = working + num;
       return { ...prev, [v]: { total, working, notWorking: num } };
+    });
+  };
+
+  /** Step summary cells with keyboard (↑/↓) like native number inputs; wheel still does nothing (text fields). */
+  const handleSummaryArrowKey = (field, v, e) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const delta = e.key === "ArrowUp" ? 1 : -1;
+    setVoltageStats((prev) => {
+      const s = prev[v] || { total: 0, working: 0, notWorking: 0 };
+      const working = s.working ?? 0;
+      const notWorking = s.notWorking ?? 0;
+      const total = s.total ?? 0;
+      if (field === "total") {
+        const num = Math.max(0, total + delta);
+        const nw = Math.max(0, num - working);
+        return { ...prev, [v]: { total: num, working, notWorking: nw } };
+      }
+      if (field === "work") {
+        const num = Math.max(0, working + delta);
+        const t = num + notWorking;
+        return { ...prev, [v]: { total: t, working: num, notWorking } };
+      }
+      const num = Math.max(0, notWorking + delta);
+      const t = working + num;
+      return { ...prev, [v]: { total: t, working, notWorking: num } };
     });
   };
 
@@ -697,24 +727,33 @@ export default function OldChargers() {
                 >
                   <span style={{ fontWeight: 600 }}>{v}</span>
                   <input
-                    type="number"
-                    min={0}
-                    value={totalVal}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    aria-label={`${v} total`}
+                    value={String(totalVal)}
                     onChange={(e) => handleTotalChange(v, e)}
+                    onKeyDown={(e) => handleSummaryArrowKey("total", v, e)}
                     style={{ ...numInputStyle("#f9fafb") }}
                   />
                   <input
-                    type="number"
-                    min={0}
-                    value={workVal}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    aria-label={`${v} working`}
+                    value={String(workVal)}
                     onChange={(e) => handleWorkChange(v, e)}
+                    onKeyDown={(e) => handleSummaryArrowKey("work", v, e)}
                     style={{ ...numInputStyle("rgba(34,197,94,0.15)"), color: "#166534" }}
                   />
                   <input
-                    type="number"
-                    min={0}
-                    value={notVal}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    aria-label={`${v} not working`}
+                    value={String(notVal)}
                     onChange={(e) => handleNotChange(v, e)}
+                    onKeyDown={(e) => handleSummaryArrowKey("not", v, e)}
                     style={{ ...numInputStyle("rgba(239,68,68,0.15)"), color: "#991b1b" }}
                   />
                 </div>

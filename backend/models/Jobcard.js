@@ -234,6 +234,20 @@ const jobcardSchema = new mongoose.Schema(
         },
       },
     ],
+    // Old charger rows removed from inventory when selling chargerOldNew "old" (restored on jobcard delete).
+    consumedOldChargers: {
+      type: [
+        {
+          voltage: { type: String, required: true },
+          batteryType: { type: String, required: true },
+          ampere: { type: String, default: "4A" },
+          status: { type: String, default: "working" },
+          entryDate: { type: Date, default: Date.now },
+          jobcardNumber: { type: String, default: null },
+        },
+      ],
+      default: [],
+    },
     // Whether inventory (spare stock, etc.) has been adjusted for this jobcard.
     // Used so we can safely restore stock on delete without double-counting.
     inventoryAdjusted: {

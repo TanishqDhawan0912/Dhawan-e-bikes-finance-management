@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { FaSearch } from "react-icons/fa";
 import DatePicker from "../../components/DatePicker";
 
 const API = "http://localhost:5000/api";
@@ -94,8 +95,7 @@ export default function AllBills() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | pending | cleared
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [billDateFilter, setBillDateFilter] = useState(""); // YYYY-MM-DD — show bills on this bill date only
 
   // Service management (stored as part of the Bill; up to 3 entries)
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
@@ -164,12 +164,10 @@ export default function AllBills() {
       (statusFilter === "cleared" && (bill.pendingAmount || 0) === 0);
     if (!matchStatus) return false;
 
-    // Date range filter
-    if (dateFrom || dateTo) {
+    // Single bill date filter (exact day)
+    if (billDateFilter) {
       const iso = billDateToISO(bill.billDate);
-      if (!iso) return false;
-      if (dateFrom && iso < dateFrom) return false;
-      if (dateTo && iso > dateTo) return false;
+      if (!iso || iso !== billDateFilter) return false;
     }
 
     if (!search.trim()) return true;
@@ -449,13 +447,39 @@ export default function AllBills() {
   return (
     <div className="page-content" style={{ minWidth: 0 }}>
       <div className="bills-toolbar">
-        <input
-          type="text"
-          className="bills-search-input"
-          placeholder="Search by customer, bill no., mobile or model"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className="bills-toolbar-top-row">
+          <div className="bills-search-wrap">
+            <span className="bills-search-icon" aria-hidden>
+              <FaSearch />
+            </span>
+            <input
+              type="text"
+              className="bills-search-input"
+              placeholder="Search by customer, bill no., mobile or model"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search bills"
+            />
+          </div>
+
+          <div
+            className="bills-toolbar-date-block"
+            role="group"
+            aria-label="Filter by bill date"
+          >
+            <span className="bills-toolbar-date-label">Bill date</span>
+            <div className="bills-toolbar-date-picker">
+              <DatePicker
+                value={billDateFilter}
+                onChange={(v) => setBillDateFilter(v || "")}
+                className="date-picker-modern"
+                placeholder="dd/mm/yyyy"
+                showCalendarIcon={false}
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="bills-status-group">
           <span className="bills-status-label">Status:</span>
           <div className="bills-filter-group">
@@ -480,46 +504,6 @@ export default function AllBills() {
             >
               Cleared ({clearedCount})
             </button>
-          </div>
-        </div>
-
-        <div className="bills-date-filter-row">
-          <div className="bills-date-filter-label">Date:</div>
-          <div className="bills-date-filter-controls">
-            <label className="bills-date-filter-field">
-              <span>From</span>
-              <div style={{ width: 160 }}>
-                <DatePicker
-                  value={dateFrom}
-                  onChange={(v) => setDateFrom(v)}
-                  className="date-picker-modern"
-                  placeholder="dd/mm/yyyy"
-                />
-              </div>
-            </label>
-            <label className="bills-date-filter-field">
-              <span>To</span>
-              <div style={{ width: 160 }}>
-                <DatePicker
-                  value={dateTo}
-                  onChange={(v) => setDateTo(v)}
-                  className="date-picker-modern"
-                  placeholder="dd/mm/yyyy"
-                />
-              </div>
-            </label>
-            {(dateFrom || dateTo) && (
-              <button
-                type="button"
-                className="bills-date-filter-reset"
-                onClick={() => {
-                  setDateFrom("");
-                  setDateTo("");
-                }}
-              >
-                Reset
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -549,14 +533,11 @@ export default function AllBills() {
               <div key={bill._id} className="bills-card">
                 <div className="bills-card-header">
                   <h3 className="bills-card-title">Bill No. – {bill.billNo && bill.billNo.trim() ? bill.billNo : "—"}</h3>
-                  <div className="bills-card-meta">
-                    <span style={{ fontSize: "0.8rem", color: "#4b5563", marginRight: "0.75rem" }}>
-                      Date: {formatDateShort(bill.billDate)}
-                    </span>
+                  <div className="bills-card-header-meta">
                     <span className={`bills-badge ${isPaid ? "bills-badge-paid" : "bills-badge-pending"}`}>
                       {isPaid ? "Paid" : "Pending"}
                     </span>
-                    <span style={{ fontSize: "0.8rem", color: "#0f766e" }}>Payment: {paymentMode}</span>
+                    <span className="bills-card-header-payment">Payment: {paymentMode}</span>
                   </div>
                 </div>
 
@@ -663,7 +644,9 @@ export default function AllBills() {
                 </div>
 
                 <div className="bills-card-footer">
-                  <span>Created: {formatDateTimeCreated(bill.createdAt)}</span>
+                  <div className="bills-card-footer-left">
+                    <span className="bills-card-footer-created">Created: {formatDateTimeCreated(bill.createdAt)}</span>
+                  </div>
                   <div className="bills-card-actions">
                       <button
                         type="button"
@@ -913,7 +896,7 @@ export default function AllBills() {
                 <div key={idx} className="bills-service-entry">
                   <div className="bills-service-entry-title">Service {idx + 1}</div>
                   <div className="bills-service-entry-controls">
-                    <div style={{ width: 160 }}>
+                    <div className="bills-service-date-wrap">
                       <DatePicker
                         value={entry.date}
                         onChange={(v) => {
@@ -925,6 +908,7 @@ export default function AllBills() {
                         }}
                         className="date-picker-modern"
                         placeholder="dd/mm/yyyy"
+                        showCalendarIcon={false}
                       />
                     </div>
                   </div>

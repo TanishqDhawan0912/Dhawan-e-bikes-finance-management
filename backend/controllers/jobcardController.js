@@ -3,6 +3,165 @@ const Spare = require("../models/Spare");
 const Battery = require("../models/Battery");
 const Charger = require("../models/Charger");
 const OldCharger = require("../models/OldCharger");
+const OldChargerSummary = require("../models/OldChargerSummary");
+const {
+  adjustOldChargerSummaryDelta,
+  adjustOldChargerSummaryByStatusDelta,
+  summaryKeyForVoltage,
+} = require("../utils/oldChargerSummaryAdjust");
+
+const VALID_OLD_CHARGER_INVENTORY_VOLTAGES = ["48V", "60V", "72V"];
+
+function parseVoltageForOldChargerJobcard(v) {
+  if (!v || typeof v !== "string") return "48V";
+  const s = v.trim().toUpperCase();
+  if (s.includes("72") || s === "72") return "72V";
+  if (s.includes("60") || s === "60") return "60V";
+  return "48V";
+}
+
+function isOldChargerStockSalePartPlain(part) {
+  if (!part || part.partType !== "sales") return false;
+  const nameLooksOld = /^\s*old\s*charger\s*$/i.test(
+    String(part.spareName || "").trim()
+  );
+  const st = (part.salesType || "").toString().toLowerCase();
+  if (st !== "charger" && !(part.isCustom && nameLooksOld)) return false;
+  if (String(part.chargerOldNew || "").toLowerCase() === "old") return true;
+  if (part.isCustom === true && nameLooksOld) return true;
+  return false;
+}
+
+/** Coerce snapshot fields so restore insertMany matches OldCharger schema (enum validation). */
+function normalizeOldChargerAmpereForDb(amp) {
+  const s = String(amp ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s/g, "");
+  if (s === "3A" || s === "4A" || s === "5A") return s;
+  if (s.includes("5")) return "5A";
+  if (s.includes("3")) return "3A";
+  return "4A";
+}
+
+function normalizeOldChargerStatusForDb(st) {
+  const s = String(st || "")
+    .trim()
+    .toLowerCase();
+  if (s === "notworking" || s.includes("not")) return "notWorking";
+  return "working";
+}
+
+function normalizeBatteryTypeForOldCharger(bt) {
+  const s = String(bt || "lead")
+    .trim()
+    .toLowerCase();
+  return s === "lithium" ? "lithium" : "lead";
+}
+
+function oldChargerSnapshotToRow(snap) {
+  let voltage = snap.voltage;
+  if (!VALID_OLD_CHARGER_INVENTORY_VOLTAGES.includes(voltage)) {
+    voltage = parseVoltageForOldChargerJobcard(String(voltage || ""));
+  }
+  const row = {
+    voltage,
+    batteryType: normalizeBatteryTypeForOldCharger(snap.batteryType),
+    ampere: normalizeOldChargerAmpereForDb(snap.ampere),
+    status: normalizeOldChargerStatusForDb(snap.status),
+    entryDate: snap.entryDate ? new Date(snap.entryDate) : new Date(),
+  };
+  if (snap.jobcardNumber) row.jobcardNumber = snap.jobcardNumber;
+  return row;
+}
+
+/** Count consumed snapshots per inventory voltage key (48V/60V/72V). */
+function countConsumedOldChargersByInventoryVoltage(consumed) {
+  const map = {};
+  for (const snap of consumed || []) {
+    let vk = snap.voltage;
+    if (!VALID_OLD_CHARGER_INVENTORY_VOLTAGES.includes(vk)) {
+      vk = parseVoltageForOldChargerJobcard(String(vk || ""));
+    }
+    if (!VALID_OLD_CHARGER_INVENTORY_VOLTAGES.includes(vk)) continue;
+    map[vk] = (map[vk] || 0) + 1;
+  }
+  return map;
+}
+
+/** Total qty of old-charger stock sales per voltage (48V/60V/72V). */
+function sumOldChargerStockSaleQtyByVoltage(parts) {
+  const map = {};
+  const list = parts || [];
+  for (const raw of list) {
+    const part =
+      raw && typeof raw.toObject === "function" ? raw.toObject() : { ...raw };
+    if (!isOldChargerStockSalePartPlain(part)) continue;
+    const volRaw = (part.voltage || "").toString().trim();
+    if (!volRaw) continue;
+    const voltage = parseVoltageForOldChargerJobcard(volRaw);
+    if (!VALID_OLD_CHARGER_INVENTORY_VOLTAGES.includes(voltage)) continue;
+    const qty = Math.max(1, Number(part.quantity) || 1);
+    map[voltage] = (map[voltage] || 0) + qty;
+  }
+  return map;
+}
+
+/**
+ * After finalize, if user edits jobcard and reduces old-charger sale qty (or removes the line),
+ * put units back into old charger stock using jobcard.consumedOldChargers snapshots (LIFO per voltage),
+ * then bump summary for any gap (summary-only deductions).
+ */
+async function restoreOldChargerUnitsFromJobcardSnapshots(
+  jobcard,
+  voltage,
+  count
+) {
+  if (!count || !jobcard) return;
+  if (!jobcard.consumedOldChargers) jobcard.consumedOldChargers = [];
+  const consumed = jobcard.consumedOldChargers;
+  const snapshots = [];
+  let i = consumed.length - 1;
+  while (i >= 0 && snapshots.length < count) {
+    if (consumed[i].voltage === voltage) {
+      snapshots.unshift(consumed[i]);
+      consumed.splice(i, 1);
+    }
+    i -= 1;
+  }
+  if (snapshots.length) {
+    await OldCharger.insertMany(
+      snapshots.map((snap) => oldChargerSnapshotToRow(snap))
+    );
+  }
+  const summaryOnly = count - snapshots.length;
+  if (summaryOnly > 0) {
+    console.warn(
+      `[jobcard] Old charger restore: re-inserted ${snapshots.length}/${count} for ${voltage}; summary +${summaryOnly} only`
+    );
+  }
+  await adjustOldChargerSummaryDelta(voltage, count);
+}
+
+async function restoreOldChargerInventoryAfterJobcardEdit(
+  existingJobcard,
+  newParts
+) {
+  if (!existingJobcard || !existingJobcard.inventoryAdjusted) return;
+  const beforeMap = sumOldChargerStockSaleQtyByVoltage(existingJobcard.parts);
+  const afterMap = sumOldChargerStockSaleQtyByVoltage(newParts);
+  const volts = new Set([...Object.keys(beforeMap), ...Object.keys(afterMap)]);
+  for (const voltage of volts) {
+    const prev = beforeMap[voltage] || 0;
+    const next = afterMap[voltage] || 0;
+    if (next >= prev) continue;
+    await restoreOldChargerUnitsFromJobcardSnapshots(
+      existingJobcard,
+      voltage,
+      prev - next
+    );
+  }
+}
 
 // Helper: adjust main spare stock for parts on a jobcard that come from the
 // spare inventory.
@@ -198,8 +357,10 @@ const adjustChargerInventoryForReplacements = async (
   }
 };
 
-// Helper: create OldCharger entries when replacement charger has old charger arrived
-// (oldChargerName or oldChargerVoltage set). On restore (jobcard delete), delete those entries.
+// Helper: old charger inventory tied to jobcards.
+// - Deduct: replacement charger "old arrived" + new-charger sale trade-in -> create OldCharger rows (jobcardNumber).
+// - Deduct: sales chargerOldNew "old" -> remove working OldCharger rows (FIFO) + decrement summary; snapshots on jobcard for restore.
+// - Restore (delete jobcard): remove rows tagged with jobcardNumber; re-insert consumed snapshots; bump summary back.
 const adjustOldChargerEntriesForReplacementChargers = async (
   jobcard,
   mode = "deduct"
@@ -209,26 +370,12 @@ const adjustOldChargerEntriesForReplacementChargers = async (
   }
 
   const jobcardNumber = jobcard.jobcardNumber || null;
-  if (!jobcardNumber) return;
 
-  if (mode === "restore") {
-    await OldCharger.deleteMany({ jobcardNumber });
-    return;
-  }
-
-  // mode === "deduct" -> create entries for each replacement charger part that has old charger arrived
-  const validVoltages = ["48V", "60V", "72V"];
+  const validVoltages = VALID_OLD_CHARGER_INVENTORY_VOLTAGES;
   const validBatteryTypes = ["lead", "lithium"];
-  const validAmperes = ["3A", "4A", "5A"];
   const validStatuses = ["working", "notWorking"];
 
-  const parseVoltage = (v) => {
-    if (!v || typeof v !== "string") return "48V";
-    const s = v.trim().toUpperCase();
-    if (s.includes("72") || s === "72") return "72V";
-    if (s.includes("60") || s === "60") return "60V";
-    return "48V";
-  };
+  const parseVoltage = parseVoltageForOldChargerJobcard;
 
   const parseJobcardDate = (dateStr) => {
     if (!dateStr) return new Date();
@@ -246,7 +393,122 @@ const adjustOldChargerEntriesForReplacementChargers = async (
     return "working";
   };
 
-  // 1) Replacement charger parts: old charger arrived
+  if (mode === "restore") {
+    if (jobcardNumber) {
+      const tagged = await OldCharger.find({ jobcardNumber }).lean();
+      for (const row of tagged) {
+        const vk = summaryKeyForVoltage(row.voltage);
+        await adjustOldChargerSummaryByStatusDelta(vk, row.status, -1);
+      }
+      await OldCharger.deleteMany({ jobcardNumber });
+    }
+
+    const consumed = jobcard.consumedOldChargers || [];
+    if (consumed.length) {
+      try {
+        await OldCharger.insertMany(consumed.map((snap) => oldChargerSnapshotToRow(snap)));
+      } catch (insErr) {
+        console.error(
+          "[jobcard] Old charger restore insertMany failed:",
+          insErr.message
+        );
+        throw insErr;
+      }
+      const byVolt = countConsumedOldChargersByInventoryVoltage(consumed);
+      for (const [vk, n] of Object.entries(byVolt)) {
+        await adjustOldChargerSummaryDelta(vk, n);
+      }
+    }
+
+    // Stock sale may have decreased summary only (no rows / no snapshots). Restore that gap.
+    const plainPartsRestore = Array.isArray(jobcard.parts)
+      ? jobcard.parts.map((p) =>
+          p && typeof p.toObject === "function" ? p.toObject() : { ...p }
+        )
+      : [];
+    const soldMap = sumOldChargerStockSaleQtyByVoltage(plainPartsRestore);
+    const reinsertedByVolt =
+      countConsumedOldChargersByInventoryVoltage(consumed);
+    for (const voltage of Object.keys(soldMap)) {
+      const sold = soldMap[voltage] || 0;
+      const fromSnapshots = reinsertedByVolt[voltage] || 0;
+      const summaryOnlyGap = sold - fromSnapshots;
+      if (summaryOnlyGap > 0) {
+        await adjustOldChargerSummaryDelta(voltage, summaryOnlyGap);
+      }
+    }
+    return;
+  }
+
+  // mode === "deduct"
+
+  const plainParts = jobcard.parts.map((p) =>
+    p && typeof p.toObject === "function" ? p.toObject() : { ...p }
+  );
+
+  // 0) Sell old charger from stock: remove working units + summary.
+  // Match by voltage only (summary/UI counts working per voltage, not per battery chemistry).
+  for (const part of plainParts) {
+    if (!isOldChargerStockSalePartPlain(part)) continue;
+
+    const qty = Math.max(1, Number(part.quantity) || 1);
+    const volRaw = (part.voltage || "").toString().trim();
+    if (!volRaw) {
+      console.warn(
+        "[jobcard] Old charger sale line skipped: missing voltage on part",
+        part.spareName
+      );
+      continue;
+    }
+
+    const voltage = parseVoltage(volRaw);
+    if (!validVoltages.includes(voltage)) continue;
+
+    const docs = await OldCharger.find({
+      voltage,
+      status: { $regex: /^working$/i },
+    })
+      .sort({ entryDate: 1, createdAt: 1 })
+      .limit(qty)
+      .lean();
+
+    if (docs.length) {
+      await OldCharger.deleteMany({ _id: { $in: docs.map((d) => d._id) } });
+
+      if (!jobcard.consumedOldChargers) jobcard.consumedOldChargers = [];
+      for (const d of docs) {
+        jobcard.consumedOldChargers.push({
+          voltage: d.voltage,
+          batteryType: d.batteryType,
+          ampere: d.ampere,
+          status: d.status,
+          entryDate: d.entryDate,
+          jobcardNumber: d.jobcardNumber || null,
+        });
+      }
+
+      await adjustOldChargerSummaryDelta(voltage, -docs.length);
+    } else {
+      const sumDoc = await OldChargerSummary.findOne({ id: "default" }).lean();
+      const s = sumDoc?.summary?.[voltage] || { working: 0, total: 0 };
+      const w = Math.max(0, Number(s.working) || 0);
+      const dec = Math.min(qty, w);
+      if (dec > 0) {
+        await adjustOldChargerSummaryDelta(voltage, -dec);
+        console.warn(
+          `[jobcard] Old charger sale: no OldCharger rows for ${voltage}; decreased summary working by ${dec} only`
+        );
+      } else {
+        console.warn(
+          `[jobcard] Old charger sale: no rows and no summary working for ${voltage} (qty ${qty})`
+        );
+      }
+    }
+  }
+
+  if (!jobcardNumber) return;
+
+  // 1) Replacement charger parts: old charger arrived -> add stock
   for (const part of jobcard.parts) {
     if (
       !part ||
@@ -283,17 +545,15 @@ const adjustOldChargerEntriesForReplacementChargers = async (
       jobcardNumber,
     });
     await oldCharger.save();
+    await adjustOldChargerSummaryByStatusDelta(voltage, statusNorm, 1);
   }
 
-  // 2) Sales charger parts (Add Charger for Sale) with old charger available:
-  //    create one OldCharger entry per quantity, with jobcard date so they appear in the entry table.
+  // 2) New charger sale with customer old charger trade-in -> add stock (one row per unit sold, same as before)
   for (const part of jobcard.parts) {
     if (!part || part.partType !== "sales" || part.salesType !== "charger") {
       continue;
     }
-    const isOldChargerSale =
-      part.chargerOldNew === "old" || part.oldChargerAvailable === true;
-    if (!isOldChargerSale) continue;
+    if (!part.oldChargerAvailable) continue;
 
     const volRaw = (part.oldChargerVoltage || part.voltage || "")
       .toString()
@@ -312,9 +572,9 @@ const adjustOldChargerEntriesForReplacementChargers = async (
     const ampere = "4A";
     const statusNorm = normalizeStatus(part.oldChargerWorking);
     const entryDate = parseJobcardDate(jobcard.date);
-    const qty = Math.max(1, Number(part.quantity) || 1);
+    const tradeQty = Math.max(1, Number(part.quantity) || 1);
 
-    for (let i = 0; i < qty; i++) {
+    for (let i = 0; i < tradeQty; i++) {
       const oldCharger = new OldCharger({
         voltage,
         batteryType,
@@ -324,8 +584,29 @@ const adjustOldChargerEntriesForReplacementChargers = async (
         jobcardNumber,
       });
       await oldCharger.save();
+      await adjustOldChargerSummaryByStatusDelta(voltage, statusNorm, 1);
     }
   }
+};
+
+// Always use latest parts from DB (avoids stale in-memory doc missing sales fields).
+const refreshJobcardPartsFromDb = async (jobcard) => {
+  if (!jobcard?._id) return;
+  const latest = await Jobcard.findById(jobcard._id).select("parts");
+  if (latest && Array.isArray(latest.parts)) {
+    jobcard.parts = latest.parts;
+  }
+};
+
+// Run stock deductions once (finalize and/or first settle must both trigger this).
+const applyJobcardInventoryDeductionOnce = async (jobcard) => {
+  if (!jobcard || jobcard.inventoryAdjusted) return;
+  await refreshJobcardPartsFromDb(jobcard);
+  await adjustSpareInventoryForJobcard(jobcard, "deduct");
+  await adjustBatteryInventoryForReplacements(jobcard, "deduct");
+  await adjustChargerInventoryForReplacements(jobcard, "deduct");
+  await adjustOldChargerEntriesForReplacementChargers(jobcard, "deduct");
+  jobcard.inventoryAdjusted = true;
 };
 
 // @desc    Create a new jobcard
@@ -420,6 +701,11 @@ const updateJobcard = async (req, res) => {
   try {
     const jobcardData = req.body;
 
+    const existing = await Jobcard.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ message: "Jobcard not found" });
+    }
+
     // Calculate total amount from parts if parts are provided
     // Exclude replacement parts from billing total (only service + sales count)
     if (Array.isArray(jobcardData.parts)) {
@@ -429,6 +715,15 @@ const updateJobcard = async (req, res) => {
         }
         return sum + (part.price || 0) * (part.quantity || 1);
       }, 0);
+
+      // If stock was already deducted on finalize/settle, lowering old-charger sale qty restores stock.
+      if (existing.inventoryAdjusted) {
+        await restoreOldChargerInventoryAfterJobcardEdit(
+          existing,
+          jobcardData.parts
+        );
+        jobcardData.consumedOldChargers = existing.consumedOldChargers;
+      }
     }
 
     const jobcard = await Jobcard.findByIdAndUpdate(
@@ -548,13 +843,7 @@ const finalizeJobcard = async (req, res) => {
 
     // Adjust inventory once, the first time this jobcard is finalized/saved.
     // This applies even if the jobcard remains in "pending" status due to unpaid amount.
-    if (!jobcard.inventoryAdjusted) {
-      await adjustSpareInventoryForJobcard(jobcard, "deduct");
-      await adjustBatteryInventoryForReplacements(jobcard, "deduct");
-      await adjustChargerInventoryForReplacements(jobcard, "deduct");
-      await adjustOldChargerEntriesForReplacementChargers(jobcard, "deduct");
-      jobcard.inventoryAdjusted = true;
-    }
+    await applyJobcardInventoryDeductionOnce(jobcard);
 
     // Only mark as finalized if there's no pending amount.
     // If pendingAmount > 0, keep status as "pending".
@@ -670,6 +959,9 @@ const settleJobcard = async (req, res) => {
       jobcard.status = "finalized";
     }
 
+    // Same as /finalize: many users only record payments via /settle and never hit finalize.
+    await applyJobcardInventoryDeductionOnce(jobcard);
+
     const savedJobcard = await jobcard.save();
 
     res.json(savedJobcard);
@@ -693,6 +985,7 @@ const deleteJobcard = async (req, res) => {
     // If inventory was previously adjusted for this jobcard, restore stock.
     if (jobcard.inventoryAdjusted) {
       try {
+        await refreshJobcardPartsFromDb(jobcard);
         await adjustSpareInventoryForJobcard(jobcard, "restore");
         await adjustBatteryInventoryForReplacements(jobcard, "restore");
         await adjustChargerInventoryForReplacements(jobcard, "restore");

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import SparePartsSearch from "../../components/SparePartsSearch";
 import DatePicker from "../../components/DatePicker";
@@ -17,6 +17,46 @@ const isValidObjectId = (id) => {
   }
   return false;
 };
+
+/** Voltages used for old-charger inventory entries (matches Old chargers page). */
+const OLD_CHARGER_SALE_VOLTAGES = ["48V", "60V", "72V"];
+
+function buildOldChargerVoltageStatsFromEntries(entries) {
+  const voltages = ["48V", "60V", "72V", "Other"];
+  const stats = {};
+  voltages.forEach((v) => {
+    stats[v] = { total: 0, working: 0, notWorking: 0 };
+  });
+  for (const charger of entries) {
+    let v = charger.voltage;
+    if (!v || !stats[v]) v = "Other";
+    stats[v].total += 1;
+    if (charger.status === "working") stats[v].working += 1;
+  }
+  voltages.forEach((v) => {
+    stats[v].notWorking = stats[v].total - stats[v].working;
+  });
+  return stats;
+}
+
+/** Same merge as OldChargers.jsx: use saved summary unless all zero, then use entries. */
+function mergeOldChargerStockStats(entries, summaryData) {
+  const computed = buildOldChargerVoltageStatsFromEntries(entries);
+  const volts = ["48V", "60V", "72V", "Other"];
+  const allZero = volts.every(
+    (v) =>
+      (summaryData[v]?.total ?? 0) === 0 &&
+      (summaryData[v]?.working ?? 0) === 0 &&
+      (summaryData[v]?.notWorking ?? 0) === 0
+  );
+  if (allZero) return computed;
+  return {
+    "48V": summaryData["48V"] || { total: 0, working: 0, notWorking: 0 },
+    "60V": summaryData["60V"] || { total: 0, working: 0, notWorking: 0 },
+    "72V": summaryData["72V"] || { total: 0, working: 0, notWorking: 0 },
+    Other: summaryData.Other || { total: 0, working: 0, notWorking: 0 },
+  };
+}
 
 export default function NewJobcard() {
   const navigate = useNavigate();
@@ -150,6 +190,8 @@ export default function NewJobcard() {
     salesOldChargerOldChargerWorking,
     setSalesOldChargerOldChargerWorking,
   ] = useState("working"); // "working" | "notWorking"
+  /** Per-voltage stock for old charger sales (working count from summary or entries). */
+  const [oldChargerStockStats, setOldChargerStockStats] = useState(null);
   const [oldScootyData, setOldScootyData] = useState({
     pmcNo: "",
     name: "",
@@ -668,6 +710,90 @@ export default function NewJobcard() {
       setLoadingBatteries(false);
     }
   };
+
+  // Old charger inventory (for sales): only offer voltages with working stock (same logic as Old chargers page)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const token = localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+      try {
+        const [entriesRes, summaryRes] = await Promise.all([
+          fetch("http://localhost:5000/api/old-chargers", { headers }),
+          fetch("http://localhost:5000/api/old-chargers/summary", { headers }),
+        ]);
+        const entriesJson = entriesRes.ok ? await entriesRes.json() : [];
+        const entries = Array.isArray(entriesJson) ? entriesJson : [];
+        let summaryData = {};
+        if (summaryRes.ok) {
+          try {
+            summaryData = await summaryRes.json();
+          } catch {
+            summaryData = {};
+          }
+        }
+        const stats = mergeOldChargerStockStats(entries, summaryData);
+        if (!cancelled) setOldChargerStockStats(stats);
+      } catch (e) {
+        console.error("Error loading old charger stock for sales:", e);
+        if (!cancelled)
+          setOldChargerStockStats(mergeOldChargerStockStats([], {}));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const oldChargerSaleVoltageOptions = useMemo(() => {
+    if (!oldChargerStockStats) return [];
+    return OLD_CHARGER_SALE_VOLTAGES.filter(
+      (v) => (oldChargerStockStats[v]?.working ?? 0) > 0
+    );
+  }, [oldChargerStockStats]);
+
+  /** Working units in Old chargers stock for the selected voltage (old charger sale). */
+  const oldChargerWorkingInStock = useMemo(() => {
+    if (!salesOldChargerVoltage || !oldChargerStockStats) return 0;
+    return oldChargerStockStats[salesOldChargerVoltage]?.working ?? 0;
+  }, [salesOldChargerVoltage, oldChargerStockStats]);
+
+  const oldChargerSaleAddDisabled = useMemo(() => {
+    const q = parseInt(salesOldChargerQuantity, 10) || 0;
+    const tradeInBlocked =
+      salesOldChargerOldChargerAvailable &&
+      !salesOldChargerOldChargerVoltage.trim();
+    return (
+      !salesOldChargerType ||
+      !salesOldChargerVoltage ||
+      oldChargerSaleVoltageOptions.length === 0 ||
+      q < 1 ||
+      (oldChargerWorkingInStock > 0 && q > oldChargerWorkingInStock) ||
+      tradeInBlocked
+    );
+  }, [
+    salesOldChargerType,
+    salesOldChargerVoltage,
+    salesOldChargerQuantity,
+    oldChargerSaleVoltageOptions.length,
+    oldChargerWorkingInStock,
+    salesOldChargerOldChargerAvailable,
+    salesOldChargerOldChargerVoltage,
+  ]);
+
+  useEffect(() => {
+    if (!oldChargerStockStats || !salesOldChargerVoltage) return;
+    const working = oldChargerStockStats[salesOldChargerVoltage]?.working ?? 0;
+    if (
+      OLD_CHARGER_SALE_VOLTAGES.includes(salesOldChargerVoltage) &&
+      working <= 0
+    ) {
+      setSalesOldChargerVoltage("");
+    }
+  }, [oldChargerStockStats, salesOldChargerVoltage]);
 
   // Search batteries by name
   useEffect(() => {
@@ -1294,14 +1420,18 @@ export default function NewJobcard() {
     }
     const voltage = salesOldChargerVoltage.trim();
     if (!voltage) {
-      alert("Please enter charger voltage");
+      alert("Please select charger voltage");
       return;
     }
-    if (
-      salesOldChargerType === "lead" &&
-      !["48V", "60V", "72V"].includes(voltage)
-    ) {
-      alert("For lead charger, voltage must be 48V, 60V, or 72V");
+    if (!OLD_CHARGER_SALE_VOLTAGES.includes(voltage)) {
+      alert("Voltage must be 48V, 60V, or 72V");
+      return;
+    }
+    const workingAvail = oldChargerStockStats?.[voltage]?.working ?? 0;
+    if (workingAvail <= 0) {
+      alert(
+        "No working stock for this voltage. Add or mark working units in Old chargers."
+      );
       return;
     }
     if (
@@ -1314,6 +1444,12 @@ export default function NewJobcard() {
     const qty = parseInt(salesOldChargerQuantity, 10) || 1;
     if (qty <= 0) {
       alert("Quantity must be at least 1");
+      return;
+    }
+    if (qty > workingAvail) {
+      alert(
+        `Quantity cannot exceed working stock for ${voltage}. In stock: ${workingAvail}.`
+      );
       return;
     }
     const price = parseFloat(salesOldChargerPrice);
@@ -4920,7 +5056,72 @@ export default function NewJobcard() {
                         >
                           Voltage <span style={{ color: "#ef4444" }}>*</span>
                         </label>
-                        {salesOldChargerType === "lead" ? (
+                        {!salesOldChargerType ? (
+                          <select
+                            disabled
+                            value=""
+                            style={{
+                              width: "100%",
+                              padding: "0.5rem",
+                              borderRadius: "0.375rem",
+                              border: "1px solid #d1d5db",
+                              fontSize: "0.875rem",
+                              backgroundColor: "#f3f4f6",
+                              color: "#6b7280",
+                            }}
+                          >
+                            <option value="">Select charger type first</option>
+                          </select>
+                        ) : oldChargerStockStats === null ? (
+                          <select
+                            disabled
+                            value=""
+                            style={{
+                              width: "100%",
+                              padding: "0.5rem",
+                              borderRadius: "0.375rem",
+                              border: "1px solid #d1d5db",
+                              fontSize: "0.875rem",
+                              backgroundColor: "#f3f4f6",
+                              color: "#6b7280",
+                            }}
+                          >
+                            <option value="">Loading stock…</option>
+                          </select>
+                        ) : oldChargerSaleVoltageOptions.length === 0 ? (
+                          <>
+                            <select
+                              disabled
+                              value=""
+                              style={{
+                                width: "100%",
+                                padding: "0.5rem",
+                                borderRadius: "0.375rem",
+                                border: "1px solid #d1d5db",
+                                fontSize: "0.875rem",
+                                backgroundColor: "#f3f4f6",
+                                color: "#6b7280",
+                              }}
+                            >
+                              <option value="">
+                                No working old chargers in stock
+                              </option>
+                            </select>
+                            <p
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "#6b7280",
+                                marginTop: "0.35rem",
+                                marginBottom: 0,
+                                lineHeight: 1.4,
+                              }}
+                            >
+                              Only voltages with at least one{" "}
+                              <strong>working</strong> unit in{" "}
+                              <strong>Old chargers</strong> appear here.
+                            </p>
+                          </>
+                        ) : (
                           <select
                             value={salesOldChargerVoltage}
                             onChange={(e) =>
@@ -4936,34 +5137,12 @@ export default function NewJobcard() {
                             }}
                           >
                             <option value="">Select voltage</option>
-                            <option value="48V">48V</option>
-                            <option value="60V">60V</option>
-                            <option value="72V">72V</option>
+                            {oldChargerSaleVoltageOptions.map((v) => (
+                              <option key={v} value={v}>
+                                {v} ({oldChargerStockStats[v].working} working)
+                              </option>
+                            ))}
                           </select>
-                        ) : (
-                          <input
-                            type="text"
-                            value={salesOldChargerVoltage}
-                            onChange={(e) =>
-                              setSalesOldChargerVoltage(e.target.value)
-                            }
-                            placeholder={
-                              salesOldChargerType === "lithium"
-                                ? "Enter lithium voltage"
-                                : "Select charger type first"
-                            }
-                            disabled={!salesOldChargerType}
-                            style={{
-                              width: "100%",
-                              padding: "0.5rem",
-                              borderRadius: "0.375rem",
-                              border: "1px solid #d1d5db",
-                              fontSize: "0.875rem",
-                              backgroundColor: !salesOldChargerType
-                                ? "#f3f4f6"
-                                : "white",
-                            }}
-                          />
                         )}
                       </div>
                       <div>
@@ -4983,8 +5162,27 @@ export default function NewJobcard() {
                           onChange={(e) =>
                             setSalesOldChargerQuantity(e.target.value)
                           }
+                          onBlur={() => {
+                            if (
+                              !salesOldChargerVoltage ||
+                              oldChargerWorkingInStock <= 0
+                            )
+                              return;
+                            const q =
+                              parseInt(salesOldChargerQuantity, 10) || 1;
+                            if (q > oldChargerWorkingInStock) {
+                              setSalesOldChargerQuantity(
+                                String(oldChargerWorkingInStock)
+                              );
+                            }
+                          }}
                           placeholder="1"
-                          min="1"
+                          min={1}
+                          max={
+                            salesOldChargerVoltage && oldChargerWorkingInStock > 0
+                              ? oldChargerWorkingInStock
+                              : undefined
+                          }
                           style={{
                             width: "100%",
                             padding: "0.5rem",
@@ -4993,6 +5191,22 @@ export default function NewJobcard() {
                             fontSize: "0.875rem",
                           }}
                         />
+                        {salesOldChargerVoltage &&
+                          oldChargerWorkingInStock > 0 && (
+                            <p
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "#64748b",
+                                marginTop: "0.3rem",
+                                marginBottom: 0,
+                              }}
+                            >
+                              Working in stock for{" "}
+                              <strong>{salesOldChargerVoltage}</strong>:{" "}
+                              <strong>{oldChargerWorkingInStock}</strong> (max
+                              you can sell on this jobcard)
+                            </p>
+                          )}
                       </div>
                       <div>
                         <label
@@ -5310,26 +5524,19 @@ export default function NewJobcard() {
                           <button
                             type="button"
                             onClick={handleAddSalesOldCharger}
-                            disabled={
-                              salesOldChargerOldChargerAvailable &&
-                              !salesOldChargerOldChargerVoltage.trim()
-                            }
+                            disabled={oldChargerSaleAddDisabled}
                             style={{
                               padding: "0.5rem 1rem",
                               fontSize: "0.875rem",
-                              backgroundColor:
-                                !salesOldChargerOldChargerAvailable ||
-                                salesOldChargerOldChargerVoltage.trim()
-                                  ? "#10b981"
-                                  : "#9ca3af",
+                              backgroundColor: oldChargerSaleAddDisabled
+                                ? "#9ca3af"
+                                : "#10b981",
                               color: "white",
                               border: "none",
                               borderRadius: "0.375rem",
-                              cursor:
-                                !salesOldChargerOldChargerAvailable ||
-                                salesOldChargerOldChargerVoltage.trim()
-                                  ? "pointer"
-                                  : "not-allowed",
+                              cursor: oldChargerSaleAddDisabled
+                                ? "not-allowed"
+                                : "pointer",
                               fontWeight: 500,
                             }}
                           >
