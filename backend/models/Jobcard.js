@@ -248,6 +248,17 @@ const jobcardSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    // Battery scrap units consumed from stock when selling old batteries.
+    // Restored on jobcard delete.
+    consumedBatteryScraps: {
+      type: [
+        {
+          quantity: { type: Number, required: true, min: 1 },
+          entryDate: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
     // Whether inventory (spare stock, etc.) has been adjusted for this jobcard.
     // Used so we can safely restore stock on delete without double-counting.
     inventoryAdjusted: {

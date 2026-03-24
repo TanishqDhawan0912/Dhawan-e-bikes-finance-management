@@ -343,10 +343,8 @@ export default function Scraps() {
       {/* Sticky totals */}
       <div
         style={{
-          position: "sticky",
-          bottom: 0,
-          left: 0,
-          right: 0,
+          // Keep totals in normal flow so it never overlaps list rows.
+          position: "relative",
           padding: "0.75rem 1rem",
           borderRadius: "0.5rem",
           backgroundColor: "#111827",

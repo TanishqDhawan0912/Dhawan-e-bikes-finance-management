@@ -1,6 +1,7 @@
 const Jobcard = require("../models/Jobcard");
 const Spare = require("../models/Spare");
 const Battery = require("../models/Battery");
+const BatteryScrap = require("../models/BatteryScrap");
 const Charger = require("../models/Charger");
 const OldCharger = require("../models/OldCharger");
 const OldChargerSummary = require("../models/OldChargerSummary");
@@ -357,6 +358,114 @@ const adjustChargerInventoryForReplacements = async (
   }
 };
 
+// Helper: adjust battery scrap stock for old-battery sales.
+// Deduct old-battery sold quantity from scrap stock (FIFO across BatteryScrap entries),
+// and add new scrap entries when a part has scrapAvailable/scrapQuantity.
+const adjustBatteryScrapInventoryForOldBatterySales = async (
+  jobcard,
+  mode = "deduct"
+) => {
+  if (!jobcard || !Array.isArray(jobcard.parts) || jobcard.parts.length === 0) {
+    return;
+  }
+
+  const jobcardNumber = jobcard.jobcardNumber || null;
+  const parseJobcardDate = (dateStr) => {
+    if (!dateStr) return new Date();
+    if (typeof dateStr !== "string") return new Date(dateStr);
+    const iso = dateStr.includes("T") ? dateStr : `${dateStr}T12:00:00.000Z`;
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? new Date() : d;
+  };
+
+  if (mode === "restore") {
+    // 1) Remove entries that were added by this jobcard through scrapAvailable.
+    if (jobcardNumber) {
+      await BatteryScrap.deleteMany({ jobcardNumber });
+    }
+
+    // 2) Re-add units that were consumed from existing scrap stock.
+    const consumed = jobcard.consumedBatteryScraps || [];
+    if (consumed.length) {
+      await BatteryScrap.insertMany(
+        consumed.map((snap) => ({
+          quantity: Math.max(1, Number(snap.quantity) || 1),
+          entryDate: snap.entryDate ? new Date(snap.entryDate) : new Date(),
+        }))
+      );
+    }
+    return;
+  }
+
+  // mode === "deduct"
+  if (!jobcard.consumedBatteryScraps) jobcard.consumedBatteryScraps = [];
+
+  for (const part of jobcard.parts) {
+    if (
+      !part ||
+      part.partType !== "sales" ||
+      part.salesType !== "battery" ||
+      String(part.batteryOldNew || "").toLowerCase() !== "old"
+    ) {
+      continue;
+    }
+
+    // A) Selling old batteries: consume scrap stock.
+    const soldQty = Math.max(
+      1,
+      Number(
+        part.quantity !== undefined && part.quantity !== null
+          ? part.quantity
+          : part.selectedQuantity
+      ) || 1
+    );
+    let remaining = soldQty;
+    const docs = await BatteryScrap.find({})
+      .sort({ entryDate: 1, createdAt: 1 })
+      .select("_id quantity entryDate")
+      .lean();
+
+    for (const d of docs) {
+      if (remaining <= 0) break;
+      const cur = Math.max(0, Number(d.quantity) || 0);
+      if (cur <= 0) continue;
+      const take = Math.min(cur, remaining);
+      remaining -= take;
+
+      const left = cur - take;
+      if (left <= 0) {
+        await BatteryScrap.deleteOne({ _id: d._id });
+      } else {
+        await BatteryScrap.updateOne({ _id: d._id }, { $set: { quantity: left } });
+      }
+
+      jobcard.consumedBatteryScraps.push({
+        quantity: take,
+        entryDate: d.entryDate || new Date(),
+      });
+    }
+    if (remaining > 0) {
+      console.warn(
+        `[jobcard] Battery scrap sale: requested ${soldQty}, consumed ${
+          soldQty - remaining
+        } (insufficient stock)`
+      );
+    }
+
+    // B) If scrap is available from customer, add it as new scrap entry.
+    if (part.scrapAvailable) {
+      const addQty = Math.max(0, Number(part.scrapQuantity) || 0);
+      if (addQty > 0) {
+        await BatteryScrap.create({
+          quantity: addQty,
+          entryDate: parseJobcardDate(jobcard.date),
+          jobcardNumber,
+        });
+      }
+    }
+  }
+};
+
 // Helper: old charger inventory tied to jobcards.
 // - Deduct: replacement charger "old arrived" + new-charger sale trade-in -> create OldCharger rows (jobcardNumber).
 // - Deduct: sales chargerOldNew "old" -> remove working OldCharger rows (FIFO) + decrement summary; snapshots on jobcard for restore.
@@ -605,6 +714,7 @@ const applyJobcardInventoryDeductionOnce = async (jobcard) => {
   await adjustSpareInventoryForJobcard(jobcard, "deduct");
   await adjustBatteryInventoryForReplacements(jobcard, "deduct");
   await adjustChargerInventoryForReplacements(jobcard, "deduct");
+  await adjustBatteryScrapInventoryForOldBatterySales(jobcard, "deduct");
   await adjustOldChargerEntriesForReplacementChargers(jobcard, "deduct");
   jobcard.inventoryAdjusted = true;
 };
@@ -989,6 +1099,7 @@ const deleteJobcard = async (req, res) => {
         await adjustSpareInventoryForJobcard(jobcard, "restore");
         await adjustBatteryInventoryForReplacements(jobcard, "restore");
         await adjustChargerInventoryForReplacements(jobcard, "restore");
+        await adjustBatteryScrapInventoryForOldBatterySales(jobcard, "restore");
         await adjustOldChargerEntriesForReplacementChargers(jobcard, "restore");
         jobcard.inventoryAdjusted = false;
       } catch (invErr) {
