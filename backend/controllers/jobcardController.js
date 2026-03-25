@@ -358,9 +358,10 @@ const adjustChargerInventoryForReplacements = async (
   }
 };
 
-// Helper: adjust battery scrap stock for old-battery sales.
-// Deduct old-battery sold quantity from scrap stock (FIFO across BatteryScrap entries),
-// and add new scrap entries when a part has scrapAvailable/scrapQuantity.
+// Helper: adjust battery scrap stock for jobcard.
+// - Old battery sale: deduct sold quantity from scrap stock (FIFO across BatteryScrap entries)
+// - Battery replacement (not from company): add scrap stock (one unit per replaced battery)
+// - Any battery line with scrapAvailable/scrapQuantity: add scrap stock as a new entry
 const adjustBatteryScrapInventoryForOldBatterySales = async (
   jobcard,
   mode = "deduct"
@@ -399,19 +400,8 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
 
   // mode === "deduct"
   if (!jobcard.consumedBatteryScraps) jobcard.consumedBatteryScraps = [];
-
-  for (const part of jobcard.parts) {
-    if (
-      !part ||
-      part.partType !== "sales" ||
-      part.salesType !== "battery" ||
-      String(part.batteryOldNew || "").toLowerCase() !== "old"
-    ) {
-      continue;
-    }
-
-    // A) Selling old batteries: consume scrap stock.
-    const soldQty = Math.max(
+  const getPartQty = (part) =>
+    Math.max(
       1,
       Number(
         part.quantity !== undefined && part.quantity !== null
@@ -419,40 +409,71 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
           : part.selectedQuantity
       ) || 1
     );
-    let remaining = soldQty;
-    const docs = await BatteryScrap.find({})
-      .sort({ entryDate: 1, createdAt: 1 })
-      .select("_id quantity entryDate")
-      .lean();
+  const isBatterySalesPart = (part) =>
+    part && part.partType === "sales" && part.salesType === "battery";
+  const isBatteryReplacementPart = (part) =>
+    part && part.partType === "replacement" && part.replacementType === "battery";
+  const isOldBatteryLine = (part) =>
+    String(part?.batteryOldNew || "").toLowerCase() === "old";
 
-    for (const d of docs) {
-      if (remaining <= 0) break;
-      const cur = Math.max(0, Number(d.quantity) || 0);
-      if (cur <= 0) continue;
-      const take = Math.min(cur, remaining);
-      remaining -= take;
+  for (const part of jobcard.parts) {
+    if (!part) continue;
 
-      const left = cur - take;
-      if (left <= 0) {
-        await BatteryScrap.deleteOne({ _id: d._id });
-      } else {
-        await BatteryScrap.updateOne({ _id: d._id }, { $set: { quantity: left } });
+    // 0) Battery replacement (not from company) adds scrap stock.
+    if (isBatteryReplacementPart(part)) {
+      const addQty = getPartQty(part);
+      if (addQty > 0) {
+        await BatteryScrap.create({
+          quantity: addQty,
+          entryDate: parseJobcardDate(jobcard.date),
+          jobcardNumber,
+        });
       }
-
-      jobcard.consumedBatteryScraps.push({
-        quantity: take,
-        entryDate: d.entryDate || new Date(),
-      });
-    }
-    if (remaining > 0) {
-      console.warn(
-        `[jobcard] Battery scrap sale: requested ${soldQty}, consumed ${
-          soldQty - remaining
-        } (insufficient stock)`
-      );
     }
 
-    // B) If scrap is available from customer, add it as new scrap entry.
+    // 1) Old battery sale consumes scrap stock.
+    if (!isBatterySalesPart(part) || !isOldBatteryLine(part)) {
+      // Still allow scrapAvailable on non-old-battery battery lines below.
+    } else {
+      const soldQty = getPartQty(part);
+      let remaining = soldQty;
+      const docs = await BatteryScrap.find({})
+        .sort({ entryDate: 1, createdAt: 1 })
+        .select("_id quantity entryDate")
+        .lean();
+
+      for (const d of docs) {
+        if (remaining <= 0) break;
+        const cur = Math.max(0, Number(d.quantity) || 0);
+        if (cur <= 0) continue;
+        const take = Math.min(cur, remaining);
+        remaining -= take;
+
+        const left = cur - take;
+        if (left <= 0) {
+          await BatteryScrap.deleteOne({ _id: d._id });
+        } else {
+          await BatteryScrap.updateOne(
+            { _id: d._id },
+            { $set: { quantity: left } }
+          );
+        }
+
+        jobcard.consumedBatteryScraps.push({
+          quantity: take,
+          entryDate: d.entryDate || new Date(),
+        });
+      }
+      if (remaining > 0) {
+        console.warn(
+          `[jobcard] Battery scrap sale: requested ${soldQty}, consumed ${
+            soldQty - remaining
+          } (insufficient stock)`
+        );
+      }
+    }
+
+    // 2) If scrap is available from customer, add it as new scrap entry (sales battery lines).
     if (part.scrapAvailable) {
       const addQty = Math.max(0, Number(part.scrapQuantity) || 0);
       if (addQty > 0) {

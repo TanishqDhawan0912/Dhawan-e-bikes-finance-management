@@ -120,14 +120,12 @@ export default function NewJobcard() {
   const [chargerQuantity, setChargerQuantity] = useState("1");
   const [replacementChargerBatteryType, setReplacementChargerBatteryType] =
     useState(""); // "lead" | "lithium"
-  const [batteryReplacementFromCompany, setBatteryReplacementFromCompany] =
-    useState(false);
-  const [chargerReplacementFromCompany, setChargerReplacementFromCompany] =
-    useState(false);
+  // Charger replacement is always treated as not-from-company (no toggle needed)
   const [oldChargerName, setOldChargerName] = useState("");
   const [oldChargerVoltage, setOldChargerVoltage] = useState("");
   const [oldChargerVoltageOption, setOldChargerVoltageOption] = useState(""); // "48V" | "60V" | "72V" | "other"
   const [oldChargerVoltageOther, setOldChargerVoltageOther] = useState("");
+  const [oldChargerWorking, setOldChargerWorking] = useState("working"); // replacement charger old unit status
   const [loadingBatteries, setLoadingBatteries] = useState(false);
   const [loadingChargers, setLoadingChargers] = useState(false);
 
@@ -953,7 +951,6 @@ export default function NewJobcard() {
       replacementType: "battery",
       batteryType: replacementBatteryType,
       ampereValue: ampereValue,
-      replacementFromCompany: batteryReplacementFromCompany,
     };
 
     setSelectedParts((prev) => ({
@@ -965,7 +962,6 @@ export default function NewJobcard() {
     setSelectedBattery(null);
     setBatteryQuantity("1");
     setReplacementBatteryType("");
-    setBatteryReplacementFromCompany(false);
     setSelectedReplacementType(null);
   };
 
@@ -1005,9 +1001,9 @@ export default function NewJobcard() {
       replacementType: "charger",
       batteryType: replacementChargerBatteryType,
       voltage: selectedCharger.voltage || null,
-      replacementFromCompany: chargerReplacementFromCompany,
       oldChargerName: oldChargerName.trim() || null,
       oldChargerVoltage: oldChargerVoltage.trim() || null,
+      oldChargerWorking: oldChargerWorking || "working",
     };
 
     setSelectedParts((prev) => ({
@@ -1019,9 +1015,9 @@ export default function NewJobcard() {
     setSelectedCharger(null);
     setChargerQuantity("1");
     setReplacementChargerBatteryType("");
-    setChargerReplacementFromCompany(false);
     setOldChargerName("");
     setOldChargerVoltage("");
+    setOldChargerWorking("working");
     setSelectedReplacementType(null);
   };
 
@@ -2018,50 +2014,7 @@ export default function NewJobcard() {
 
       const savedJobcard = await response.json();
 
-      // Handle battery scrap entries for batteries replaced (not from company)
-      const batteryReplacements = selectedParts.replacement.filter(
-        (part) =>
-          part.replacementType === "battery" && !part.replacementFromCompany
-      );
-
-      if (!isEditMode && batteryReplacements.length > 0) {
-        // Group batteries by date (use jobcard date)
-        const jobcardDate = formData.date || today;
-
-        // Calculate total quantity of batteries replaced (not from company)
-        const totalScrapQuantity = batteryReplacements.reduce(
-          (sum, part) => sum + (part.selectedQuantity || 1),
-          0
-        );
-
-        if (totalScrapQuantity > 0) {
-          try {
-            // Create or update scrap entry for this date
-            const scrapResponse = await fetch(
-              "http://localhost:5000/api/battery-scraps/upsert",
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  quantity: totalScrapQuantity,
-                  entryDate: jobcardDate,
-                }),
-              }
-            );
-
-            if (!scrapResponse.ok) {
-              console.error(
-                "Failed to update scrap entries, but jobcard was saved"
-              );
-            }
-          } catch (scrapError) {
-            console.error("Error updating scrap entries:", scrapError);
-            // Don't fail the jobcard save if scrap update fails
-          }
-        }
-      }
+      // NOTE: Scrap stock adjustments are handled on backend when jobcard is finalized/settled.
 
       alert(
         isEditMode
@@ -3289,34 +3242,6 @@ export default function NewJobcard() {
                                 }}
                               />
                             </div>
-                            <div>
-                              <label
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "0.5rem",
-                                  fontSize: "0.875rem",
-                                  fontWeight: 500,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={batteryReplacementFromCompany}
-                                  onChange={(e) =>
-                                    setBatteryReplacementFromCompany(
-                                      e.target.checked
-                                    )
-                                  }
-                                  style={{
-                                    width: "1rem",
-                                    height: "1rem",
-                                    cursor: "pointer",
-                                  }}
-                                />
-                                Replacement from company
-                              </label>
-                            </div>
                           </>
                         )}
                         <div
@@ -3331,7 +3256,6 @@ export default function NewJobcard() {
                             onClick={() => {
                               setSelectedReplacementType(null);
                               setSelectedBattery(null);
-                              setBatteryReplacementFromCompany(false);
                             }}
                             style={{
                               padding: "0.5rem 1rem",
@@ -3707,32 +3631,77 @@ export default function NewJobcard() {
                               </div>
                             </div>
                             <div>
-                              <label
+                              <span
                                 style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "0.5rem",
+                                  display: "block",
+                                  marginBottom: "0.5rem",
                                   fontSize: "0.875rem",
                                   fontWeight: 500,
-                                  cursor: "pointer",
+                                  color: "#374151",
                                 }}
                               >
-                                <input
-                                  type="checkbox"
-                                  checked={chargerReplacementFromCompany}
-                                  onChange={(e) =>
-                                    setChargerReplacementFromCompany(
-                                      e.target.checked
-                                    )
-                                  }
+                                Old Charger Working Condition{" "}
+                                <span style={{ color: "#ef4444" }}>*</span>
+                              </span>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: "1rem",
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                <label
                                   style={{
-                                    width: "1rem",
-                                    height: "1rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.4rem",
                                     cursor: "pointer",
+                                    fontSize: "0.875rem",
                                   }}
-                                />
-                                Replacement from company
-                              </label>
+                                >
+                                  <input
+                                    type="radio"
+                                    name="replacementOldChargerWorking"
+                                    value="working"
+                                    checked={oldChargerWorking === "working"}
+                                    onChange={(e) =>
+                                      setOldChargerWorking(e.target.value)
+                                    }
+                                    style={{
+                                      width: "0.9rem",
+                                      height: "0.9rem",
+                                    }}
+                                  />
+                                  Working
+                                </label>
+                                <label
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.4rem",
+                                    cursor: "pointer",
+                                    fontSize: "0.875rem",
+                                  }}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="replacementOldChargerWorking"
+                                    value="notWorking"
+                                    checked={oldChargerWorking === "notWorking"}
+                                    onChange={(e) =>
+                                      setOldChargerWorking(e.target.value)
+                                    }
+                                    style={{
+                                      width: "0.9rem",
+                                      height: "0.9rem",
+                                    }}
+                                  />
+                                  Not working
+                                </label>
+                              </div>
+                            </div>
+                            <div>
+                              {/* Replacement from company removed (always no-company) */}
                             </div>
                           </>
                         )}
@@ -3749,9 +3718,9 @@ export default function NewJobcard() {
                               setSelectedReplacementType(null);
                               setSelectedCharger(null);
                               setReplacementChargerBatteryType("");
-                              setChargerReplacementFromCompany(false);
                               setOldChargerName("");
                               setOldChargerVoltage("");
+                              setOldChargerWorking("working");
                             }}
                             style={{
                               padding: "0.5rem 1rem",

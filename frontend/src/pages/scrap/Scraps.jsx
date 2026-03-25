@@ -1,20 +1,23 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSessionTimeout } from "../../hooks/useSessionTimeout";
-import { formatDate } from "../../utils/dateUtils";
+import { formatDate, getTodayForInput } from "../../utils/dateUtils";
+import DatePicker from "../../components/DatePicker";
 
 export default function Scraps() {
   useSessionTimeout();
 
   const [quantity, setQuantity] = useState("");
-  const [entryDate, setEntryDate] = useState(() => {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
-  });
+  const [entryDate, setEntryDate] = useState(getTodayForInput());
   const [ratePerBattery, setRatePerBattery] = useState("");
   const [scraps, setScraps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editQuantity, setEditQuantity] = useState("");
+  const [editEntryDate, setEditEntryDate] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   // Fetch existing scraps
   const fetchScraps = async () => {
@@ -94,6 +97,90 @@ export default function Scraps() {
       setError(err.message || "Failed to add scrap entry");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const startEdit = (scrap) => {
+    if (!scrap?._id) return;
+    const dateStr = scrap.entryDate
+      ? new Date(scrap.entryDate).toISOString().split("T")[0]
+      : getTodayForInput();
+    setEditingId(scrap._id);
+    setEditQuantity(String(scrap.quantity || ""));
+    setEditEntryDate(dateStr);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditQuantity("");
+    setEditEntryDate("");
+  };
+
+  const saveEdit = async (scrapId) => {
+    if (!scrapId) return;
+    if (!editQuantity || Number(editQuantity) <= 0) {
+      setError("Please enter a valid quantity");
+      return;
+    }
+    if (!editEntryDate) {
+      setError("Please select a valid date");
+      return;
+    }
+    try {
+      setSavingEdit(true);
+      setError("");
+      const token = localStorage.getItem("token");
+      const res = await fetch(`http://localhost:5000/api/battery-scraps/${scrapId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({
+          quantity: Number(editQuantity),
+          entryDate: editEntryDate,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to update scrap entry");
+      }
+      setScraps((prev) => prev.map((s) => (s._id === scrapId ? data : s)));
+      cancelEdit();
+    } catch (err) {
+      console.error("Error updating scrap:", err);
+      setError(err.message || "Failed to update scrap entry");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDelete = async (scrap) => {
+    if (!scrap?._id) return;
+    const ok = window.confirm("Delete this scrap entry?");
+    if (!ok) return;
+    try {
+      setDeletingId(scrap._id);
+      setError("");
+      const token = localStorage.getItem("token");
+      const res = await fetch(`http://localhost:5000/api/battery-scraps/${scrap._id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to delete scrap entry");
+      }
+      setScraps((prev) => prev.filter((s) => s._id !== scrap._id));
+      if (editingId === scrap._id) cancelEdit();
+    } catch (err) {
+      console.error("Error deleting scrap:", err);
+      setError(err.message || "Failed to delete scrap entry");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -227,11 +314,10 @@ export default function Scraps() {
             >
               Date of Entry *
             </label>
-            <input
-              type="date"
+            <DatePicker
               value={entryDate}
-              onChange={(e) => setEntryDate(e.target.value)}
-              required
+              onChange={(date) => setEntryDate(date || getTodayForInput())}
+              placeholder="dd/mm/yyyy"
               style={{
                 width: "100%",
                 padding: "0.5rem 0.75rem",
@@ -323,14 +409,145 @@ export default function Scraps() {
                   >
                     <div>
                       <div style={{ fontWeight: 500, color: "#111827" }}>
-                        {scrap.quantity} scrap batteries
-                      </div>
-                      <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                        {new Date(scrap.createdAt || scrap.entryDate).toLocaleTimeString(
-                          undefined,
-                          { hour: "2-digit", minute: "2-digit", second: "2-digit" }
+                        {editingId === scrap._id ? (
+                          <span style={{ display: "inline-flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <input
+                              type="number"
+                              min="1"
+                              value={editQuantity}
+                              onChange={(e) => setEditQuantity(e.target.value)}
+                              style={{
+                                width: "90px",
+                                padding: "0.2rem 0.4rem",
+                                borderRadius: "0.35rem",
+                                border: "1px solid #d1d5db",
+                                fontSize: "0.8rem",
+                              }}
+                            />
+                            <div style={{ minWidth: "150px" }}>
+                              <DatePicker
+                                value={editEntryDate}
+                                onChange={(date) =>
+                                  setEditEntryDate(date || getTodayForInput())
+                                }
+                                placeholder="dd/mm/yyyy"
+                                style={{
+                                  padding: "0.2rem 0.4rem",
+                                  borderRadius: "0.35rem",
+                                  border: "1px solid #d1d5db",
+                                  fontSize: "0.8rem",
+                                }}
+                              />
+                            </div>
+                          </span>
+                        ) : (
+                          <>
+                            {scrap.quantity} scrap batteries
+                            {scrap.jobcardNumber ? (
+                              <span
+                                style={{
+                                  marginLeft: "0.5rem",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 600,
+                                  color: "#1d4ed8",
+                                }}
+                              >
+                                (From Jobcard)
+                              </span>
+                            ) : null}
+                          </>
                         )}
                       </div>
+                      <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
+                        {editingId === scrap._id
+                          ? "Editing..."
+                          : new Date(scrap.createdAt || scrap.entryDate).toLocaleTimeString(
+                              undefined,
+                              { hour: "2-digit", minute: "2-digit", second: "2-digit" }
+                            )}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      {editingId === scrap._id ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => saveEdit(scrap._id)}
+                            disabled={savingEdit}
+                            style={{
+                              padding: "0.3rem 0.55rem",
+                              borderRadius: "0.35rem",
+                              border: "1px solid #bbf7d0",
+                              backgroundColor: "#f0fdf4",
+                              color: "#166534",
+                              fontSize: "0.75rem",
+                              cursor: savingEdit ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            {savingEdit ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEdit}
+                            style={{
+                              padding: "0.3rem 0.55rem",
+                              borderRadius: "0.35rem",
+                              border: "1px solid #e5e7eb",
+                              backgroundColor: "#fff",
+                              color: "#374151",
+                              fontSize: "0.75rem",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => startEdit(scrap)}
+                            title="Edit entry"
+                            style={{
+                              padding: "0.3rem 0.55rem",
+                              borderRadius: "0.35rem",
+                              border: "1px solid #bfdbfe",
+                              backgroundColor: "#eff6ff",
+                              color: "#1d4ed8",
+                              fontSize: "0.75rem",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(scrap)}
+                            disabled={deletingId === scrap._id}
+                            title="Delete entry"
+                            style={{
+                              padding: "0.3rem 0.55rem",
+                              borderRadius: "0.35rem",
+                              border: "1px solid #fecaca",
+                              backgroundColor:
+                                deletingId === scrap._id
+                                  ? "#f3f4f6"
+                                  : "#fef2f2",
+                              color:
+                                deletingId === scrap._id
+                                  ? "#9ca3af"
+                                  : "#dc2626",
+                              fontSize: "0.75rem",
+                              cursor:
+                                deletingId === scrap._id
+                                  ? "not-allowed"
+                                  : "pointer",
+                            }}
+                          >
+                            {deletingId === scrap._id ? "Deleting..." : "Delete"}
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}

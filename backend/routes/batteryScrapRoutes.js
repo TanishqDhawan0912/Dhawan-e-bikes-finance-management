@@ -4,6 +4,8 @@ const { protect } = require("../middleware/authMiddleware");
 const {
   createBatteryScrap,
   getBatteryScraps,
+  updateBatteryScrap,
+  deleteBatteryScrap,
   upsertBatteryScrap,
 } = require("../controllers/batteryScrapController");
 
@@ -11,6 +13,7 @@ const {
 // router.use(protect);
 
 router.route("/").post(createBatteryScrap).get(getBatteryScraps);
+router.route("/:id").put(updateBatteryScrap).delete(deleteBatteryScrap);
 router.route("/upsert").post(upsertBatteryScrap);
 
 module.exports = router;

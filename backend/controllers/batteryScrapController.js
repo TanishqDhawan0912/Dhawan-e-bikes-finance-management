@@ -50,6 +50,59 @@ const getBatteryScraps = async (req, res) => {
   }
 };
 
+// @desc    Update a battery scrap entry
+// @route   PUT /api/battery-scraps/:id
+// @access  Private
+const updateBatteryScrap = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quantity, entryDate } = req.body;
+
+    if (!quantity || Number(quantity) <= 0) {
+      return res
+        .status(400)
+        .json({ message: "Quantity must be greater than 0" });
+    }
+    if (!entryDate) {
+      return res.status(400).json({ message: "Entry date is required" });
+    }
+
+    const scrap = await BatteryScrap.findById(id);
+    if (!scrap) {
+      return res.status(404).json({ message: "Scrap entry not found" });
+    }
+    scrap.quantity = Number(quantity);
+    scrap.entryDate = new Date(entryDate);
+    const updated = await scrap.save();
+    return res.status(200).json(updated);
+  } catch (error) {
+    console.error("Error updating battery scrap:", error);
+    return res
+      .status(500)
+      .json({ message: "Server error", error: error.message });
+  }
+};
+
+// @desc    Delete a battery scrap entry
+// @route   DELETE /api/battery-scraps/:id
+// @access  Private
+const deleteBatteryScrap = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const scrap = await BatteryScrap.findById(id);
+    if (!scrap) {
+      return res.status(404).json({ message: "Scrap entry not found" });
+    }
+    await BatteryScrap.deleteOne({ _id: id });
+    return res.status(200).json({ message: "Deleted", id });
+  } catch (error) {
+    console.error("Error deleting battery scrap:", error);
+    return res
+      .status(500)
+      .json({ message: "Server error", error: error.message });
+  }
+};
+
 // @desc    Create or update battery scrap entry for a specific date
 // @route   POST /api/battery-scraps/upsert
 // @access  Private
@@ -106,6 +159,8 @@ const upsertBatteryScrap = async (req, res) => {
 module.exports = {
   createBatteryScrap,
   getBatteryScraps,
+  updateBatteryScrap,
+  deleteBatteryScrap,
   upsertBatteryScrap,
 };
 
