@@ -712,121 +712,103 @@ export default function PendingJobcard() {
                 );
               })()}
 
-              <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  {jobcard.pendingAmount && jobcard.pendingAmount > 0 ? (
-                    <>
-                      <button
-                        onClick={() => setPrintingJobcard(jobcard)}
-                        style={{
-                          padding: "0.5rem 1rem",
-                          fontSize: "0.875rem",
-                          fontWeight: 500,
-                          borderRadius: "0.375rem",
-                          border: "1px solid #d1d5db",
-                          backgroundColor: "#ffffff",
-                          color: "#374151",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Print
-                      </button>
-                      <button
-                        onClick={() => handleFinalize(jobcard)}
-                        style={{
-                          padding: "0.5rem 1rem",
-                          fontSize: "0.875rem",
-                          fontWeight: 500,
-                          borderRadius: "0.375rem",
-                          border: "none",
-                          backgroundColor: "#3b82f6",
-                          color: "white",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Settle
-                      </button>
-                      <button
-                        onClick={() => handleDelete(jobcard._id)}
-                        style={{
-                          padding: "0.5rem 1rem",
-                          fontSize: "0.875rem",
-                          fontWeight: 500,
-                          borderRadius: "0.375rem",
-                          border: "none",
-                          backgroundColor: "#ef4444",
-                          color: "white",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => setPrintingJobcard(jobcard)}
-                        style={{
-                          padding: "0.5rem 1rem",
-                          fontSize: "0.875rem",
-                          fontWeight: 500,
-                          borderRadius: "0.375rem",
-                          border: "1px solid #d1d5db",
-                          backgroundColor: "#ffffff",
-                          color: "#374151",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Print
-                      </button>
-                      <button
-                        onClick={() => handleEdit(jobcard)}
-                        style={{
-                          padding: "0.5rem 1rem",
-                          fontSize: "0.875rem",
-                          fontWeight: 500,
-                          borderRadius: "0.375rem",
-                          border: "1px solid #d1d5db",
-                          backgroundColor: "#ffffff",
-                          color: "#374151",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(jobcard._id)}
-                        style={{
-                          padding: "0.5rem 1rem",
-                          fontSize: "0.875rem",
-                          fontWeight: 500,
-                          borderRadius: "0.375rem",
-                          border: "none",
-                          backgroundColor: "#ef4444",
-                          color: "white",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </>
-                  )}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  marginTop: "1rem",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => setPrintingJobcard(jobcard)}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      fontSize: "0.875rem",
+                      fontWeight: 500,
+                      borderRadius: "0.375rem",
+                      border: "1px solid #d1d5db",
+                      backgroundColor: "#ffffff",
+                      color: "#374151",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Print
+                  </button>
+                  <button
+                    onClick={() => handleEdit(jobcard)}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      fontSize: "0.875rem",
+                      fontWeight: 500,
+                      borderRadius: "0.375rem",
+                      border: "1px solid #d1d5db",
+                      backgroundColor: "#ffffff",
+                      color: "#374151",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(jobcard._id)}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      fontSize: "0.875rem",
+                      fontWeight: 500,
+                      borderRadius: "0.375rem",
+                      border: "none",
+                      backgroundColor: "#ef4444",
+                      color: "white",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Delete
+                  </button>
                 </div>
-                <button
-                  onClick={() => jobcard.pendingAmount && jobcard.pendingAmount > 0 ? handleFinalizeWithPending(jobcard) : handleFinalize(jobcard)}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    fontSize: "0.875rem",
-                    fontWeight: 500,
-                    borderRadius: "0.375rem",
-                    border: "none",
-                    backgroundColor: "#10b981",
-                    color: "white",
-                    cursor: "pointer",
-                  }}
-                >
-                  Finalize
-                </button>
+
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  {/* For pending-payment jobcards, show Settle just left of Finalize */}
+                  {jobcard.pendingAmount && jobcard.pendingAmount > 0 ? (
+                    <button
+                      onClick={() => handleFinalize(jobcard)}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        fontSize: "0.875rem",
+                        fontWeight: 500,
+                        borderRadius: "0.375rem",
+                        border: "none",
+                        backgroundColor: "#3b82f6",
+                        color: "white",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Settle
+                    </button>
+                  ) : null}
+                  <button
+                    onClick={() =>
+                      jobcard.pendingAmount && jobcard.pendingAmount > 0
+                        ? handleFinalizeWithPending(jobcard)
+                        : handleFinalize(jobcard)
+                    }
+                    style={{
+                      padding: "0.5rem 1rem",
+                      fontSize: "0.875rem",
+                      fontWeight: 500,
+                      borderRadius: "0.375rem",
+                      border: "none",
+                      backgroundColor: "#10b981",
+                      color: "white",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Finalize
+                  </button>
+                </div>
               </div>
             </div>
           ))}

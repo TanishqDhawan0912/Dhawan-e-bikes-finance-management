@@ -95,6 +95,8 @@ export default function NewJobcard() {
   });
   const [showSearch, setShowSearch] = useState(false);
   const [showCustomSpare, setShowCustomSpare] = useState(false);
+  const [editingPrice, setEditingPrice] = useState(null); // { id, cat } | null
+  const [editingPriceValue, setEditingPriceValue] = useState("");
   const [customSpareData, setCustomSpareData] = useState({
     name: "",
     price: "",
@@ -103,6 +105,35 @@ export default function NewJobcard() {
   });
   const [validationError, setValidationError] = useState("");
   const errorRef = useRef(null);
+
+  const startEditPrice = (part, cat) => {
+    if (!part?.id || !cat) return;
+    setEditingPrice({ id: part.id, cat });
+    setEditingPriceValue(
+      part.price != null && !isNaN(Number(part.price)) ? String(part.price) : "0"
+    );
+  };
+  const cancelEditPrice = () => {
+    setEditingPrice(null);
+    setEditingPriceValue("");
+  };
+  const commitEditPrice = () => {
+    if (!editingPrice) return;
+    const raw = String(editingPriceValue ?? "").trim();
+    const next = Number(raw);
+    if (isNaN(next) || next < 0) {
+      alert("Enter a valid price (0 or more)");
+      return;
+    }
+    const { id, cat } = editingPrice;
+    setSelectedParts((prev) => ({
+      ...prev,
+      [cat]: (prev[cat] || []).map((p) =>
+        p.id === id ? { ...p, price: next } : p
+      ),
+    }));
+    cancelEditPrice();
+  };
 
   // Replacement item type state (battery, charger, controller, motor)
   const [selectedReplacementType, setSelectedReplacementType] = useState(null);
@@ -305,14 +336,16 @@ export default function NewJobcard() {
         price: Number(part?.price || 0),
         selectedQuantity: Number(part?.quantity || 1),
         quantity: Number(part?.quantity || 1),
-        inventoryQuantity: Number(part?.quantity || 1),
+        // In edit mode we often don't have live stock quantities (list API populates only name/sku),
+        // so don't cap "+" by the saved selected quantity.
+        inventoryQuantity: 999,
         selectedColor: part?.selectedColor || null,
         hasColors: Boolean(part?.selectedColor),
         colorQuantity: part?.selectedColor
           ? [
               {
                 color: part.selectedColor,
-                quantity: Number(part?.quantity || 1),
+                quantity: 999,
               },
             ]
           : [],
@@ -581,7 +614,9 @@ export default function NewJobcard() {
         return colorEntry.quantity;
       }
     }
-    return part.inventoryQuantity || part.quantity || 999;
+    // IMPORTANT: `part.quantity` is the selected quantity on saved jobcards, not the available stock.
+    // Only use `inventoryQuantity` / `colorQuantity` as stock limit; otherwise allow.
+    return typeof part.inventoryQuantity === "number" ? part.inventoryQuantity : 999;
   };
 
   // Total for a part (battery sales with scrap: gross - scrap deduction)
@@ -8870,28 +8905,114 @@ export default function NewJobcard() {
                                 marginTop: "0.5rem",
                                 fontFamily:
                                   "system-ui, -apple-system, sans-serif",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
                               }}
                             >
-                              {part.partType === "replacement" &&
-                              part.replacementType === "battery" ? (
-                                // For battery replacement, show total price (price per battery × quantity)
+                              {editingPrice?.id === part.id &&
+                              editingPrice?.cat === activeTab ? (
                                 <>
-                                  ₹
-                                  {(
-                                    part.price * (part.selectedQuantity || 1)
-                                  ).toFixed(2)}
+                                  <span style={{ fontWeight: 600 }}>₹</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={editingPriceValue}
+                                    onChange={(e) =>
+                                      setEditingPriceValue(e.target.value)
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (
+                                        e.key === "ArrowUp" ||
+                                        e.key === "ArrowDown"
+                                      ) {
+                                        e.preventDefault();
+                                      }
+                                    }}
+                                    onWheel={(e) => e.target.blur()}
+                                    style={{
+                                      width: "120px",
+                                      padding: "0.25rem 0.5rem",
+                                      borderRadius: "0.4rem",
+                                      border: "1px solid #d1d5db",
+                                      fontSize: "0.9rem",
+                                      fontWeight: 600,
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={commitEditPrice}
+                                    style={{
+                                      padding: "0.25rem 0.6rem",
+                                      borderRadius: "0.4rem",
+                                      border: "1px solid #bbf7d0",
+                                      backgroundColor: "#f0fdf4",
+                                      color: "#166534",
+                                      fontSize: "0.8rem",
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={cancelEditPrice}
+                                    style={{
+                                      padding: "0.25rem 0.6rem",
+                                      borderRadius: "0.4rem",
+                                      border: "1px solid #e5e7eb",
+                                      backgroundColor: "#ffffff",
+                                      color: "#374151",
+                                      fontSize: "0.8rem",
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    Cancel
+                                  </button>
                                 </>
-                              ) : part.partType === "sales" &&
-                                part.salesType === "battery" ? (
-                                // For sales battery: show net price after scrap deduction
-                                <>₹{getPartTotal(part).toFixed(2)}</>
-                              ) : part.partType === "sales" &&
-                                part.salesType === "charger" ? (
-                                // For sales charger: show total (charger may have scrap deduction)
-                                <>₹{getPartTotal(part).toFixed(2)}</>
                               ) : (
-                                // For other parts, show unit price
-                                <>₹{part.price.toFixed(2)}</>
+                                <>
+                                  <span>
+                                    {part.partType === "replacement" &&
+                                    part.replacementType === "battery" ? (
+                                      <>
+                                        ₹
+                                        {(
+                                          part.price *
+                                          (part.selectedQuantity || 1)
+                                        ).toFixed(2)}
+                                      </>
+                                    ) : part.partType === "sales" &&
+                                      part.salesType === "battery" ? (
+                                      <>₹{getPartTotal(part).toFixed(2)}</>
+                                    ) : part.partType === "sales" &&
+                                      part.salesType === "charger" ? (
+                                      <>₹{getPartTotal(part).toFixed(2)}</>
+                                    ) : (
+                                      <>₹{part.price.toFixed(2)}</>
+                                    )}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditPrice(part, activeTab)}
+                                    title="Edit price"
+                                    style={{
+                                      padding: "0.2rem 0.5rem",
+                                      borderRadius: "0.4rem",
+                                      border: "1px solid #bfdbfe",
+                                      backgroundColor: "#eff6ff",
+                                      color: "#1d4ed8",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    Edit
+                                  </button>
+                                </>
                               )}
                             </div>
                           </div>
@@ -9313,9 +9434,96 @@ export default function NewJobcard() {
                                       marginLeft: "0.75rem",
                                       fontWeight: 600,
                                       color: "#0f172a",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.5rem",
                                     }}
                                   >
-                                    ₹{getPartTotal(part).toFixed(2)}
+                                    {editingPrice?.id === part.id &&
+                                    editingPrice?.cat === cat ? (
+                                      <>
+                                        <span>₹</span>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          value={editingPriceValue}
+                                          onChange={(e) =>
+                                            setEditingPriceValue(e.target.value)
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (
+                                              e.key === "ArrowUp" ||
+                                              e.key === "ArrowDown"
+                                            ) {
+                                              e.preventDefault();
+                                            }
+                                          }}
+                                          onWheel={(e) => e.target.blur()}
+                                          style={{
+                                            width: "110px",
+                                            padding: "0.2rem 0.45rem",
+                                            borderRadius: "0.35rem",
+                                            border: "1px solid #d1d5db",
+                                            fontSize: "0.78rem",
+                                            fontWeight: 700,
+                                          }}
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={commitEditPrice}
+                                          style={{
+                                            padding: "0.2rem 0.5rem",
+                                            borderRadius: "0.35rem",
+                                            border: "1px solid #bbf7d0",
+                                            backgroundColor: "#f0fdf4",
+                                            color: "#166534",
+                                            fontSize: "0.72rem",
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          Save
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={cancelEditPrice}
+                                          style={{
+                                            padding: "0.2rem 0.5rem",
+                                            borderRadius: "0.35rem",
+                                            border: "1px solid #e5e7eb",
+                                            backgroundColor: "#ffffff",
+                                            color: "#374151",
+                                            fontSize: "0.72rem",
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          Cancel
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span>₹{getPartTotal(part).toFixed(2)}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => startEditPrice(part, cat)}
+                                          title="Edit price"
+                                          style={{
+                                            padding: "0.15rem 0.45rem",
+                                            borderRadius: "0.35rem",
+                                            border: "1px solid #bfdbfe",
+                                            backgroundColor: "#eff6ff",
+                                            color: "#1d4ed8",
+                                            fontSize: "0.7rem",
+                                            fontWeight: 800,
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          Edit
+                                        </button>
+                                      </>
+                                    )}
                                   </span>
                                 )}
                               </div>
