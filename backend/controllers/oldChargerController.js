@@ -59,6 +59,7 @@ const createOldCharger = async (req, res) => {
       ampere: ampereNorm,
       status: statusNorm,
       entryDate: new Date(entryDate),
+      source: "manual",
     });
 
     const created = await oldCharger.save();

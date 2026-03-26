@@ -44,6 +44,12 @@ const oldChargerSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    source: {
+      type: String,
+      enum: ["manual", "jobcard", "oldScooty"],
+      default: "manual",
+      index: true,
+    },
   },
   {
     timestamps: true,

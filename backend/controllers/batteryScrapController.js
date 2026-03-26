@@ -20,6 +20,7 @@ const createBatteryScrap = async (req, res) => {
     const scrap = new BatteryScrap({
       quantity,
       entryDate: new Date(entryDate),
+      source: "manual",
     });
 
     const created = await scrap.save();
@@ -144,6 +145,7 @@ const upsertBatteryScrap = async (req, res) => {
       const scrap = new BatteryScrap({
         quantity,
         entryDate: new Date(entryDate),
+        source: "manual",
       });
       const created = await scrap.save();
       return res.status(201).json(created);

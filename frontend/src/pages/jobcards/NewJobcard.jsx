@@ -1614,6 +1614,7 @@ export default function NewJobcard() {
                   ? s.quantity
                   : parseInt(s.quantity, 10) || 1,
               color: (s.color && String(s.color).trim()) || "",
+              fromOldScooty: true,
             }))
           : [];
       setOldScootyData((prev) => ({
@@ -1693,6 +1694,7 @@ export default function NewJobcard() {
             ? s.quantity
             : parseInt(s.quantity, 10) || 1,
         color: s.color ? String(s.color).trim() : "",
+        fromOldScooty: Boolean(s.fromOldScooty),
       })),
     };
 
@@ -1829,7 +1831,7 @@ export default function NewJobcard() {
       ...prev,
       sparesUsed: [
         ...(prev.sparesUsed || []),
-        { spareId, name, quantity: qty, color },
+        { spareId, name, quantity: qty, color, fromOldScooty: false },
       ],
     }));
     setOldScootySpareName("");
@@ -2041,6 +2043,19 @@ export default function NewJobcard() {
           if (part.ampereValue) basePart.ampereValue = part.ampereValue;
           if (part.warrantyStatus)
             basePart.warrantyStatus = part.warrantyStatus;
+          if (part.pmcNo) basePart.pmcNo = part.pmcNo;
+          if (Array.isArray(part.sparesUsed) && part.sparesUsed.length) {
+            basePart.sparesUsed = part.sparesUsed.map((s) => ({
+              spareId: s.spareId || null,
+              name: s.name || "",
+              quantity:
+                typeof s.quantity === "number"
+                  ? s.quantity
+                  : parseInt(s.quantity, 10) || 1,
+              color: s.color || "",
+              fromOldScooty: Boolean(s.fromOldScooty),
+            }));
+          }
 
           // Add replacement-related fields if they exist and have values
           if (part.replacementType)

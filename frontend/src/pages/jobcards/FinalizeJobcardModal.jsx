@@ -337,6 +337,15 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
 
                   const typeSuffix = tags.length ? ` <${tags.join(", ")}>` : "";
                   let label = part.spareName;
+                  if (part.salesType === "oldScooty") {
+                    const rawPmc = String(part.pmcNo || "").trim();
+                    const pmcDisplay = rawPmc
+                      ? `PMC-${rawPmc.replace(/^PMC-?/i, "")}`
+                      : "";
+                    label = pmcDisplay
+                      ? `Old Scooty - ${label} (${pmcDisplay})`
+                      : `Old Scooty - ${label}`;
+                  }
                   if (part.selectedColor) {
                     label += ` (${part.selectedColor})`;
                   }

@@ -16,6 +16,13 @@ export default function OldChargers() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const getSourceLabel = (charger) => {
+    const src = String(charger?.source || "").trim();
+    if (src === "oldScooty" || charger?.oldScootyId) return "Old scooty";
+    if (src === "jobcard" || charger?.jobcardNumber) return "Jobcard";
+    return "Manual";
+  };
+
   // Helper to compute per-voltage stats from current data
   const buildVoltageStats = (chargers) => {
     const voltages = ["48V", "60V", "72V", "Other"];
@@ -831,6 +838,21 @@ export default function OldChargers() {
                             • {charger.status === "working" ? "Working" : "Not working"}
                           </span>
                         )}
+                        <span
+                          style={{
+                            marginLeft: "0.5rem",
+                            fontSize: "0.72rem",
+                            fontWeight: 600,
+                            color:
+                              getSourceLabel(charger) === "Old scooty"
+                                ? "#7c3aed"
+                                : getSourceLabel(charger) === "Jobcard"
+                                ? "#1d4ed8"
+                                : "#6b7280",
+                          }}
+                        >
+                          • From {getSourceLabel(charger)}
+                        </span>
                       </div>
                       <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
                         {new Date(charger.createdAt || charger.entryDate).toLocaleTimeString(

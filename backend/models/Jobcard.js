@@ -112,6 +112,43 @@ const jobcardPartSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  // Old scooty sales metadata
+  pmcNo: {
+    type: String,
+    required: false,
+    default: "",
+  },
+  sparesUsed: [
+    {
+      spareId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Spare",
+        required: false,
+        default: null,
+      },
+      name: {
+        type: String,
+        required: false,
+        default: "",
+      },
+      quantity: {
+        type: Number,
+        required: false,
+        min: 1,
+        default: 1,
+      },
+      color: {
+        type: String,
+        required: false,
+        default: "",
+      },
+      // true when spare came from old scooty master entry (already deducted there)
+      fromOldScooty: {
+        type: Boolean,
+        default: false,
+      },
+    },
+  ],
   // Models this part/spare is compatible with (copied from Spare.models)
   models: [
     {
@@ -255,6 +292,27 @@ const jobcardSchema = new mongoose.Schema(
         {
           quantity: { type: Number, required: true, min: 1 },
           entryDate: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
+    // Old scooty entries removed from old scooty section when sold via jobcard.
+    consumedOldScooties: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+    // Extra spares added in old scooty sales (jobcard-only additions) consumed from Spare stock.
+    consumedOldScootySaleSpares: {
+      type: [
+        {
+          spareId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Spare",
+            required: false,
+            default: null,
+          },
+          quantity: { type: Number, required: true, min: 1 },
+          color: { type: String, default: "" },
         },
       ],
       default: [],

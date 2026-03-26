@@ -19,6 +19,13 @@ export default function Scraps() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
+  const getSourceLabel = (scrap) => {
+    const src = String(scrap?.source || "").trim();
+    if (src === "oldScooty" || scrap?.oldScootyId) return "Old scooty";
+    if (src === "jobcard" || scrap?.jobcardNumber) return "Jobcard";
+    return "Manual";
+  };
+
   // Fetch existing scraps
   const fetchScraps = async () => {
     try {
@@ -443,18 +450,21 @@ export default function Scraps() {
                         ) : (
                           <>
                             {scrap.quantity} scrap batteries
-                            {scrap.jobcardNumber ? (
-                              <span
-                                style={{
-                                  marginLeft: "0.5rem",
-                                  fontSize: "0.72rem",
-                                  fontWeight: 600,
-                                  color: "#1d4ed8",
-                                }}
-                              >
-                                (From Jobcard)
-                              </span>
-                            ) : null}
+                            <span
+                              style={{
+                                marginLeft: "0.5rem",
+                                fontSize: "0.72rem",
+                                fontWeight: 600,
+                                color:
+                                  getSourceLabel(scrap) === "Old scooty"
+                                    ? "#7c3aed"
+                                    : getSourceLabel(scrap) === "Jobcard"
+                                    ? "#1d4ed8"
+                                    : "#6b7280",
+                              }}
+                            >
+                              (From {getSourceLabel(scrap)})
+                            </span>
                           </>
                         )}
                       </div>

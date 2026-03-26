@@ -743,7 +743,19 @@ export default function OldScooties() {
                     <>
                       <select
                         value={chargerType}
-                        onChange={(e) => setChargerType(e.target.value)}
+                        onChange={(e) => {
+                          const nextType = e.target.value;
+                          setChargerType(nextType);
+                          // For lead chargers, constrain voltage to supported options.
+                          if (nextType.toLowerCase() === "lead") {
+                            const current = normalizeVoltageText(chargerVoltageAmpere);
+                            if (!["48V", "60V", "72V"].includes(current)) {
+                              setChargerVoltageAmpere("48V");
+                            } else {
+                              setChargerVoltageAmpere(current);
+                            }
+                          }
+                        }}
                         style={{
                           width: "160px",
                           padding: "0.4rem 0.5rem",
@@ -756,24 +768,49 @@ export default function OldScooties() {
                         <option value="Lead">Lead</option>
                         <option value="Lithium">Lithium</option>
                       </select>
-                      <input
-                        type="text"
-                        value={chargerVoltageAmpere}
-                        onChange={(e) => setChargerVoltageAmpere(e.target.value)}
-                        onBlur={() =>
-                          setChargerVoltageAmpere((prev) =>
-                            normalizeVoltageText(prev)
-                          )
-                        }
-                        placeholder="Voltage / Ampere"
-                        style={{
-                          width: "150px",
-                          padding: "0.4rem 0.5rem",
-                          borderRadius: "0.375rem",
-                          border: "1px solid #d1d5db",
-                          fontSize: "0.8125rem",
-                        }}
-                      />
+                      {String(chargerType || "").toLowerCase() === "lead" ? (
+                        <select
+                          value={
+                            ["48V", "60V", "72V"].includes(
+                              normalizeVoltageText(chargerVoltageAmpere)
+                            )
+                              ? normalizeVoltageText(chargerVoltageAmpere)
+                              : "48V"
+                          }
+                          onChange={(e) => setChargerVoltageAmpere(e.target.value)}
+                          style={{
+                            width: "150px",
+                            padding: "0.4rem 0.5rem",
+                            borderRadius: "0.375rem",
+                            border: "1px solid #d1d5db",
+                            fontSize: "0.8125rem",
+                            backgroundColor: "#fff",
+                          }}
+                        >
+                          <option value="48V">48V</option>
+                          <option value="60V">60V</option>
+                          <option value="72V">72V</option>
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={chargerVoltageAmpere}
+                          onChange={(e) => setChargerVoltageAmpere(e.target.value)}
+                          onBlur={() =>
+                            setChargerVoltageAmpere((prev) =>
+                              normalizeVoltageText(prev)
+                            )
+                          }
+                          placeholder="Voltage / Ampere"
+                          style={{
+                            width: "150px",
+                            padding: "0.4rem 0.5rem",
+                            borderRadius: "0.375rem",
+                            border: "1px solid #d1d5db",
+                            fontSize: "0.8125rem",
+                          }}
+                        />
+                      )}
                       <div
                         style={{
                           display: "flex",

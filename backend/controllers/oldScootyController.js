@@ -63,6 +63,7 @@ const upsertBatteryAndChargerEntriesForOldScooty = async (oldScootyDoc) => {
       quantity: qty,
       entryDate,
       oldScootyId: oldScootyDoc._id,
+      source: "oldScooty",
     });
   }
 
@@ -80,6 +81,7 @@ const upsertBatteryAndChargerEntriesForOldScooty = async (oldScootyDoc) => {
         status,
         entryDate,
         oldScootyId: oldScootyDoc._id,
+        source: "oldScooty",
       });
       await row.save();
       await adjustOldChargerSummaryByStatusDelta(voltage, status, 1);

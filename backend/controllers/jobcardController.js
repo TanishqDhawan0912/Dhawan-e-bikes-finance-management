@@ -5,6 +5,7 @@ const BatteryScrap = require("../models/BatteryScrap");
 const Charger = require("../models/Charger");
 const OldCharger = require("../models/OldCharger");
 const OldChargerSummary = require("../models/OldChargerSummary");
+const OldScooty = require("../models/OldScooty");
 const {
   adjustOldChargerSummaryDelta,
   adjustOldChargerSummaryByStatusDelta,
@@ -233,6 +234,141 @@ const adjustSpareInventoryForJobcard = async (jobcard, mode = "deduct") => {
     }
 
     await spare.save();
+  }
+};
+
+const normalizePmcNoForMatch = (v) =>
+  String(v || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^pmc-?/i, "")
+    .replace(/\s+/g, "");
+
+// Old scooty sales inventory effects:
+// - Remove sold old scooty entry from old scooty section (by PMC No. match)
+// - Deduct ONLY newly added spares in jobcard old scooty sale (fromOldScooty !== true)
+//   because spares that came from old scooty master are already deducted there.
+const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
+  if (!jobcard || !Array.isArray(jobcard.parts) || jobcard.parts.length === 0) {
+    return;
+  }
+
+  if (mode === "restore") {
+    // 1) Reinsert removed old scooty rows
+    const consumedRows = Array.isArray(jobcard.consumedOldScooties)
+      ? jobcard.consumedOldScooties
+      : [];
+    for (const snap of consumedRows) {
+      if (!snap || typeof snap !== "object") continue;
+      const row = { ...snap };
+      delete row._id; // let Mongo create new id safely
+      try {
+        await OldScooty.create(row);
+      } catch (e) {
+        console.error("[jobcard] old scooty restore create failed:", e.message);
+      }
+    }
+    jobcard.consumedOldScooties = [];
+
+    // 2) Restore spare stock consumed from newly added old scooty sale spares
+    const consumedSpares = Array.isArray(jobcard.consumedOldScootySaleSpares)
+      ? jobcard.consumedOldScootySaleSpares
+      : [];
+    for (const s of consumedSpares) {
+      if (!s?.spareId) continue;
+      const qty = Math.max(1, Number(s.quantity) || 1);
+      const spare = await Spare.findById(s.spareId);
+      if (!spare) continue;
+      const colorKey = String(s.color || "")
+        .trim()
+        .toLowerCase();
+      if (spare.hasColors && Array.isArray(spare.colorQuantity) && colorKey) {
+        const colorEntry = spare.colorQuantity.find(
+          (cq) =>
+            cq &&
+            typeof cq.color === "string" &&
+            cq.color.trim().toLowerCase() === colorKey
+        );
+        if (colorEntry) {
+          colorEntry.quantity = Math.max(
+            0,
+            (Number(colorEntry.quantity) || 0) + qty
+          );
+        } else {
+          spare.quantity = Math.max(0, (Number(spare.quantity) || 0) + qty);
+        }
+      } else {
+        spare.quantity = Math.max(0, (Number(spare.quantity) || 0) + qty);
+      }
+      await spare.save();
+    }
+    jobcard.consumedOldScootySaleSpares = [];
+    return;
+  }
+
+  // mode === "deduct"
+  if (!Array.isArray(jobcard.consumedOldScooties)) jobcard.consumedOldScooties = [];
+  if (!Array.isArray(jobcard.consumedOldScootySaleSpares))
+    jobcard.consumedOldScootySaleSpares = [];
+
+  for (const part of jobcard.parts) {
+    if (!part || part.partType !== "sales" || part.salesType !== "oldScooty") {
+      continue;
+    }
+
+    // A) Remove sold old scooty entry from old scooty section
+    const pmcRaw = part.pmcNo || "";
+    const pmcKey = normalizePmcNoForMatch(pmcRaw);
+    let scooty = null;
+    if (pmcKey) {
+      const all = await OldScooty.find({}).lean();
+      scooty = all.find(
+        (row) => normalizePmcNoForMatch(row?.pmcNo || "") === pmcKey
+      );
+      if (scooty) {
+        await OldScooty.deleteOne({ _id: scooty._id });
+        jobcard.consumedOldScooties.push(scooty);
+      }
+    }
+
+    // B) Deduct only newly added spares in this sale line
+    const saleSpares = Array.isArray(part.sparesUsed) ? part.sparesUsed : [];
+    const newlyAdded = saleSpares.filter((s) => !s?.fromOldScooty);
+    for (const s of newlyAdded) {
+      if (!s?.spareId) continue;
+      const qty = Math.max(1, Number(s.quantity) || 1);
+      const spare = await Spare.findById(s.spareId);
+      if (!spare) continue;
+
+      const colorKey = String(s.color || "")
+        .trim()
+        .toLowerCase();
+      if (spare.hasColors && Array.isArray(spare.colorQuantity) && colorKey) {
+        const colorEntry = spare.colorQuantity.find(
+          (cq) =>
+            cq &&
+            typeof cq.color === "string" &&
+            cq.color.trim().toLowerCase() === colorKey
+        );
+        if (colorEntry) {
+          colorEntry.quantity = Math.max(
+            0,
+            (Number(colorEntry.quantity) || 0) - qty
+          );
+        } else {
+          spare.quantity = Math.max(0, (Number(spare.quantity) || 0) - qty);
+        }
+      } else {
+        spare.quantity = Math.max(0, (Number(spare.quantity) || 0) - qty);
+      }
+
+      await spare.save();
+      jobcard.consumedOldScootySaleSpares.push({
+        spareId: s.spareId,
+        quantity: qty,
+        color: s.color || "",
+      });
+    }
   }
 };
 
@@ -541,6 +677,7 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
           quantity: addQty,
           entryDate: parseJobcardDate(jobcard.date),
           jobcardNumber,
+          source: "jobcard",
         });
       }
     }
@@ -595,6 +732,7 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
           quantity: addQty,
           entryDate: parseJobcardDate(jobcard.date),
           jobcardNumber,
+          source: "jobcard",
         });
       }
     }
@@ -787,6 +925,7 @@ const adjustOldChargerEntriesForReplacementChargers = async (
       status: statusNorm,
       entryDate,
       jobcardNumber,
+      source: "jobcard",
     });
     await oldCharger.save();
     await adjustOldChargerSummaryByStatusDelta(voltage, statusNorm, 1);
@@ -826,6 +965,7 @@ const adjustOldChargerEntriesForReplacementChargers = async (
         status: statusNorm,
         entryDate,
         jobcardNumber,
+        source: "jobcard",
       });
       await oldCharger.save();
       await adjustOldChargerSummaryByStatusDelta(voltage, statusNorm, 1);
@@ -851,6 +991,7 @@ const applyJobcardInventoryDeductionOnce = async (jobcard) => {
   await adjustBatteryInventoryForNewBatterySales(jobcard, "deduct");
   await adjustChargerInventoryForReplacements(jobcard, "deduct");
   await adjustChargerInventoryForNewChargerSales(jobcard, "deduct");
+  await adjustOldScootyInventoryForSales(jobcard, "deduct");
   await adjustBatteryScrapInventoryForOldBatterySales(jobcard, "deduct");
   await adjustOldChargerEntriesForReplacementChargers(jobcard, "deduct");
   jobcard.inventoryAdjusted = true;
@@ -1291,6 +1432,7 @@ const deleteJobcard = async (req, res) => {
         await adjustBatteryInventoryForNewBatterySales(jobcard, "restore");
         await adjustChargerInventoryForReplacements(jobcard, "restore");
         await adjustChargerInventoryForNewChargerSales(jobcard, "restore");
+        await adjustOldScootyInventoryForSales(jobcard, "restore");
         await adjustBatteryScrapInventoryForOldBatterySales(jobcard, "restore");
         await adjustOldChargerEntriesForReplacementChargers(jobcard, "restore");
         jobcard.inventoryAdjusted = false;

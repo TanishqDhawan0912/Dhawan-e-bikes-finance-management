@@ -21,6 +21,12 @@ const batteryScrapSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    source: {
+      type: String,
+      enum: ["manual", "jobcard", "oldScooty"],
+      default: "manual",
+      index: true,
+    },
     entryDate: {
       // Explicit date chosen by user (date-only, but we store full Date)
       type: Date,
