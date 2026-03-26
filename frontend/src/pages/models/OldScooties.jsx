@@ -24,6 +24,7 @@ export default function OldScooties() {
   const [entryDate, setEntryDate] = useState(getTodayForInput());
   const [status, setStatus] = useState("not-ready"); // "ready" | "not-ready"
   const [oldScooties, setOldScooties] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -216,8 +217,17 @@ export default function OldScooties() {
     }
   };
 
+  const normalizedQuery = String(searchQuery || "").trim().toLowerCase();
+  const filteredOldScooties = normalizedQuery
+    ? oldScooties.filter((item) => {
+        const name = String(item?.name || "").toLowerCase();
+        const pmc = String(item?.pmcNo || "").toLowerCase();
+        return name.includes(normalizedQuery) || pmc.includes(normalizedQuery);
+      })
+    : oldScooties;
+
   // Group by entry date (date only)
-  const groupedByDate = oldScooties.reduce((acc, item) => {
+  const groupedByDate = filteredOldScooties.reduce((acc, item) => {
     const dateKey = item.entryDate
       ? new Date(item.entryDate).toISOString().split("T")[0]
       : item.createdAt
@@ -558,7 +568,16 @@ export default function OldScooties() {
                         checked={status === "ready"}
                         onChange={(e) => setStatus(e.target.value)}
                       />
-                      <span>Ready</span>
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: "#16a34a",
+                          textDecoration:
+                            status === "ready" ? "underline" : "none",
+                        }}
+                      >
+                        Ready
+                      </span>
                     </label>
                     <label
                       style={{
@@ -575,7 +594,16 @@ export default function OldScooties() {
                         checked={status === "not-ready"}
                         onChange={(e) => setStatus(e.target.value)}
                       />
-                      <span>Not ready</span>
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: "#dc2626",
+                          textDecoration:
+                            status === "not-ready" ? "underline" : "none",
+                        }}
+                      >
+                        Not ready
+                      </span>
                     </label>
                   </div>
                 </div>
@@ -1108,11 +1136,61 @@ export default function OldScooties() {
         >
           All Old Scooties
         </h2>
+        <div
+          style={{
+            display: "flex",
+            gap: "0.75rem",
+            alignItems: "center",
+            marginBottom: "0.75rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search model name or PMC no…"
+            style={{
+              flex: "1 1 260px",
+              maxWidth: "520px",
+              padding: "0.5rem 0.75rem",
+              borderRadius: "0.5rem",
+              border: "1px solid #d1d5db",
+              fontSize: "0.9rem",
+              outline: "none",
+            }}
+          />
+          {searchQuery ? (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              style={{
+                padding: "0.5rem 0.75rem",
+                borderRadius: "0.5rem",
+                border: "1px solid #d1d5db",
+                backgroundColor: "#ffffff",
+                cursor: "pointer",
+                fontSize: "0.875rem",
+                fontWeight: 600,
+                color: "#374151",
+              }}
+            >
+              Clear
+            </button>
+          ) : null}
+          <span style={{ color: "#6b7280", fontSize: "0.875rem" }}>
+            Showing{" "}
+            <strong style={{ color: "#111827" }}>
+              {filteredOldScooties.length}
+            </strong>{" "}
+            of{" "}
+            <strong style={{ color: "#111827" }}>{oldScooties.length}</strong>
+          </span>
+        </div>
         {loading ? (
           <p style={{ color: "#6b7280", fontSize: "0.875rem" }}>
             Loading…
           </p>
-        ) : oldScooties.length === 0 ? (
+        ) : filteredOldScooties.length === 0 ? (
           <p
             style={{
               padding: "1.5rem",
@@ -1123,7 +1201,7 @@ export default function OldScooties() {
               fontSize: "0.875rem",
             }}
           >
-            No old scooties added yet. Add one using the form above.
+            No matching old scooty found.
           </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -1300,7 +1378,8 @@ export default function OldScooties() {
                           <td
                             style={{
                               padding: "0.6rem 0.5rem",
-                              color: status === "ready" ? "#16a34a" : "#6b7280",
+                              color:
+                                item.status === "ready" ? "#16a34a" : "#dc2626",
                               fontWeight: 600,
                             }}
                           >

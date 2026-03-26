@@ -87,6 +87,36 @@ const oldScootySchema = new mongoose.Schema(
         },
       },
     ],
+
+    // Track whether sparesUsed has already been deducted from inventory.
+    inventoryAdjusted: {
+      type: Boolean,
+      default: false,
+    },
+
+    // Snapshot of what was deducted (used to restore on edit/delete).
+    consumedSparesUsed: [
+      {
+        spareId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Spare",
+          required: false,
+          default: null,
+        },
+        quantity: {
+          type: Number,
+          required: true,
+          min: 1,
+          default: 1,
+        },
+        color: {
+          type: String,
+          required: false,
+          trim: true,
+          default: "",
+        },
+      },
+    ],
   },
   {
     timestamps: true,
