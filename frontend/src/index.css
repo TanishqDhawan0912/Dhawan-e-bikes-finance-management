@@ -631,26 +631,29 @@ button {
 
 .bills-card-actions {
   display: inline-flex;
-  gap: 0.65rem;
+  gap: 0.8rem;
+  flex-wrap: wrap;
 }
 
 .bills-action-print,
 .bills-action-edit,
 .bills-action-delete,
-.bills-action-service {
-  border-radius: 10px;
+.bills-action-service,
+.bills-action-settle {
+  border-radius: 12px;
   border: 1px solid transparent;
-  padding: 0.45rem 0.95rem;
-  font-size: 0.93rem;
-  font-weight: 850;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 800;
   cursor: pointer;
-  min-height: 2.1rem;
+  min-height: 2.25rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  box-shadow: 0 1px 6px rgba(2, 6, 23, 0.08);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
+  gap: 0.4rem;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  transition: transform 0.12s ease, box-shadow 0.12s ease,
+    background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
 .bills-action-print {
@@ -660,27 +663,28 @@ button {
 }
 
 .bills-action-edit {
-  background: #ecfdf5;
-  border-color: #bbf7d0;
-  color: #15803d;
+  background: #e7f8ee;
+  border-color: #a7f3d0;
+  color: #0f7a3a;
 }
 
 .bills-action-delete {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #b91c1c;
+  background: #fdecec;
+  border-color: #fbcaca;
+  color: #b42318;
 }
 
 .bills-action-service {
-  background: #eff6ff;
-  border-color: #bfdbfe;
-  color: #1d4ed8;
+  background: #eef4ff;
+  border-color: #c6dafd;
+  color: #1f4fc9;
 }
 
 .bills-action-print:hover:not(:disabled),
 .bills-action-edit:hover:not(:disabled),
 .bills-action-delete:hover:not(:disabled),
-.bills-action-service:hover:not(:disabled) {
+.bills-action-service:hover:not(:disabled),
+.bills-action-settle:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 10px 24px rgba(2, 6, 23, 0.14);
 }
@@ -688,7 +692,8 @@ button {
 .bills-action-print:disabled,
 .bills-action-edit:disabled,
 .bills-action-delete:disabled,
-.bills-action-service:disabled {
+.bills-action-service:disabled,
+.bills-action-settle:disabled {
   cursor: not-allowed;
   opacity: 0.65;
   transform: none;
@@ -703,22 +708,22 @@ button {
 }
 
 .bills-action-edit:hover:not(:disabled) {
-  background: #a7f3d0;
-  border-color: #4ade80;
+  background: #d1f4df;
+  border-color: #6ee7b7;
   color: #065f46;
 }
 
 .bills-action-delete:hover:not(:disabled) {
-  background: #fecaca;
-  border-color: #fca5a5;
+  background: #fbd5d5;
+  border-color: #fda4af;
   color: #7f1d1d;
 }
 
 .bills-action-service:hover:not(:disabled) {
-  background: #3b82f6;
-  border-color: #1d4ed8;
-  color: #ffffff;
-  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.35);
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+  box-shadow: 0 12px 30px rgba(59, 130, 246, 0.24);
 }
 
 .bills-action-service-meta {
@@ -1071,6 +1076,17 @@ button {
   align-items: center;
 }
 
+/* Match Jobcard-like date field look in Service modal */
+.bills-service-modal .bills-service-date-field-jobcard .date-picker-input-modern {
+  min-height: 2.4rem;
+  border-radius: 0.375rem !important;
+  border: 1px solid #d1d5db !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.875rem !important;
+  background: #ffffff !important;
+  color: #374151 !important;
+}
+
 .bills-service-modal .bills-service-date-wrap {
   display: flex;
   align-items: center;
@@ -1148,19 +1164,9 @@ button {
 }
 
 .bills-action-settle {
-  background: #fef3c7;
-  border-color: #fbbf24;
-  color: #92400e;
-  border-radius: 10px;
-  border: 1px solid #fcd34d;
-  padding: 0.45rem 0.95rem;
-  font-size: 0.93rem;
-  font-weight: 850;
-  cursor: pointer;
-  min-height: 2.1rem;
-  box-shadow: 0 1px 6px rgba(2, 6, 23, 0.08);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease,
-    border-color 0.12s ease, color 0.12s ease;
+  background: #fff6db;
+  border-color: #fcd67a;
+  color: #9a6700;
 }
 
 .bills-action-settle:disabled {
@@ -1171,11 +1177,10 @@ button {
 }
 
 .bills-action-settle:hover {
-  background: #f59e0b;
-  border-color: #d97706;
-  color: #111827;
-  box-shadow: 0 12px 30px rgba(217, 119, 6, 0.22);
-  transform: translateY(-1px);
+  background: #fef0c2;
+  border-color: #fbbf24;
+  color: #7c4a03;
+  box-shadow: 0 12px 30px rgba(245, 158, 11, 0.2);
 }
 
 .bill-form-error {

@@ -98,9 +98,7 @@ export default function NewBill({
   const [paidAmount, setPaidAmount] = useState("");
   const [pendingAmount, setPendingAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash");
-  const [upiId, setUpiId] = useState("");
-  const [upiTransactionId, setUpiTransactionId] = useState("");
-  const [upiTransactionDate, setUpiTransactionDate] = useState("");
+  const [bankDetail, setBankDetail] = useState("");
   const [oldScootyAvailable, setOldScootyAvailable] = useState("no"); // "yes" | "no"
   const [oldScootyPmcNo, setOldScootyPmcNo] = useState("");
   const [oldScootyWithBattery, setOldScootyWithBattery] = useState("no"); // "yes" | "no"
@@ -136,12 +134,10 @@ export default function NewBill({
     }
   };
 
-  // If payment mode is not UPI, clear UPI fields so we don't accidentally submit them.
+  // If payment mode is not UPI, clear bank detail so we don't accidentally submit it.
   useEffect(() => {
     if (paymentMode !== "upi") {
-      setUpiId("");
-      setUpiTransactionId("");
-      setUpiTransactionDate("");
+      setBankDetail("");
     }
   }, [paymentMode]);
 
@@ -186,6 +182,13 @@ export default function NewBill({
     }
     // Lithium voltage can be a free-text field like "72V"
     setCustomLithiumVoltage(b.batteryVoltageForBill || "");
+    setBatteryNumbers(
+      b.batteryNumbersForBill ||
+        b.batteryNumbers ||
+        (b.batteryName && b.batteryName.toLowerCase() !== "custom"
+          ? b.batteryName
+          : "")
+    );
 
     setCustomChargerVoltage(b.chargerVoltageForBill || "");
 
@@ -194,9 +197,12 @@ export default function NewBill({
     setPendingAmount(String(b.pendingAmount ?? 0));
     setPaymentMode(b.paymentMode || "cash");
 
-    setUpiId(b.upiId || "");
-    setUpiTransactionId(b.upiTransactionId || "");
-    setUpiTransactionDate(b.upiTransactionDate || "");
+    setBankDetail(
+      b.bankDetail ||
+        [b.upiId, b.upiTransactionId, b.upiTransactionDate]
+          .filter(Boolean)
+          .join(" | ")
+    );
 
     const oldScootyText = (b.oldScootyExchange || "").toString().trim();
     const oldScootyPrice = Number(b.oldScootyExchangePrice ?? 0);
@@ -300,11 +306,102 @@ export default function NewBill({
     if (!Array.isArray(models) || models.length === 0) return;
 
     const match =
+      models.find((m) => m._id === initialBill.modelId) ||
       models.find((m) => m.modelName === initialBill.modelPurchased) ||
       null;
 
     setSelectedModel(match);
   }, [mode, initialBill, models]);
+
+  // Edit-mode fallback: older bills may not have batteryId saved.
+  // Resolve selection from batteryName so edit prefill still works.
+  useEffect(() => {
+    if (mode !== "edit" || !initialBill) return;
+    if (!withBattery) return;
+    if (!Array.isArray(batteries) || batteries.length === 0) return;
+    if (selectedBatteryId) return;
+
+    const savedName = String(initialBill.batteryName || "").trim();
+    if (!savedName) return;
+
+    if (savedName.toLowerCase() === "custom") {
+      setSelectedBatteryId("custom");
+      return;
+    }
+
+    const match = batteries.find(
+      (b) =>
+        String(b?.name || "")
+          .trim()
+          .toLowerCase() === savedName.toLowerCase()
+    );
+    if (match?._id) {
+      setSelectedBatteryId(match._id);
+      if (!batteryTypeForBill && match.batteryType) {
+        setBatteryTypeForBill(String(match.batteryType).toLowerCase());
+      }
+    }
+  }, [
+    mode,
+    initialBill,
+    withBattery,
+    batteries,
+    selectedBatteryId,
+    batteryTypeForBill,
+  ]);
+
+  // Edit-mode fallback: older bills may not have chargerId saved.
+  // Resolve selection from chargerName so edit prefill still works.
+  useEffect(() => {
+    if (mode !== "edit" || !initialBill) return;
+    if (!withCharger) return;
+    if (!Array.isArray(chargers) || chargers.length === 0) return;
+    if (selectedChargerId) return;
+
+    const savedName = String(initialBill.chargerName || "").trim();
+    if (!savedName) return;
+
+    if (savedName.toLowerCase() === "custom") {
+      setSelectedChargerId("custom");
+      return;
+    }
+
+    const match = chargers.find(
+      (c) =>
+        String(c?.name || "")
+          .trim()
+          .toLowerCase() === savedName.toLowerCase()
+    );
+    if (match?._id) {
+      setSelectedChargerId(match._id);
+      if (!chargerTypeForBill && match.batteryType) {
+        setChargerTypeForBill(String(match.batteryType).toLowerCase());
+      }
+    }
+  }, [
+    mode,
+    initialBill,
+    withCharger,
+    chargers,
+    selectedChargerId,
+    chargerTypeForBill,
+  ]);
+
+  // If lead voltage is missing in older bills, infer from selected battery set size.
+  useEffect(() => {
+    if (mode !== "edit") return;
+    if (batteryTypeForBill !== "lead") return;
+    if (batteryVoltage) return;
+    if (!selectedBatteryId || !Array.isArray(batteries) || batteries.length === 0)
+      return;
+    const matchedBattery =
+      batteries.find((b) => b._id === selectedBatteryId) || null;
+    if (!matchedBattery || !matchedBattery.batteriesPerSet) return;
+    const setSize = Number(matchedBattery.batteriesPerSet) || 0;
+    if (setSize === 4) setBatteryVoltage("48");
+    else if (setSize === 5) setBatteryVoltage("60");
+    else if (setSize === 6) setBatteryVoltage("72");
+  }, [mode, batteryTypeForBill, batteryVoltage, selectedBatteryId, batteries]);
 
   // When "Battery available" is unchecked, clear battery type, voltage and selection
   useEffect(() => {
@@ -319,6 +416,7 @@ export default function NewBill({
 
   // When battery type or voltage changes, clear selected battery so user picks again from filtered list
   useEffect(() => {
+    if (prefillInProgressRef.current) return;
     setSelectedBatteryId("");
   }, [batteryTypeForBill, batteryVoltage]);
 
@@ -348,13 +446,15 @@ export default function NewBill({
   useEffect(() => {
     // Auto-sync charger type with battery type.
     // User can override manually; this will re-sync only when battery type changes again.
-    if (batteryTypeForBill && withCharger) {
+    if (prefillInProgressRef.current) return;
+    if (batteryTypeForBill && withCharger && !chargerTypeForBill) {
       setChargerTypeForBill(batteryTypeForBill);
     }
   }, [batteryTypeForBill, chargerTypeForBill, withCharger]);
 
   // When charger type changes, clear selected charger
   useEffect(() => {
+    if (prefillInProgressRef.current) return;
     setSelectedChargerId("");
   }, [chargerTypeForBill]);
 
@@ -775,6 +875,7 @@ export default function NewBill({
         customerName: customerName.trim(),
         mobile: mobile.replace(/\D/g, ""),
         address: address.trim(),
+        modelId: selectedModel?._id || initialBill?.modelId || "",
         modelPurchased: modelPurchased.trim(),
         descriptionVariant: descriptionVariant.trim(),
         modelColor: modelColor.trim(),
@@ -794,15 +895,12 @@ export default function NewBill({
         pendingAmount: Number(pendingAmount) || 0,
         paymentMode: paymentMode || "cash",
         warranty: modelWarranty ? "With warranty" : "No warranty",
-        upiId: paymentMode === "upi" ? upiId.trim() : "",
-        upiTransactionId:
-          paymentMode === "upi" ? upiTransactionId.trim() : "",
-        upiTransactionDate:
-          paymentMode === "upi" ? upiTransactionDate.trim() : "",
+        bankDetail: paymentMode === "upi" ? bankDetail.trim() : "",
         batteryId: withBattery ? selectedBatteryId : "",
         batteryName: withBattery ? batteryNameForBill : "",
         batteryTypeForBill: withBattery ? batteryTypeForBill : "",
         batteryVoltageForBill: withBattery ? batteryVoltageForBillValue || "" : "",
+        batteryNumbersForBill: withBattery ? batteryNumbers.trim() : "",
         chargerId: withCharger ? selectedChargerId : "",
         chargerName: withCharger ? chargerNameForBill : "",
         chargerTypeForBill: withCharger ? chargerTypeForBill : "",
@@ -1263,11 +1361,12 @@ export default function NewBill({
                             </div>
                           )}
                           {(batteryTypeForBill === "lithium" ||
-                            (isLead && batteryVoltage)) && (
+                            (isLead && batteryVoltage) ||
+                            (mode === "edit" && Boolean(selectedBatteryId))) && (
                             <div className="form-group">
                               <label>Select Battery</label>
                               {(() => {
-                                const availableBatteries = batteries.filter(
+                                const availableBatteriesRaw = batteries.filter(
                                   (b) => {
                                     if (
                                       b.batteryType &&
@@ -1285,6 +1384,13 @@ export default function NewBill({
                                     return stock >= batteryRequiredCount;
                                   }
                                 );
+                                const availableBatteries =
+                                  selectedBattery &&
+                                  !availableBatteriesRaw.some(
+                                    (b) => b._id === selectedBattery._id
+                                  )
+                                    ? [selectedBattery, ...availableBatteriesRaw]
+                                    : availableBatteriesRaw;
                                 return (
                                   <>
                                     <select
@@ -1490,8 +1596,14 @@ export default function NewBill({
                           >
                             <option value="">— Select charger —</option>
                             <option value="custom">— Custom —</option>
-                            {chargers
+                            {(() => {
+                              const filteredChargers = chargers
                               .filter((c) => {
+                                if (
+                                  selectedCharger &&
+                                  c._id === selectedCharger._id
+                                )
+                                  return true;
                                 if ((c.quantity || 0) <= 0) return false;
                                 const type = (c.batteryType || "")
                                   .toLowerCase()
@@ -1504,7 +1616,9 @@ export default function NewBill({
                                   {c.name}
                                   {c.voltage ? ` (${c.voltage})` : ""}
                                 </option>
-                              ))}
+                              ));
+                              return filteredChargers;
+                            })()}
                           </select>
                           {chargers.filter((c) => {
                             if ((c.quantity || 0) <= 0) return false;
@@ -1757,36 +1871,15 @@ export default function NewBill({
 
               {paymentMode === "upi" && (
                 <div className="bill-detail-card" style={{ marginTop: "1rem" }}>
-                  <h4>UPI details</h4>
+                  <h4>Bank detail</h4>
                   <div className="payment-row" style={{ marginBottom: 0 }}>
-                    <div className="form-group" style={{ flex: "1 1 220px" }}>
-                      <label>UPI ID</label>
+                    <div className="form-group" style={{ flex: "1 1 100%" }}>
+                      <label>Bank detail</label>
                       <input
                         type="text"
-                        value={upiId}
-                        onChange={(e) => setUpiId(e.target.value)}
-                        placeholder="e.g. name@bank"
-                      />
-                    </div>
-                    <div className="form-group" style={{ flex: "1 1 220px" }}>
-                      <label>UTR / Transaction ID</label>
-                      <input
-                        type="text"
-                        value={upiTransactionId}
-                        onChange={(e) =>
-                          setUpiTransactionId(e.target.value)
-                        }
-                        placeholder="e.g. UTR-XXXX / Txn ID"
-                      />
-                    </div>
-                    <div className="form-group" style={{ flex: "1 1 160px" }}>
-                      <label>Transaction Date (optional)</label>
-                      <input
-                        type="date"
-                        value={upiTransactionDate}
-                        onChange={(e) =>
-                          setUpiTransactionDate(e.target.value)
-                        }
+                        value={bankDetail}
+                        onChange={(e) => setBankDetail(e.target.value)}
+                        placeholder="Enter bank detail"
                       />
                     </div>
                   </div>

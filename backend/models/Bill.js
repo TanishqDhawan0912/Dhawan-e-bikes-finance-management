@@ -33,6 +33,7 @@ const billSchema = new mongoose.Schema(
     mobile: { type: String, required: true, trim: true },
     address: { type: String, default: "", trim: true },
     // Model details (new scooty sold)
+    modelId: { type: String, default: "", trim: true },
     modelPurchased: { type: String, required: true, trim: true },
     descriptionVariant: { type: String, default: "", trim: true },
     modelColor: { type: String, required: true, trim: true },
@@ -44,10 +45,8 @@ const billSchema = new mongoose.Schema(
     pendingAmount: { type: Number, default: 0, min: 0 },
     paymentMode: { type: String, enum: ["cash", "upi"], default: "cash" },
     paymentHistory: [paymentEntrySchema],
-    // Optional UPI metadata (only collected when paymentMode === "upi")
-    upiId: { type: String, default: "", trim: true },
-    upiTransactionId: { type: String, default: "", trim: true },
-    upiTransactionDate: { type: String, default: "", trim: true },
+    // Optional bank detail (collected when paymentMode === "upi")
+    bankDetail: { type: String, default: "", trim: true },
     // Warranty (e.g. "Battery, Charger, Motor, Controller" or "None")
     warranty: { type: String, default: "None", trim: true },
     // Optional flags for display
@@ -60,6 +59,7 @@ const billSchema = new mongoose.Schema(
     batteryName: { type: String, default: "", trim: true },
     batteryTypeForBill: { type: String, default: "", trim: true },
     batteryVoltageForBill: { type: String, default: "", trim: true },
+    batteryNumbersForBill: { type: String, default: "", trim: true },
 
     chargerId: { type: String, default: "", trim: true },
     chargerName: { type: String, default: "", trim: true },

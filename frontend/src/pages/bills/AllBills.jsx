@@ -436,6 +436,49 @@ export default function AllBills() {
     return Array.isArray(bill.paymentHistory) ? bill.paymentHistory : [];
   };
 
+  const jobcardStyleButtons = {
+    printEdit: {
+      padding: "0.5rem 1rem",
+      fontSize: "0.875rem",
+      fontWeight: 500,
+      borderRadius: "0.375rem",
+      border: "1px solid #d1d5db",
+      backgroundColor: "#ffffff",
+      color: "#374151",
+      cursor: "pointer",
+    },
+    service: {
+      padding: "0.5rem 1rem",
+      fontSize: "0.875rem",
+      fontWeight: 500,
+      borderRadius: "0.375rem",
+      border: "none",
+      backgroundColor: "#3b82f6",
+      color: "white",
+      cursor: "pointer",
+    },
+    settle: {
+      padding: "0.5rem 1rem",
+      fontSize: "0.875rem",
+      fontWeight: 500,
+      borderRadius: "0.375rem",
+      border: "none",
+      backgroundColor: "#3b82f6",
+      color: "white",
+      cursor: "pointer",
+    },
+    delete: {
+      padding: "0.5rem 1rem",
+      fontSize: "0.875rem",
+      fontWeight: 500,
+      borderRadius: "0.375rem",
+      border: "none",
+      backgroundColor: "#ef4444",
+      color: "white",
+      cursor: "pointer",
+    },
+  };
+
   if (loading) {
     return (
       <div className="page-content">
@@ -654,6 +697,7 @@ export default function AllBills() {
                         onClick={() => handleOpenServiceMenu(bill)}
                         disabled={serviceSaving}
                         title="Service management"
+                        style={jobcardStyleButtons.service}
                       >
                         Service
                       </button>
@@ -662,6 +706,7 @@ export default function AllBills() {
                           type="button"
                           className="bills-action-settle"
                           onClick={() => handleOpenClearPending(bill)}
+                          style={jobcardStyleButtons.settle}
                         >
                           Clear Pending
                         </button>
@@ -670,6 +715,7 @@ export default function AllBills() {
                         type="button"
                         className="bills-action-edit"
                         onClick={() => handleEdit(bill)}
+                        style={jobcardStyleButtons.printEdit}
                       >
                         Edit
                       </button>
@@ -677,6 +723,7 @@ export default function AllBills() {
                         type="button"
                         className="bills-action-delete"
                         onClick={() => handleDeleteClick(bill)}
+                        style={jobcardStyleButtons.delete}
                       >
                         Delete
                       </button>
@@ -906,7 +953,7 @@ export default function AllBills() {
                             return next;
                           });
                         }}
-                        className="date-picker-modern"
+                        className="date-picker-modern bills-service-date-field-jobcard"
                         placeholder="dd/mm/yyyy"
                         showCalendarIcon={false}
                       />
@@ -920,6 +967,7 @@ export default function AllBills() {
               <button
                 type="button"
                 className="bills-btn-secondary"
+                style={jobcardStyleButtons.printEdit}
                 onClick={() => {
                   if (serviceSaving) return;
                   setServiceModalOpen(false);
@@ -936,6 +984,7 @@ export default function AllBills() {
               <button
                 type="button"
                 className="bills-btn-primary"
+                style={jobcardStyleButtons.service}
                 onClick={handleSaveServices}
                 disabled={serviceSaving}
               >
