@@ -463,16 +463,20 @@ export default function AddMoreBattery() {
 
   const getTotalValue = () => {
     if (!battery || !Array.isArray(battery.stockEntries)) return 0;
-    const perSet = battery.batteriesPerSet || 0;
-
     return battery.stockEntries.reduce((sum, entry) => {
-      const quantity = entry.quantity || 0; // total batteries
-      const purchasePricePerSet = entry.purchasePrice || 0;
+      const quantity = Number(entry.quantity || 0); // total batteries in this entry
+      const purchasePricePerSet = Number(entry.purchasePrice || 0); // purchase price per "set" for this entry
 
-      // If batteriesPerSet is defined, interpret purchasePrice as "per set"
-      // and convert it to per-battery price for total value calculation.
+      // Use per-entry batteriesPerSet when present. This is important because
+      // the UI can hold multiple stockEntries with different batteriesPerSet.
+      const perSetForEntry =
+        entry.batteriesPerSet !== undefined && entry.batteriesPerSet !== null
+          ? Number(entry.batteriesPerSet)
+          : Number(battery.batteriesPerSet || 0);
+
+      // Total value = (purchase price per set / batteries per set) * total batteries
       const perBatteryPrice =
-        perSet > 0 ? purchasePricePerSet / perSet : purchasePricePerSet;
+        perSetForEntry > 0 ? purchasePricePerSet / perSetForEntry : purchasePricePerSet;
 
       return sum + quantity * perBatteryPrice;
     }, 0);

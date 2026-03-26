@@ -95,6 +95,36 @@ export default function AllBatteries() {
     return nameMatch && supplierMatch && batteryTypeMatch;
   });
 
+  // Helper: detect missing purchase price in any stock entry (by purchaseDate)
+  // We show a warning only when at least one entry has missing/<=0 purchasePrice.
+  const getBatteryPriceStatus = (battery) => {
+    const pendingDatesSet = new Set();
+
+    const isMissing = (v) => {
+      if (v === undefined || v === null) return true;
+      if (typeof v === "string") return v.trim() === "" || Number(v) <= 0;
+      const n = Number(v);
+      return Number.isNaN(n) || n <= 0;
+    };
+
+    if (battery && Array.isArray(battery.stockEntries)) {
+      battery.stockEntries.forEach((entry) => {
+        const dateLabel = (entry?.purchaseDate || "").toString().trim();
+        if (!dateLabel) return;
+        if (isMissing(entry?.purchasePrice)) {
+          pendingDatesSet.add(dateLabel);
+        }
+      });
+    }
+
+    const pendingDates = Array.from(pendingDatesSet);
+
+    return {
+      hasPending: pendingDates.length > 0,
+      pendingDates,
+    };
+  };
+
   const handleEdit = (batteryId) => {
     navigate(`/batteries/edit/${batteryId}`);
   };
@@ -484,7 +514,60 @@ export default function AllBatteries() {
                       fontWeight: "600",
                     }}
                   >
-                    {battery.name}
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.25rem",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <div>{battery.name}</div>
+                      {(() => {
+                        const priceStatus = getBatteryPriceStatus(battery);
+                        return (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              fontSize: "0.75rem",
+                              marginTop: "0.35rem",
+                            }}
+                            title={
+                              priceStatus.hasPending
+                                ? "Some battery stock entries have missing purchase price. Please update purchase price."
+                                : "All battery price entries are up to date."
+                            }
+                          >
+                            <span
+                              style={{
+                                width: "7px",
+                                height: "7px",
+                                borderRadius: "999px",
+                                backgroundColor: priceStatus.hasPending
+                                  ? "#f59e0b"
+                                  : "#16a34a",
+                                boxShadow: priceStatus.hasPending
+                                  ? "0 0 0 3px rgba(245, 158, 11, 0.25)"
+                                  : "0 0 0 3px rgba(22, 163, 74, 0.25)",
+                              }}
+                            />
+                            {priceStatus.hasPending ? (
+                              <span style={{ color: "#92400e" }}>
+                                Price listing pending for{" "}
+                                {priceStatus.pendingDates.join(", ")}
+                              </span>
+                            ) : (
+                              <span style={{ color: "#166534" }}>
+                                All price entries up to date
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </td>
                   <td
                     style={{
