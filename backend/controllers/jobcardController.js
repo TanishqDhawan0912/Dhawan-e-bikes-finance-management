@@ -311,6 +311,70 @@ const adjustBatteryInventoryForReplacements = async (
   }
 };
 
+// Helper: adjust battery inventory for NEW battery sales.
+// - part.partType === "sales"
+// - part.salesType === "battery"
+// - part.batteryOldNew === "new"
+// Deduct/restore individual battery units, same as replacement logic.
+const adjustBatteryInventoryForNewBatterySales = async (
+  jobcard,
+  mode = "deduct"
+) => {
+  if (!jobcard || !Array.isArray(jobcard.parts) || jobcard.parts.length === 0) {
+    return;
+  }
+
+  const factor = mode === "restore" ? 1 : -1;
+
+  for (const part of jobcard.parts) {
+    if (
+      !part ||
+      part.partType !== "sales" ||
+      part.salesType !== "battery" ||
+      String(part.batteryOldNew || "").toLowerCase() !== "new"
+    ) {
+      continue;
+    }
+
+    const batteryId =
+      part.batteryInventoryId ||
+      part.batteryId ||
+      part.spareId ||
+      part.id ||
+      null;
+    if (!batteryId) continue;
+
+    const qtyUnits =
+      Number(
+        part.selectedQuantity !== undefined && part.selectedQuantity !== null
+          ? part.selectedQuantity
+          : part.quantity
+      ) || 0;
+    if (qtyUnits <= 0) continue;
+
+    const battery = await Battery.findById(batteryId);
+    if (!battery) continue;
+
+    const perSet = Number(battery.batteriesPerSet) || 0;
+    const totalUnitsBefore =
+      (Number(battery.totalSets) || 0) * (perSet || 0) +
+      (Number(battery.openBatteries) || 0);
+
+    let totalUnitsAfter = totalUnitsBefore + factor * qtyUnits;
+    if (totalUnitsAfter < 0) totalUnitsAfter = 0;
+
+    if (perSet > 0) {
+      battery.totalSets = Math.floor(totalUnitsAfter / perSet);
+      battery.openBatteries = totalUnitsAfter % perSet;
+    } else {
+      battery.totalSets = 0;
+      battery.openBatteries = totalUnitsAfter;
+    }
+
+    await battery.save();
+  }
+};
+
 // Helper: adjust charger inventory for replacement chargers.
 // Deduct/restore charger.quantity in All Chargers when a charger is used in replacement.
 const adjustChargerInventoryForReplacements = async (
@@ -345,6 +409,56 @@ const adjustChargerInventoryForReplacements = async (
         part.quantity !== undefined && part.quantity !== null
           ? part.quantity
           : part.selectedQuantity
+      ) || 0;
+    if (qty <= 0) continue;
+
+    const charger = await Charger.findById(chargerId);
+    if (!charger) continue;
+
+    const currentQty = Number(charger.quantity) || 0;
+    const newQty = Math.max(0, currentQty + factor * qty);
+    charger.quantity = newQty;
+    await charger.save();
+  }
+};
+
+// Helper: adjust charger inventory for NEW charger sales.
+// - part.partType === "sales"
+// - part.salesType === "charger"
+// - part.chargerOldNew === "new" (or missing/other non-"old" value)
+// Deduct/restore charger.quantity in All Chargers.
+const adjustChargerInventoryForNewChargerSales = async (
+  jobcard,
+  mode = "deduct"
+) => {
+  if (!jobcard || !Array.isArray(jobcard.parts) || jobcard.parts.length === 0) {
+    return;
+  }
+
+  const factor = mode === "restore" ? 1 : -1;
+
+  for (const part of jobcard.parts) {
+    if (!part || part.partType !== "sales" || part.salesType !== "charger") {
+      continue;
+    }
+    // Old charger sales are handled by old-charger inventory logic, not Charger stock.
+    if (String(part.chargerOldNew || "").toLowerCase() === "old") {
+      continue;
+    }
+
+    const chargerId =
+      part.chargerInventoryId ||
+      part.chargerId ||
+      part.spareId ||
+      part.id ||
+      null;
+    if (!chargerId) continue;
+
+    const qty =
+      Number(
+        part.selectedQuantity !== undefined && part.selectedQuantity !== null
+          ? part.selectedQuantity
+          : part.quantity
       ) || 0;
     if (qty <= 0) continue;
 
@@ -734,7 +848,9 @@ const applyJobcardInventoryDeductionOnce = async (jobcard) => {
   await refreshJobcardPartsFromDb(jobcard);
   await adjustSpareInventoryForJobcard(jobcard, "deduct");
   await adjustBatteryInventoryForReplacements(jobcard, "deduct");
+  await adjustBatteryInventoryForNewBatterySales(jobcard, "deduct");
   await adjustChargerInventoryForReplacements(jobcard, "deduct");
+  await adjustChargerInventoryForNewChargerSales(jobcard, "deduct");
   await adjustBatteryScrapInventoryForOldBatterySales(jobcard, "deduct");
   await adjustOldChargerEntriesForReplacementChargers(jobcard, "deduct");
   jobcard.inventoryAdjusted = true;
@@ -1172,7 +1288,9 @@ const deleteJobcard = async (req, res) => {
         await refreshJobcardPartsFromDb(jobcard);
         await adjustSpareInventoryForJobcard(jobcard, "restore");
         await adjustBatteryInventoryForReplacements(jobcard, "restore");
+        await adjustBatteryInventoryForNewBatterySales(jobcard, "restore");
         await adjustChargerInventoryForReplacements(jobcard, "restore");
+        await adjustChargerInventoryForNewChargerSales(jobcard, "restore");
         await adjustBatteryScrapInventoryForOldBatterySales(jobcard, "restore");
         await adjustOldChargerEntriesForReplacementChargers(jobcard, "restore");
         jobcard.inventoryAdjusted = false;

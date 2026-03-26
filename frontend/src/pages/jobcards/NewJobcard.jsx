@@ -109,8 +109,20 @@ export default function NewJobcard() {
   const startEditPrice = (part, cat) => {
     if (!part?.id || !cat) return;
     setEditingPrice({ id: part.id, cat });
+    const qty = Number(part.selectedQuantity || 1) || 1;
+    const isBatterySaleTotal =
+      part.partType === "sales" && part.salesType === "battery";
+    const isBatteryReplacementTotal =
+      part.partType === "replacement" && part.replacementType === "battery";
+    const displayValue = isBatterySaleTotal
+      ? getPartTotal(part) // total line amount (net, after scrap deduction)
+      : isBatteryReplacementTotal
+      ? (Number(part.price) || 0) * qty // total for qty
+      : Number(part.price);
     setEditingPriceValue(
-      part.price != null && !isNaN(Number(part.price)) ? String(part.price) : "0"
+      displayValue != null && !isNaN(Number(displayValue))
+        ? String(displayValue)
+        : "0"
     );
   };
   const cancelEditPrice = () => {
@@ -129,7 +141,38 @@ export default function NewJobcard() {
     setSelectedParts((prev) => ({
       ...prev,
       [cat]: (prev[cat] || []).map((p) =>
-        p.id === id ? { ...p, price: next } : p
+        p.id === id
+          ? (() => {
+              const qty = Number(p.selectedQuantity || 1) || 1;
+              const isBatterySaleTotal =
+                p.partType === "sales" && p.salesType === "battery";
+              const isBatteryReplacementTotal =
+                p.partType === "replacement" && p.replacementType === "battery";
+
+              if (isBatterySaleTotal) {
+                // User edits TOTAL (net). Convert to unit so net total stays as entered.
+                const hasScrapDeduction =
+                  p.salesType === "battery" &&
+                  p.scrapAvailable &&
+                  (Number(p.scrapQuantity) || 0) > 0 &&
+                  (Number(p.scrapPricePerUnit) || 0) > 0;
+                const deduction = hasScrapDeduction
+                  ? (Number(p.scrapQuantity) || 0) *
+                    (Number(p.scrapPricePerUnit) || 0)
+                  : 0;
+                const unit = qty > 0 ? (next + deduction) / qty : next;
+                return { ...p, price: Math.max(0, unit) };
+              }
+
+              if (isBatteryReplacementTotal) {
+                const unit = qty > 0 ? next / qty : next;
+                return { ...p, price: Math.max(0, unit) };
+              }
+
+              // Default: user edits unit price.
+              return { ...p, price: next };
+            })()
+          : p
       ),
     }));
     cancelEditPrice();

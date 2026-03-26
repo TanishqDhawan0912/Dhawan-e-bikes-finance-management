@@ -32,6 +32,24 @@ export default function JobcardPrintView({ jobcard, onClose, onPrint }) {
     }
   };
 
+  const getWarrantyTagForPart = (part) => {
+    const isBattery =
+      part?.salesType === "battery" || part?.replacementType === "battery";
+    const isCharger =
+      part?.salesType === "charger" || part?.replacementType === "charger";
+    if (!isBattery && !isCharger) return null;
+
+    const ws = String(part?.warrantyStatus ?? "").toLowerCase();
+    const isWarranty =
+      ws &&
+      ws !== "nowarranty" &&
+      ws !== "no warranty" &&
+      ws !== "withoutwarranty" &&
+      ws !== "without warranty" &&
+      ws !== "none";
+    return isWarranty ? "W" : "NW";
+  };
+
   const parts = jobcard?.parts || [];
   // For printing, compute billing total from parts but exclude replacement items
   // (only service + sales items should contribute to the bill).
@@ -143,7 +161,18 @@ export default function JobcardPrintView({ jobcard, onClose, onPrint }) {
             ? `${label}${typeSuffix} (Qty: ${qty})`
             : `${label}${typeSuffix}`;
 
-        partText = baseText;
+        const wTag = getWarrantyTagForPart(part);
+        const wBadge = wTag
+          ? ` <span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:4px;border:1px solid ${
+              wTag === "W" ? "#16a34a" : "#dc2626"
+            };background:${
+              wTag === "W" ? "#dcfce7" : "#fee2e2"
+            };color:${
+              wTag === "W" ? "#166534" : "#991b1b"
+            };font-weight:700;font-size:10pt;line-height:1.2">${wTag}</span>`
+          : "";
+
+        partText = `${baseText}${wBadge}`;
         priceText = `₹${amount.toFixed(2)}`;
       }
       return `<tr><td ${firstCel}>${no}</td><td ${cel}>${detailText}</td><td ${cel}>${partText}</td><td ${lastCel}>${priceText}</td></tr>`;

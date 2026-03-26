@@ -573,6 +573,26 @@ export default function PendingJobcard() {
               </div>
 
               {jobcard.parts && jobcard.parts.length > 0 && (() => {
+                const getWarrantyTagForPart = (part) => {
+                  const isBattery =
+                    part?.salesType === "battery" ||
+                    part?.replacementType === "battery";
+                  const isCharger =
+                    part?.salesType === "charger" ||
+                    part?.replacementType === "charger";
+                  if (!isBattery && !isCharger) return null;
+
+                  const ws = String(part?.warrantyStatus ?? "").toLowerCase();
+                  const isWarranty =
+                    ws &&
+                    ws !== "nowarranty" &&
+                    ws !== "no warranty" &&
+                    ws !== "withoutwarranty" &&
+                    ws !== "without warranty" &&
+                    ws !== "none";
+                  return isWarranty ? "W" : "NW";
+                };
+
                 const grouped = { service: [], replacement: [], sales: [] };
                 jobcard.parts.forEach((part) => {
                   const type = ["service", "replacement", "sales"].includes(part.partType)
@@ -687,6 +707,38 @@ export default function PendingJobcard() {
                                       return `${label}${typeSuffix}`;
                                     })()}
                                   </span>
+                                  {(() => {
+                                    const tag = getWarrantyTagForPart(part);
+                                    if (!tag) return null;
+                                    const styles =
+                                      tag === "W"
+                                        ? {
+                                            backgroundColor: "#dcfce7",
+                                            borderColor: "#86efac",
+                                            color: "#166534",
+                                          }
+                                        : {
+                                            backgroundColor: "#fee2e2",
+                                            borderColor: "#fecaca",
+                                            color: "#991b1b",
+                                          };
+                                    return (
+                                      <span
+                                        style={{
+                                          padding: "0.1rem 0.35rem",
+                                          borderRadius: "0.25rem",
+                                          backgroundColor: styles.backgroundColor,
+                                          border: `1px solid ${styles.borderColor}`,
+                                          color: styles.color,
+                                          fontSize: "0.72rem",
+                                          fontWeight: 800,
+                                        }}
+                                        title={tag === "W" ? "Warranty" : "No Warranty"}
+                                      >
+                                        {tag}
+                                      </span>
+                                    );
+                                  })()}
                                   <span
                                     style={{
                                       marginLeft: "auto",

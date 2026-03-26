@@ -122,6 +122,24 @@ export default function AllJobcards() {
       .join(" ");
   };
 
+  const getWarrantyTagForPart = (part) => {
+    const isBattery =
+      part?.salesType === "battery" || part?.replacementType === "battery";
+    const isCharger =
+      part?.salesType === "charger" || part?.replacementType === "charger";
+    if (!isBattery && !isCharger) return null;
+
+    const ws = String(part?.warrantyStatus ?? "").toLowerCase();
+    const isWarranty =
+      ws &&
+      ws !== "nowarranty" &&
+      ws !== "no warranty" &&
+      ws !== "withoutwarranty" &&
+      ws !== "without warranty" &&
+      ws !== "none";
+    return isWarranty ? "W" : "NW";
+  };
+
   const formatWarrantyType = (warrantyType) => {
     if (!warrantyType || warrantyType === "none") return "None";
     return warrantyType.charAt(0).toUpperCase() + warrantyType.slice(1);
@@ -495,6 +513,21 @@ export default function AllJobcards() {
                         label += ` (${part.selectedColor})`;
                       }
                       const nameWithTypes = `${label}${typeSuffix}`;
+                      const warrantyTag = getWarrantyTagForPart(part);
+                      const warrantyStyles =
+                        warrantyTag === "W"
+                          ? {
+                              backgroundColor: "#dcfce7",
+                              borderColor: "#86efac",
+                              color: "#166534",
+                            }
+                          : warrantyTag === "NW"
+                          ? {
+                              backgroundColor: "#fee2e2",
+                              borderColor: "#fecaca",
+                              color: "#991b1b",
+                            }
+                          : null;
                       return (
                       <span
                         key={index}
@@ -512,6 +545,24 @@ export default function AllJobcards() {
                         }}
                       >
                         <span>{nameWithTypes}</span>
+                        {warrantyTag && (
+                          <span
+                            style={{
+                              padding: "0.125rem 0.375rem",
+                              backgroundColor: warrantyStyles?.backgroundColor,
+                              borderRadius: "0.25rem",
+                              fontSize: "0.75rem",
+                              fontWeight: 800,
+                              border: `1px solid ${warrantyStyles?.borderColor}`,
+                              color: warrantyStyles?.color,
+                            }}
+                            title={
+                              warrantyTag === "W" ? "Warranty" : "No Warranty"
+                            }
+                          >
+                            {warrantyTag}
+                          </span>
+                        )}
                         <span style={{ 
                           marginLeft: "auto",
                           padding: "0.125rem 0.375rem",
@@ -892,6 +943,21 @@ export default function AllJobcards() {
                           label += ` (${part.selectedColor})`;
                         }
                         const nameWithTypes = `${label}${typeSuffix}`;
+                        const warrantyTag = getWarrantyTagForPart(part);
+                        const warrantyStyles =
+                          warrantyTag === "W"
+                            ? {
+                                backgroundColor: "#dcfce7",
+                                borderColor: "#86efac",
+                                color: "#166534",
+                              }
+                            : warrantyTag === "NW"
+                            ? {
+                                backgroundColor: "#fee2e2",
+                                borderColor: "#fecaca",
+                                color: "#991b1b",
+                              }
+                            : null;
 
                         return (
                           <tr
@@ -909,7 +975,30 @@ export default function AllJobcards() {
                                 fontSize: "0.875rem",
                               }}
                             >
-                              {nameWithTypes}
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+                                <span>{nameWithTypes}</span>
+                                {warrantyTag && (
+                                  <span
+                                    style={{
+                                      padding: "0.1rem 0.35rem",
+                                      borderRadius: "0.25rem",
+                                      backgroundColor:
+                                        warrantyStyles?.backgroundColor,
+                                      color: warrantyStyles?.color,
+                                      fontSize: "0.75rem",
+                                      fontWeight: 800,
+                                      border: `1px solid ${warrantyStyles?.borderColor}`,
+                                    }}
+                                    title={
+                                      warrantyTag === "W"
+                                        ? "Warranty"
+                                        : "No Warranty"
+                                    }
+                                  >
+                                    {warrantyTag}
+                                  </span>
+                                )}
+                              </span>
                             </td>
                             <td
                               style={{

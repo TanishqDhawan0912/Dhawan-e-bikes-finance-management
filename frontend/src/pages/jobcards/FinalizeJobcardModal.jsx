@@ -96,10 +96,29 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
     return Math.max(0, partsTotal + labour - discount);
   };
 
+  const getWarrantyTagForPart = (part) => {
+    const isBattery =
+      part?.salesType === "battery" || part?.replacementType === "battery";
+    const isCharger =
+      part?.salesType === "charger" || part?.replacementType === "charger";
+    if (!isBattery && !isCharger) return null;
+
+    const ws = String(part?.warrantyStatus ?? "").toLowerCase();
+    const isWarranty =
+      ws &&
+      ws !== "nowarranty" &&
+      ws !== "no warranty" &&
+      ws !== "withoutwarranty" &&
+      ws !== "without warranty" &&
+      ws !== "none";
+    return isWarranty ? "W" : "NW";
+  };
+
   const handleSubmit = async (options = {}) => {
     const { mode, skipZeroWarning } = options || {};
     const totalAmount = calculateBillTotal();
     const paidAmount = parseFloat(formData.paidAmount) || 0;
+    const forceFinalize = mode === "finalize";
 
     // If customer paid amount is zero but there is a bill amount,
     // first show a custom warning box instead of browser confirm.
@@ -122,33 +141,42 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
       let pendingAmount = parseFloat(formData.pendingAmount) || 0;
       // When user explicitly chooses a mode from the zero-payment dialog:
       // - "pending": keep full bill as pending
-      // - "finalize": mark no pending amount
+      // - "finalize": force finalize (no pending)
       if (mode === "pending") {
         pendingAmount = totalAmount;
       } else if (mode === "finalize") {
         pendingAmount = 0;
       }
 
-      if (paidAmount > 0 && !paymentDate) {
+      if (!forceFinalize && paidAmount > 0 && !paymentDate) {
         alert("Please select a payment date");
         setLoading(false);
         return;
       }
+
+      const body = forceFinalize
+        ? {
+            labour,
+            discount,
+            paymentMode: formData.paymentMode,
+            forceFinalize: true,
+          }
+        : {
+            labour,
+            discount,
+            paidAmount,
+            totalAmount,
+            paymentMode: formData.paymentMode,
+            pendingAmount,
+            paymentDate,
+          };
 
       const response = await fetch(`http://localhost:5000/api/jobcards/${jobcard._id}/finalize`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          labour,
-          discount,
-          paidAmount,
-          totalAmount,
-          paymentMode: formData.paymentMode,
-          pendingAmount,
-          paymentDate,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -156,7 +184,7 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
         throw new Error(errorData.message || "Failed to save jobcard");
       }
 
-      if (pendingAmount > 0) {
+      if (!forceFinalize && pendingAmount > 0) {
         alert("Jobcard saved with pending payment!");
       } else {
         alert("Jobcard finalized successfully!");
@@ -313,6 +341,13 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
                     label += ` (${part.selectedColor})`;
                   }
                   const nameWithTypes = `${label}${typeSuffix}`;
+                  const warrantyTag = getWarrantyTagForPart(part);
+                  const warrantyStyles =
+                    warrantyTag === "W"
+                      ? { backgroundColor: "#dcfce7", color: "#166534", borderColor: "#86efac" }
+                      : warrantyTag === "NW"
+                      ? { backgroundColor: "#fee2e2", color: "#991b1b", borderColor: "#fecaca" }
+                      : null;
 
                   return (
                     <div
@@ -329,8 +364,34 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
                       }}
                     >
                       <div style={{ flex: 1 }}>
-                        <p style={{ margin: "0 0 0.25rem 0", fontWeight: 500 }}>
-                          {nameWithTypes}
+                        <p
+                          style={{
+                            margin: "0 0 0.25rem 0",
+                            fontWeight: 500,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <span>{nameWithTypes}</span>
+                          {warrantyTag && warrantyStyles && (
+                            <span
+                              style={{
+                                padding: "0.1rem 0.45rem",
+                                borderRadius: "0.35rem",
+                                fontSize: "0.75rem",
+                                fontWeight: 800,
+                                border: `1px solid ${warrantyStyles.borderColor}`,
+                                backgroundColor: warrantyStyles.backgroundColor,
+                                color: warrantyStyles.color,
+                                lineHeight: 1.2,
+                              }}
+                              title={warrantyTag === "W" ? "Warranty" : "No Warranty"}
+                            >
+                              {warrantyTag}
+                            </span>
+                          )}
                         </p>
                         <p
                           style={{
