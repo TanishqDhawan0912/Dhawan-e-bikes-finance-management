@@ -143,10 +143,8 @@ export default function PendingJobcard() {
         body: JSON.stringify({
           labour: jobcard.labour || 0,
           discount: jobcard.discount || 0,
-          paidAmount: jobcard.paidAmount || 0,
-          totalAmount: jobcard.totalAmount || 0,
           paymentMode: jobcard.paymentMode || "cash",
-          pendingAmount: 0, // Set pending to 0 when finalizing
+          forceFinalize: true,
         }),
       });
 

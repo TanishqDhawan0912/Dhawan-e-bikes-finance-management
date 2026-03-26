@@ -892,6 +892,7 @@ const finalizeJobcard = async (req, res) => {
       totalAmount,
       paymentMode,
       pendingAmount,
+      forceFinalize,
       paymentDate,
     } = req.body;
     const jobcard = await Jobcard.findById(req.params.id);
@@ -911,8 +912,9 @@ const finalizeJobcard = async (req, res) => {
     // Client may send totalAmount, but we treat it as informational.
     if (paymentMode !== undefined) jobcard.paymentMode = paymentMode || "cash";
 
-    // Save initial payment to payment history if paidAmount is provided
-    if (paidAmount !== undefined && paidAmount > 0) {
+    // Save initial payment to payment history if paidAmount is provided.
+    // NOTE: For force-finalize we must NOT add a new payment entry, otherwise it duplicates totals.
+    if (forceFinalize !== true && paidAmount !== undefined && paidAmount > 0) {
       // Initialize payment history if it doesn't exist
       if (!jobcard.paymentHistory || jobcard.paymentHistory.length === 0) {
         jobcard.paymentHistory = [];
@@ -994,7 +996,16 @@ const finalizeJobcard = async (req, res) => {
       (sum, payment) => sum + (payment.amount || 0),
       0
     ) || jobcard.paidAmount || 0;
-    jobcard.pendingAmount = Math.max(0, (Number(jobcard.totalAmount) || 0) - totalPaidNow);
+    jobcard.pendingAmount = Math.max(
+      0,
+      (Number(jobcard.totalAmount) || 0) - totalPaidNow
+    );
+
+    // Force finalize: mark finalized and clear pending (Option B).
+    if (forceFinalize === true) {
+      jobcard.pendingAmount = 0;
+      jobcard.status = "finalized";
+    }
 
     // Adjust inventory once, the first time this jobcard is finalized/saved.
     // This applies even if the jobcard remains in "pending" status due to unpaid amount.

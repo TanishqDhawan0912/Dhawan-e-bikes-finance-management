@@ -9876,9 +9876,96 @@ export default function NewJobcard() {
                                       marginLeft: "0.75rem",
                                       fontWeight: 600,
                                       color: "#0f172a",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.5rem",
                                     }}
                                   >
-                                    ₹{getPartTotal(part).toFixed(2)}
+                                    {editingPrice?.id === part.id &&
+                                    editingPrice?.cat === cat ? (
+                                      <>
+                                        <span>₹</span>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          value={editingPriceValue}
+                                          onChange={(e) =>
+                                            setEditingPriceValue(e.target.value)
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (
+                                              e.key === "ArrowUp" ||
+                                              e.key === "ArrowDown"
+                                            ) {
+                                              e.preventDefault();
+                                            }
+                                          }}
+                                          onWheel={(e) => e.target.blur()}
+                                          style={{
+                                            width: "110px",
+                                            padding: "0.2rem 0.45rem",
+                                            borderRadius: "0.35rem",
+                                            border: "1px solid #d1d5db",
+                                            fontSize: "0.78rem",
+                                            fontWeight: 700,
+                                          }}
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={commitEditPrice}
+                                          style={{
+                                            padding: "0.2rem 0.5rem",
+                                            borderRadius: "0.35rem",
+                                            border: "1px solid #bbf7d0",
+                                            backgroundColor: "#f0fdf4",
+                                            color: "#166534",
+                                            fontSize: "0.72rem",
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          Save
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={cancelEditPrice}
+                                          style={{
+                                            padding: "0.2rem 0.5rem",
+                                            borderRadius: "0.35rem",
+                                            border: "1px solid #e5e7eb",
+                                            backgroundColor: "#ffffff",
+                                            color: "#374151",
+                                            fontSize: "0.72rem",
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          Cancel
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span>₹{getPartTotal(part).toFixed(2)}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => startEditPrice(part, cat)}
+                                          title="Edit price"
+                                          style={{
+                                            padding: "0.15rem 0.45rem",
+                                            borderRadius: "0.35rem",
+                                            border: "1px solid #bfdbfe",
+                                            backgroundColor: "#eff6ff",
+                                            color: "#1d4ed8",
+                                            fontSize: "0.7rem",
+                                            fontWeight: 800,
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          Edit
+                                        </button>
+                                      </>
+                                    )}
                                   </span>
                                 )}
                               </div>
