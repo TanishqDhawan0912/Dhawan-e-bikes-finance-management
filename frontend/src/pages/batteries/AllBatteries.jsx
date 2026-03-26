@@ -100,6 +100,14 @@ export default function AllBatteries() {
   const getBatteryPriceStatus = (battery) => {
     const pendingDatesSet = new Set();
 
+    const normalizeDateLabel = (raw) => {
+      if (!raw) return "";
+      const s = String(raw).trim();
+      // If ISO like 2026-02-27T00:00:00.000Z, keep only YYYY-MM-DD
+      if (s.includes("T")) return s.split("T")[0];
+      return s;
+    };
+
     const isMissing = (v) => {
       if (v === undefined || v === null) return true;
       if (typeof v === "string") return v.trim() === "" || Number(v) <= 0;
@@ -109,7 +117,7 @@ export default function AllBatteries() {
 
     if (battery && Array.isArray(battery.stockEntries)) {
       battery.stockEntries.forEach((entry) => {
-        const dateLabel = (entry?.purchaseDate || "").toString().trim();
+        const dateLabel = normalizeDateLabel(entry?.purchaseDate || "");
         if (!dateLabel) return;
         if (isMissing(entry?.purchasePrice)) {
           pendingDatesSet.add(dateLabel);

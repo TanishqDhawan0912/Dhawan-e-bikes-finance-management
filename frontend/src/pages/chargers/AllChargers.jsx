@@ -90,6 +90,68 @@ export default function AllChargers() {
     return nameMatch && supplierMatch;
   });
 
+  // Helper: detect missing purchase price in any charger stock entry
+  // Collects purchaseDate for which purchasePrice is missing/empty/<= 0.
+  const getChargerPriceStatus = (Charger) => {
+    const pendingDatesSet = new Set();
+
+    const normalizeDateLabel = (raw) => {
+      if (!raw) return "";
+      const s = String(raw).trim();
+      // If ISO like 2026-02-27T00:00:00.000Z, keep only YYYY-MM-DD
+      if (s.includes("T")) return s.split("T")[0];
+      return s;
+    };
+
+    const formatPendingDate = (raw) => {
+      const s = normalizeDateLabel(raw);
+      if (!s) return "";
+
+      // Expect YYYY-MM-DD -> DD/MM/YY
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (m) {
+        const yy = m[1].slice(2);
+        return `${m[3]}/${m[2]}/${yy}`;
+      }
+
+      // If already in dd/mm/yyyy, convert to dd/mm/yy
+      const parts = s.split("/");
+      if (parts.length === 3) {
+        const [dd, mm, yyyyOrYy] = parts;
+        if (typeof yyyyOrYy === "string" && yyyyOrYy.length === 4) {
+          return `${dd}/${mm}/${yyyyOrYy.slice(2)}`;
+        }
+      }
+
+      return s;
+    };
+
+    const isMissing = (v) => {
+      if (v === undefined || v === null) return true;
+      if (typeof v === "string") return v.trim() === "" || Number(v) <= 0;
+      const n = Number(v);
+      return Number.isNaN(n) || n <= 0;
+    };
+
+    if (Charger && Array.isArray(Charger.stockEntries)) {
+      Charger.stockEntries.forEach((entry) => {
+        const dateLabel = normalizeDateLabel(entry?.purchaseDate || "");
+        if (!dateLabel) return;
+        if (isMissing(entry?.purchasePrice)) {
+          pendingDatesSet.add(dateLabel);
+        }
+      });
+    }
+
+    const pendingDates = Array.from(pendingDatesSet);
+
+    return {
+      hasPending: pendingDates.length > 0,
+      pendingDates,
+      formatPendingDate,
+    };
+  };
+
   const handleEdit = (ChargerId) => {
     navigate(`/chargers/edit/${ChargerId}`);
   };
@@ -423,7 +485,64 @@ export default function AllChargers() {
                       fontWeight: "600",
                     }}
                   >
-                    {Charger.name}
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.25rem",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <div>{Charger.name}</div>
+                      {(() => {
+                        const priceStatus = getChargerPriceStatus(Charger);
+                        return (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              fontSize: "0.75rem",
+                              marginTop: "0.35rem",
+                              justifyContent: "center",
+                            }}
+                            title={
+                              priceStatus.hasPending
+                                ? "Some charger stock entries have missing purchase price. Please update purchase price."
+                                : "All charger price entries are up to date."
+                            }
+                          >
+                            <span
+                              style={{
+                                width: "7px",
+                                height: "7px",
+                                borderRadius: "999px",
+                                backgroundColor: priceStatus.hasPending
+                                  ? "#f59e0b"
+                                  : "#16a34a",
+                                boxShadow: priceStatus.hasPending
+                                  ? "0 0 0 3px rgba(245, 158, 11, 0.25)"
+                                  : "0 0 0 3px rgba(22, 163, 74, 0.25)",
+                              }}
+                            />
+                            {priceStatus.hasPending ? (
+                              <span style={{ color: "#92400e" }}>
+                                Price listing pending for{" "}
+                                {priceStatus.pendingDates
+                                  .map((d) => priceStatus.formatPendingDate(d))
+                                  .filter(Boolean)
+                                  .join(", ")}
+                              </span>
+                            ) : (
+                              <span style={{ color: "#166534" }}>
+                                All price entries up to date
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </td>
                   <td
                     style={{
