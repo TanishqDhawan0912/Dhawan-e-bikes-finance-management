@@ -98,7 +98,9 @@ export default function SettleJobcardModal({ jobcard, onClose, onSuccess }) {
     try {
       setLoading(true);
       const paymentAmount = parseFloat(formData.paymentAmount) || 0;
-      const currentPending = jobcard.pendingAmount || 0;
+      const billTotal = calculateBillTotal();
+      const paidBefore = getTotalPaid();
+      const currentPending = Math.max(0, billTotal - paidBefore);
 
       if (paymentAmount <= 0) {
         alert("Please enter a valid payment amount");
@@ -136,7 +138,25 @@ export default function SettleJobcardModal({ jobcard, onClose, onSuccess }) {
       }
 
       const updatedJobcard = await response.json();
-      const newPending = updatedJobcard.pendingAmount || 0;
+      // Prefer backend-derived pendingAmount when present.
+      // Fallback derives pending = totalAmount - totalPaid (from paymentHistory or paidAmount).
+      const serverPending =
+        updatedJobcard.pendingAmount != null
+          ? Number(updatedJobcard.pendingAmount) || 0
+          : null;
+      const totalPaidFromHistory = (updatedJobcard.paymentHistory || []).reduce(
+        (sum, p) => sum + (p.amount || 0),
+        0
+      );
+      const newPaid =
+        totalPaidFromHistory > 0
+          ? totalPaidFromHistory
+          : Number(updatedJobcard.paidAmount) || 0;
+      const newBillTotal = Number(updatedJobcard.totalAmount) || billTotal;
+      const newPending =
+        serverPending != null
+          ? Math.max(0, serverPending)
+          : Math.max(0, newBillTotal - newPaid);
 
       if (newPending === 0) {
         alert("Payment settled! Jobcard will be finalized.");
@@ -197,7 +217,7 @@ export default function SettleJobcardModal({ jobcard, onClose, onSuccess }) {
   const discount = jobcard.discount || 0;
   const billTotal = calculateBillTotal();
   const totalPaid = getTotalPaid();
-  const pendingAmount = jobcard.pendingAmount || 0;
+  const pendingAmount = Math.max(0, billTotal - totalPaid);
   const canFinalize = pendingAmount === 0;
 
   const formatDate = (dateString) => {

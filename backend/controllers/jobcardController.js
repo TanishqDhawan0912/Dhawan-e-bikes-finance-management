@@ -907,9 +907,9 @@ const finalizeJobcard = async (req, res) => {
     // Update jobcard with finalization data
     if (labour !== undefined) jobcard.labour = labour || 0;
     if (discount !== undefined) jobcard.discount = discount || 0;
-    if (totalAmount !== undefined) jobcard.totalAmount = totalAmount || 0;
+    // Always recompute totalAmount from parts + labour - discount (ignore client drift).
+    // Client may send totalAmount, but we treat it as informational.
     if (paymentMode !== undefined) jobcard.paymentMode = paymentMode || "cash";
-    if (pendingAmount !== undefined) jobcard.pendingAmount = pendingAmount || 0;
 
     // Save initial payment to payment history if paidAmount is provided
     if (paidAmount !== undefined && paidAmount > 0) {
@@ -972,17 +972,37 @@ const finalizeJobcard = async (req, res) => {
       jobcard.paidAmount = totalPaid;
     }
 
+    const calculateBillTotalFromJobcard = (jc) => {
+      const parts = Array.isArray(jc?.parts) ? jc.parts : [];
+      const partsTotal = parts.reduce((sum, part) => {
+        if (!part) return sum;
+        if (part.partType === "replacement" || part.replacementType) return sum;
+        const qty = Number(part.quantity) || 1;
+        const price = Number(part.price) || 0;
+        return sum + price * qty;
+      }, 0);
+      const labour = Number(jc?.labour) || 0;
+      const discount = Number(jc?.discount) || 0;
+      return Math.max(0, partsTotal + labour - discount);
+    };
+
+    jobcard.totalAmount = calculateBillTotalFromJobcard(jobcard);
+
+    // Always derive pending amount from bill total - total paid.
+    // This prevents drift if older records or frontend sent incorrect pendingAmount.
+    const totalPaidNow = jobcard.paymentHistory?.reduce(
+      (sum, payment) => sum + (payment.amount || 0),
+      0
+    ) || jobcard.paidAmount || 0;
+    jobcard.pendingAmount = Math.max(0, (Number(jobcard.totalAmount) || 0) - totalPaidNow);
+
     // Adjust inventory once, the first time this jobcard is finalized/saved.
     // This applies even if the jobcard remains in "pending" status due to unpaid amount.
     await applyJobcardInventoryDeductionOnce(jobcard);
 
     // Only mark as finalized if there's no pending amount.
     // If pendingAmount > 0, keep status as "pending".
-    if (
-      pendingAmount === undefined ||
-      pendingAmount === 0 ||
-      pendingAmount === ""
-    ) {
+    if (jobcard.pendingAmount === 0) {
       jobcard.status = "finalized";
     }
     // Otherwise, keep status as "pending" (already pending, so no change needed)
@@ -1012,7 +1032,27 @@ const settleJobcard = async (req, res) => {
       return res.status(400).json({ message: "Invalid payment amount" });
     }
 
-    const currentPending = jobcard.pendingAmount || 0;
+    const calculateBillTotalFromJobcard = (jc) => {
+      const parts = Array.isArray(jc?.parts) ? jc.parts : [];
+      const partsTotal = parts.reduce((sum, part) => {
+        if (!part) return sum;
+        if (part.partType === "replacement" || part.replacementType) return sum;
+        const qty = Number(part.quantity) || 1;
+        const price = Number(part.price) || 0;
+        return sum + price * qty;
+      }, 0);
+      const labour = Number(jc?.labour) || 0;
+      const discount = Number(jc?.discount) || 0;
+      return Math.max(0, partsTotal + labour - discount);
+    };
+
+    const totalPaidBefore =
+      jobcard.paymentHistory?.reduce(
+        (sum, payment) => sum + (payment.amount || 0),
+        0
+      ) || jobcard.paidAmount || 0;
+    const billTotal = calculateBillTotalFromJobcard(jobcard);
+    const currentPending = Math.max(0, billTotal - totalPaidBefore);
     if (amount > currentPending) {
       return res.status(400).json({
         message: `Payment amount (₹${amount}) cannot exceed pending amount (₹${currentPending})`,
@@ -1075,15 +1115,17 @@ const settleJobcard = async (req, res) => {
       paymentMode: paymentMode || "cash",
     });
 
-    // Update pending amount
-    jobcard.pendingAmount = Math.max(0, currentPending - amount);
-
     // Update total paid amount
     const totalPaid = jobcard.paymentHistory.reduce(
       (sum, payment) => sum + (payment.amount || 0),
       0
     );
     jobcard.paidAmount = totalPaid;
+
+    // Update pending amount (always derived)
+    // Also persist totalAmount as the true bill total so future reads are consistent.
+    jobcard.totalAmount = billTotal;
+    jobcard.pendingAmount = Math.max(0, billTotal - totalPaid);
 
     // If pending amount is now 0, finalize the jobcard
     if (jobcard.pendingAmount === 0) {
