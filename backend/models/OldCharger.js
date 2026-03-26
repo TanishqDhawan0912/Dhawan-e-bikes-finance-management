@@ -37,6 +37,13 @@ const oldChargerSchema = new mongoose.Schema(
       required: false,
       trim: true,
     },
+    // When created from an old scooty entry (with charger).
+    oldScootyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: false,
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,

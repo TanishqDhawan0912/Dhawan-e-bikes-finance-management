@@ -14,6 +14,13 @@ const batteryScrapSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    // Present when this entry was created from an old scooty entry (with battery).
+    oldScootyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: false,
+      default: null,
+      index: true,
+    },
     entryDate: {
       // Explicit date chosen by user (date-only, but we store full Date)
       type: Date,

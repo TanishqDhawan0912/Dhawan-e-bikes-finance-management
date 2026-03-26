@@ -51,6 +51,12 @@ const oldScootySchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    chargerWorking: {
+      // Status of old charger coming with scooty
+      type: String,
+      enum: ["working", "notWorking"],
+      default: "working",
+    },
     entryDate: {
       type: Date,
       required: true,

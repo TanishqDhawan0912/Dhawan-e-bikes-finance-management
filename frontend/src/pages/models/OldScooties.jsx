@@ -21,6 +21,7 @@ export default function OldScooties() {
   const [withCharger, setWithCharger] = useState(false);
   const [chargerType, setChargerType] = useState("Lead"); // "Lead" or "Lithium"
   const [chargerVoltageAmpere, setChargerVoltageAmpere] = useState("");
+  const [chargerWorking, setChargerWorking] = useState("working"); // "working" | "notWorking"
   const [entryDate, setEntryDate] = useState(getTodayForInput());
   const [status, setStatus] = useState("not-ready"); // "ready" | "not-ready"
   const [oldScooties, setOldScooties] = useState([]);
@@ -43,6 +44,35 @@ export default function OldScooties() {
   const [selectedSpareForOldScooty, setSelectedSpareForOldScooty] =
     useState(null);
   const oldScootySpareSuggestionsRef = useRef(null);
+
+  const normalizePmc = (v) =>
+    String(v || "")
+      .trim()
+      .toLowerCase()
+      .replace(/^pmc-?/i, "")
+      .replace(/\s+/g, "");
+
+  const normalizeVoltageText = (raw) => {
+    const s = String(raw || "").trim();
+    if (!s) return "";
+    // If user entered only digits (e.g. "60"), show/store as "60V".
+    if (/^\d{2,3}$/.test(s)) return `${s}V`;
+    // If user entered like "60 v" or "60V", normalize to "60V".
+    const compact = s.replace(/\s+/g, "").toUpperCase();
+    const m = compact.match(/^(\d{2,3})V?$/);
+    if (m) return `${m[1]}V`;
+    // Otherwise keep as-is (supports "60V3A", "72V", etc.).
+    return s;
+  };
+
+  const pmcKey = normalizePmc(pmcNo);
+  const duplicatePmc =
+    pmcKey &&
+    oldScooties.some((s) => {
+      if (!s) return false;
+      if (editingId && s._id === editingId) return false;
+      return normalizePmc(s.pmcNo) === pmcKey;
+    });
 
   const fetchOldScooties = async () => {
     try {
@@ -131,6 +161,7 @@ export default function OldScooties() {
     setWithCharger(false);
     setChargerType("Lead");
     setChargerVoltageAmpere("");
+    setChargerWorking("working");
     setEntryDate(getTodayForInput());
     setStatus("not-ready");
     setEditingId(null);
@@ -151,6 +182,10 @@ export default function OldScooties() {
       setError("Please enter model name");
       return;
     }
+    if (duplicatePmc) {
+      setError("PMC No. already exists");
+      return;
+    }
     if (!entryDate) {
       setError("Please select purchase date");
       return;
@@ -168,6 +203,7 @@ export default function OldScooties() {
         withCharger,
         chargerType: withCharger ? chargerType.trim() : "",
         chargerVoltageAmpere: withCharger ? chargerVoltageAmpere.trim() : "",
+        chargerWorking: withCharger ? chargerWorking : "working",
         entryDate: entryDate,
         status,
         sparesUsed: oldScootySpares.map((s) => ({
@@ -267,6 +303,7 @@ export default function OldScooties() {
     setWithCharger(Boolean(item.withCharger));
     setChargerType(item.chargerType || "Lead");
     setChargerVoltageAmpere(item.chargerVoltageAmpere || "");
+    setChargerWorking(item.chargerWorking || "working");
     setEntryDate(formatDateForInput(item.entryDate || item.createdAt));
     setStatus(item.status === "ready" ? "ready" : "not-ready");
     setOldScootySpares(
@@ -465,10 +502,22 @@ export default function OldScooties() {
                       width: "100%",
                       padding: "0.5rem",
                       borderRadius: "0.375rem",
-                      border: "1px solid #d1d5db",
+                      border: duplicatePmc ? "1px solid #ef4444" : "1px solid #d1d5db",
                       fontSize: "0.875rem",
                     }}
                   />
+                  {duplicatePmc && (
+                    <p
+                      style={{
+                        margin: "0.35rem 0 0 0",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        color: "#dc2626",
+                      }}
+                    >
+                      This PMC No. already exists.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label
@@ -711,6 +760,11 @@ export default function OldScooties() {
                         type="text"
                         value={chargerVoltageAmpere}
                         onChange={(e) => setChargerVoltageAmpere(e.target.value)}
+                        onBlur={() =>
+                          setChargerVoltageAmpere((prev) =>
+                            normalizeVoltageText(prev)
+                          )
+                        }
                         placeholder="Voltage / Ampere"
                         style={{
                           width: "150px",
@@ -720,6 +774,56 @@ export default function OldScooties() {
                           fontSize: "0.8125rem",
                         }}
                       />
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          marginLeft: "0.25rem",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <label
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            cursor: "pointer",
+                            fontSize: "0.8125rem",
+                            fontWeight: 700,
+                            color: "#16a34a",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="oldScootyChargerWorking"
+                            value="working"
+                            checked={chargerWorking === "working"}
+                            onChange={(e) => setChargerWorking(e.target.value)}
+                          />
+                          Working
+                        </label>
+                        <label
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            cursor: "pointer",
+                            fontSize: "0.8125rem",
+                            fontWeight: 700,
+                            color: "#dc2626",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="oldScootyChargerWorking"
+                            value="notWorking"
+                            checked={chargerWorking === "notWorking"}
+                            onChange={(e) => setChargerWorking(e.target.value)}
+                          />
+                          Not working
+                        </label>
+                      </div>
                     </>
                   )}
                 </div>
@@ -988,16 +1092,18 @@ export default function OldScooties() {
               >
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || duplicatePmc}
                   style={{
                     padding: "0.5rem 1.25rem",
                     fontSize: "0.875rem",
                     fontWeight: 500,
                     color: "white",
-                    backgroundColor: submitting ? "#9ca3af" : "#10b981",
+                    backgroundColor:
+                      submitting || duplicatePmc ? "#9ca3af" : "#10b981",
                     border: "none",
                     borderRadius: "0.375rem",
-                    cursor: submitting ? "not-allowed" : "pointer",
+                    cursor:
+                      submitting || duplicatePmc ? "not-allowed" : "pointer",
                   }}
                 >
                   {submitting
@@ -1359,7 +1465,7 @@ export default function OldScooties() {
                               <>
                                 {item.chargerVoltageAmpere && (
                                   <span style={{ fontWeight: 600 }}>
-                                    {item.chargerVoltageAmpere}
+                                    {normalizeVoltageText(item.chargerVoltageAmpere)}
                                   </span>
                                 )}
                                 {item.chargerType && (

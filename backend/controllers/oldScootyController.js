@@ -1,5 +1,91 @@
 const OldScooty = require("../models/OldScooty");
 const Spare = require("../models/Spare");
+const BatteryScrap = require("../models/BatteryScrap");
+const OldCharger = require("../models/OldCharger");
+const {
+  adjustOldChargerSummaryByStatusDelta,
+} = require("../utils/oldChargerSummaryAdjust");
+
+const parseOldChargerVoltage = (raw) => {
+  const s = String(raw || "").trim().toUpperCase();
+  if (s.includes("72")) return "72V";
+  if (s.includes("60")) return "60V";
+  if (s.includes("48")) return "48V";
+  return null;
+};
+
+const parseOldChargerAmpere = (raw) => {
+  const s = String(raw || "").trim().toUpperCase().replace(/\s/g, "");
+  if (s.includes("5A") || s.endsWith("5A") || s.includes("5AMP")) return "5A";
+  if (s.includes("3A") || s.endsWith("3A") || s.includes("3AMP")) return "3A";
+  return "4A";
+};
+
+const normalizeBatteryType = (raw) => {
+  const s = String(raw || "").trim().toLowerCase();
+  return s === "lithium" ? "lithium" : "lead";
+};
+
+const normalizeWorkingStatus = (raw) => {
+  const s = String(raw || "")
+    .trim()
+    .toLowerCase();
+  if (s === "notworking" || s.includes("not")) return "notWorking";
+  return "working";
+};
+
+const upsertBatteryAndChargerEntriesForOldScooty = async (oldScootyDoc) => {
+  if (!oldScootyDoc?._id) return;
+
+  // Remove previous linked entries (idempotent for create+edit flows).
+  await BatteryScrap.deleteMany({ oldScootyId: oldScootyDoc._id });
+
+  const prevChargers = await OldCharger.find({
+    oldScootyId: oldScootyDoc._id,
+  }).lean();
+  if (prevChargers.length) {
+    for (const row of prevChargers) {
+      await adjustOldChargerSummaryByStatusDelta(
+        row.voltage,
+        row.status,
+        -1
+      );
+    }
+    await OldCharger.deleteMany({ oldScootyId: oldScootyDoc._id });
+  }
+
+  const entryDate = oldScootyDoc.entryDate ? new Date(oldScootyDoc.entryDate) : new Date();
+
+  // If old scooty has old batteries, add them into scrap stock (old batteries stock).
+  if (oldScootyDoc.withBattery) {
+    const qty = Math.max(1, Number(oldScootyDoc.batteryCount) || 1);
+    await BatteryScrap.create({
+      quantity: qty,
+      entryDate,
+      oldScootyId: oldScootyDoc._id,
+    });
+  }
+
+  // If old scooty has old charger, add to old charger stock + summary.
+  if (oldScootyDoc.withCharger) {
+    const voltage = parseOldChargerVoltage(oldScootyDoc.chargerVoltageAmpere);
+    if (voltage) {
+      const batteryType = normalizeBatteryType(oldScootyDoc.chargerType);
+      const ampere = parseOldChargerAmpere(oldScootyDoc.chargerVoltageAmpere);
+      const status = normalizeWorkingStatus(oldScootyDoc.chargerWorking);
+      const row = new OldCharger({
+        voltage,
+        batteryType,
+        ampere,
+        status,
+        entryDate,
+        oldScootyId: oldScootyDoc._id,
+      });
+      await row.save();
+      await adjustOldChargerSummaryByStatusDelta(voltage, status, 1);
+    }
+  }
+};
 
 const adjustSpareInventoryForOldScooty = async (spares, mode = "deduct") => {
   const list = Array.isArray(spares) ? spares : [];
@@ -58,6 +144,7 @@ const createOldScooty = async (req, res) => {
       chargerVoltageAmpere,
       batteryType,
       chargerType,
+      chargerWorking,
       status,
       sparesUsed,
     } = req.body;
@@ -121,6 +208,7 @@ const createOldScooty = async (req, res) => {
         ? String(chargerVoltageAmpere).trim()
         : "",
       chargerType: chargerType ? String(chargerType).trim() : "",
+      chargerWorking: normalizeWorkingStatus(chargerWorking),
       entryDate: new Date(entryDate),
       status: status === "ready" ? "ready" : "not-ready",
       sparesUsed: normalizedSpares,
@@ -145,6 +233,9 @@ const createOldScooty = async (req, res) => {
       created.consumedSparesUsed = [];
       created = await created.save();
     }
+
+    // If scooty includes old battery/charger, create those inventory entries.
+    await upsertBatteryAndChargerEntriesForOldScooty(created);
 
     return res.status(201).json(created);
   } catch (error) {
@@ -192,6 +283,7 @@ const updateOldScooty = async (req, res) => {
       chargerVoltageAmpere,
       batteryType,
       chargerType,
+      chargerWorking,
       status,
       sparesUsed,
     } = req.body;
@@ -267,6 +359,7 @@ const updateOldScooty = async (req, res) => {
       ? String(chargerVoltageAmpere).trim()
       : "";
     existing.chargerType = chargerType ? String(chargerType).trim() : "";
+    existing.chargerWorking = normalizeWorkingStatus(chargerWorking);
     existing.entryDate = new Date(entryDate);
     existing.status = status === "ready" ? "ready" : "not-ready";
     existing.sparesUsed = normalizedSpares;
@@ -288,6 +381,9 @@ const updateOldScooty = async (req, res) => {
     }
 
     const updated = await existing.save();
+
+    // Keep old battery/charger linked entries in sync with edit.
+    await upsertBatteryAndChargerEntriesForOldScooty(updated);
 
     return res.status(200).json(updated);
   } catch (error) {
@@ -323,6 +419,29 @@ const deleteOldScooty = async (req, res) => {
           invErr
         );
       }
+    }
+
+    // Remove linked old battery/charger entries (since the scooty is deleted).
+    try {
+      await BatteryScrap.deleteMany({ oldScootyId: existing._id });
+      const prevChargers = await OldCharger.find({
+        oldScootyId: existing._id,
+      }).lean();
+      if (prevChargers.length) {
+        for (const row of prevChargers) {
+          await adjustOldChargerSummaryByStatusDelta(
+            row.voltage,
+            row.status,
+            -1
+          );
+        }
+      }
+      await OldCharger.deleteMany({ oldScootyId: existing._id });
+    } catch (invErr) {
+      console.error(
+        "Error removing old battery/charger entries while deleting old scooty:",
+        invErr
+      );
     }
 
     await existing.deleteOne();
