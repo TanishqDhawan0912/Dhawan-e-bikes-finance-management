@@ -97,6 +97,7 @@ export default function NewJobcard() {
   const [showCustomSpare, setShowCustomSpare] = useState(false);
   const [editingPrice, setEditingPrice] = useState(null); // { id, cat } | null
   const [editingPriceValue, setEditingPriceValue] = useState("");
+  const [editingOldScootyPartId, setEditingOldScootyPartId] = useState(null);
   const [customSpareData, setCustomSpareData] = useState({
     name: "",
     price: "",
@@ -297,6 +298,7 @@ export default function NewJobcard() {
     useState(null); // selected spare from dropdown (for spareId)
   const oldScootySpareSuggestionsRef = useRef(null);
   const oldScootySpareInputRef = useRef(null);
+  const oldScootyFormRef = useRef(null);
   const [oldScootySelectedBattery, setOldScootySelectedBattery] =
     useState(null);
   const [oldScootySelectedCharger, setOldScootySelectedCharger] =
@@ -397,6 +399,30 @@ export default function NewJobcard() {
         partType: mappedType,
         // Sales-related fields (so Selected Parts shows total price for sales battery)
         salesType: part?.salesType ?? null,
+        pmcNo: part?.pmcNo ?? "",
+        batteryChemistry: part?.batteryChemistry ?? null,
+        batteryVoltage: part?.batteryVoltage ?? null,
+        batteryName: part?.batteryName ?? null,
+        chargerType: part?.chargerType ?? null,
+        chargerName: part?.chargerName ?? null,
+        chargerChemistry: part?.chargerChemistry ?? null,
+        chargerVoltage: part?.chargerVoltage ?? null,
+        chargerWarrantyStatus: part?.chargerWarrantyStatus ?? null,
+        sparesUsed: Array.isArray(part?.sparesUsed)
+          ? part.sparesUsed.map((s) => ({
+              spareId:
+                s?.spareId && typeof s.spareId === "object"
+                  ? s.spareId._id || s.spareId.id || null
+                  : s?.spareId || null,
+              name: s?.name || "",
+              quantity:
+                typeof s?.quantity === "number"
+                  ? s.quantity
+                  : parseInt(s?.quantity, 10) || 1,
+              color: s?.color ? String(s.color).trim() : "",
+              fromOldScooty: Boolean(s?.fromOldScooty),
+            }))
+          : [],
         scrapAvailable: part?.scrapAvailable ?? false,
         scrapQuantity: Number(part?.scrapQuantity || 0),
         scrapPricePerUnit: Number(part?.scrapPricePerUnit || 0),
@@ -1631,6 +1657,61 @@ export default function NewJobcard() {
   };
 
   // Handle adding old scooty
+  const resetOldScootySalesForm = () => {
+    setOldScootyData({
+      pmcNo: "",
+      name: "",
+      price: "",
+      quantity: "1",
+      batteryChemistry: "lead",
+      batteryVoltage: "48",
+      batteryType: "oldBattery",
+      chargerType: "oldCharger",
+      chargerChemistry: "lead",
+      chargerVoltage: "48",
+      warrantyStatus: "withoutWarranty",
+      chargerWarrantyStatus: "noWarranty",
+      sparesUsed: [],
+    });
+    setOldScootySpareName("");
+    setOldScootySpareQty("1");
+    setOldScootySpareColor("");
+    setOldScootyPmcLookupError("");
+    setOldScootySelectedBattery(null);
+    setOldScootySelectedCharger(null);
+    setEditingOldScootyPartId(null);
+  };
+
+  const startEditOldScootySale = (part) => {
+    if (!part || part.salesType !== "oldScooty") return;
+    setSelectedSalesType("oldScooty");
+    setActiveTab("sales");
+    setEditingOldScootyPartId(part.id);
+    setOldScootyData((prev) => ({
+      ...prev,
+      pmcNo: part.pmcNo || "",
+      name: part.name || "",
+      price:
+        part.price !== undefined && part.price !== null ? String(part.price) : "",
+      quantity: String(part.selectedQuantity || 1),
+      batteryChemistry: part.batteryChemistry || "lead",
+      batteryVoltage: part.batteryVoltage || "48",
+      batteryType: part.batteryType || "oldBattery",
+      chargerType: part.chargerType || "oldCharger",
+      chargerChemistry: part.chargerChemistry || "lead",
+      chargerVoltage: part.chargerVoltage || "48",
+      warrantyStatus: part.warrantyStatus || "withoutWarranty",
+      chargerWarrantyStatus: part.chargerWarrantyStatus || "noWarranty",
+      sparesUsed: Array.isArray(part.sparesUsed) ? part.sparesUsed : [],
+    }));
+    setTimeout(() => {
+      oldScootyFormRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 50);
+  };
+
   const handleAddOldScooty = () => {
     if (!oldScootyData.name.trim()) {
       alert("Please enter old scooty name");
@@ -1642,20 +1723,22 @@ export default function NewJobcard() {
     }
     if (
       oldScootyData.batteryType === "newBattery" &&
-      !oldScootySelectedBattery
+      !oldScootySelectedBattery &&
+      !oldScootyData.batteryName
     ) {
       alert("Please select a battery from the list");
       return;
     }
     if (
       oldScootyData.chargerType === "newCharger" &&
-      !oldScootySelectedCharger
+      !oldScootySelectedCharger &&
+      !oldScootyData.chargerName
     ) {
       alert("Please select a charger from the list");
       return;
     }
     const oldScootyPart = {
-      id: `oldScooty-${Date.now()}`,
+      id: editingOldScootyPartId || `oldScooty-${Date.now()}`,
       pmcNo: (oldScootyData.pmcNo || "").trim(),
       name: oldScootyData.name.trim(),
       price: parseFloat(oldScootyData.price),
@@ -1698,33 +1781,16 @@ export default function NewJobcard() {
       })),
     };
 
-    setSelectedParts((prev) => ({
-      ...prev,
-      sales: [oldScootyPart, ...(prev.sales || [])],
-    }));
+    setSelectedParts((prev) => {
+      const sales = prev.sales || [];
+      const nextSales = editingOldScootyPartId
+        ? sales.map((p) => (p.id === editingOldScootyPartId ? oldScootyPart : p))
+        : [oldScootyPart, ...sales];
+      return { ...prev, sales: nextSales };
+    });
 
     // Reset form
-    setOldScootyData({
-      pmcNo: "",
-      name: "",
-      price: "",
-      quantity: "1",
-      batteryChemistry: "lead",
-      batteryVoltage: "48",
-      batteryType: "oldBattery",
-      chargerType: "oldCharger",
-      chargerChemistry: "lead",
-      chargerVoltage: "48",
-      warrantyStatus: "withoutWarranty",
-      chargerWarrantyStatus: "noWarranty",
-      sparesUsed: [],
-    });
-    setOldScootySpareName("");
-    setOldScootySpareQty("1");
-    setOldScootySpareColor("");
-    setOldScootyPmcLookupError("");
-    setOldScootySelectedBattery(null);
-    setOldScootySelectedCharger(null);
+    resetOldScootySalesForm();
     setSelectedSalesType(null);
   };
 
@@ -2044,6 +2110,17 @@ export default function NewJobcard() {
           if (part.warrantyStatus)
             basePart.warrantyStatus = part.warrantyStatus;
           if (part.pmcNo) basePart.pmcNo = part.pmcNo;
+          if (part.batteryChemistry)
+            basePart.batteryChemistry = part.batteryChemistry;
+          if (part.batteryVoltage) basePart.batteryVoltage = part.batteryVoltage;
+          if (part.batteryName) basePart.batteryName = part.batteryName;
+          if (part.chargerType) basePart.chargerType = part.chargerType;
+          if (part.chargerName) basePart.chargerName = part.chargerName;
+          if (part.chargerChemistry)
+            basePart.chargerChemistry = part.chargerChemistry;
+          if (part.chargerVoltage) basePart.chargerVoltage = part.chargerVoltage;
+          if (part.chargerWarrantyStatus)
+            basePart.chargerWarrantyStatus = part.chargerWarrantyStatus;
           if (Array.isArray(part.sparesUsed) && part.sparesUsed.length) {
             basePart.sparesUsed = part.sparesUsed.map((s) => ({
               spareId: s.spareId || null,
@@ -6118,6 +6195,7 @@ export default function NewJobcard() {
               {/* Old Scooty Form */}
               {activeTab === "sales" && selectedSalesType === "oldScooty" && (
                 <div
+                  ref={oldScootyFormRef}
                   style={{
                     padding: "1.5rem",
                     marginBottom: "1rem",
@@ -7719,27 +7797,7 @@ export default function NewJobcard() {
                         type="button"
                         onClick={() => {
                           setSelectedSalesType(null);
-                          setOldScootyData({
-                            pmcNo: "",
-                            name: "",
-                            price: "",
-                            quantity: "1",
-                            batteryChemistry: "lead",
-                            batteryVoltage: "48",
-                            batteryType: "oldBattery",
-                            chargerType: "oldCharger",
-                            chargerChemistry: "lead",
-                            chargerVoltage: "48",
-                            warrantyStatus: "withoutWarranty",
-                            chargerWarrantyStatus: "noWarranty",
-                            sparesUsed: [],
-                          });
-                          setOldScootySpareName("");
-                          setOldScootySpareQty("1");
-                          setOldScootySpareColor("");
-                          setOldScootyPmcLookupError("");
-                          setOldScootySelectedBattery(null);
-                          setOldScootySelectedCharger(null);
+                          resetOldScootySalesForm();
                         }}
                         style={{
                           padding: "0.5rem 1rem",
@@ -7768,7 +7826,7 @@ export default function NewJobcard() {
                           fontWeight: 500,
                         }}
                       >
-                        Add to Jobcard
+                        {editingOldScootyPartId ? "Update Old Scooty" : "Add to Jobcard"}
                       </button>
                     </div>
                   </div>
@@ -9055,8 +9113,16 @@ export default function NewJobcard() {
                                   </span>
                                   <button
                                     type="button"
-                                    onClick={() => startEditPrice(part, activeTab)}
-                                    title="Edit price"
+                                    onClick={() =>
+                                      part.salesType === "oldScooty"
+                                        ? startEditOldScootySale(part)
+                                        : startEditPrice(part, activeTab)
+                                    }
+                                    title={
+                                      part.salesType === "oldScooty"
+                                        ? "Edit old scooty details"
+                                        : "Edit price"
+                                    }
                                     style={{
                                       padding: "0.2rem 0.5rem",
                                       borderRadius: "0.4rem",
@@ -9565,8 +9631,16 @@ export default function NewJobcard() {
                                         <span>₹{getPartTotal(part).toFixed(2)}</span>
                                         <button
                                           type="button"
-                                          onClick={() => startEditPrice(part, cat)}
-                                          title="Edit price"
+                                          onClick={() =>
+                                            part.salesType === "oldScooty"
+                                              ? startEditOldScootySale(part)
+                                              : startEditPrice(part, cat)
+                                          }
+                                          title={
+                                            part.salesType === "oldScooty"
+                                              ? "Edit old scooty details"
+                                              : "Edit price"
+                                          }
                                           style={{
                                             padding: "0.15rem 0.45rem",
                                             borderRadius: "0.35rem",
@@ -10007,8 +10081,16 @@ export default function NewJobcard() {
                                         <span>₹{getPartTotal(part).toFixed(2)}</span>
                                         <button
                                           type="button"
-                                          onClick={() => startEditPrice(part, cat)}
-                                          title="Edit price"
+                                          onClick={() =>
+                                            part.salesType === "oldScooty"
+                                              ? startEditOldScootySale(part)
+                                              : startEditPrice(part, cat)
+                                          }
+                                          title={
+                                            part.salesType === "oldScooty"
+                                              ? "Edit old scooty details"
+                                              : "Edit price"
+                                          }
                                           style={{
                                             padding: "0.15rem 0.45rem",
                                             borderRadius: "0.35rem",

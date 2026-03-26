@@ -149,6 +149,39 @@ const jobcardPartSchema = new mongoose.Schema({
       },
     },
   ],
+  // Old scooty sales specific fields
+  batteryChemistry: {
+    type: String,
+    required: false,
+  },
+  batteryVoltage: {
+    type: String,
+    required: false,
+  },
+  batteryName: {
+    type: String,
+    required: false,
+  },
+  chargerType: {
+    type: String,
+    required: false,
+  },
+  chargerName: {
+    type: String,
+    required: false,
+  },
+  chargerChemistry: {
+    type: String,
+    required: false,
+  },
+  chargerVoltage: {
+    type: String,
+    required: false,
+  },
+  chargerWarrantyStatus: {
+    type: String,
+    required: false,
+  },
   // Models this part/spare is compatible with (copied from Spare.models)
   models: [
     {

@@ -153,6 +153,13 @@ export default function JobcardPrintView({ jobcard, onClose, onPrint }) {
 
         const typeSuffix = tags.length ? ` <${tags.join(", ")}>` : "";
         let label = partName;
+        if (part.salesType === "oldScooty") {
+          const rawPmc = String(part.pmcNo || "").trim();
+          const pmcDisplay = rawPmc
+            ? `PMC-${rawPmc.replace(/^PMC-?/i, "")}`
+            : "";
+          label = pmcDisplay ? `${pmcDisplay} - ${partName}` : partName;
+        }
         if (part.selectedColor) {
           label += ` (${part.selectedColor})`;
         }
@@ -519,6 +526,13 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
 
                 const typeSuffix = tags.length ? ` <${tags.join(", ")}>` : "";
                 let label = partName;
+                if (part.salesType === "oldScooty") {
+                  const rawPmc = String(part.pmcNo || "").trim();
+                  const pmcDisplay = rawPmc
+                    ? `PMC-${rawPmc.replace(/^PMC-?/i, "")}`
+                    : "";
+                  label = pmcDisplay ? `${pmcDisplay} - ${partName}` : partName;
+                }
                 if (part.selectedColor) {
                   label += ` (${part.selectedColor})`;
                 }
