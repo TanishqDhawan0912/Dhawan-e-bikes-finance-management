@@ -748,15 +748,21 @@ export default function AllBills() {
           }}
         >
           <div className="bills-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Delete bill</h3>
-            <p>Enter admin password to delete this bill.</p>
+            <h3>Confirm Deletion</h3>
+            <p>Please enter the admin password to delete this bill.</p>
+            {billToDelete && (
+              <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.9rem" }}>
+                <span style={{ fontWeight: 600 }}>Bill:</span>{" "}
+                {billToDelete.billNo || "N/A"}
+              </p>
+            )}
             <form onSubmit={handlePasswordSubmit}>
               <div className="bills-password-input-wrap">
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Admin password"
+                  placeholder="Enter admin password"
                   className="bills-password-input"
                 />
                 <button
@@ -779,9 +785,6 @@ export default function AllBills() {
               </div>
               {passwordError && <p className="bills-modal-error">{passwordError}</p>}
               <div className="bills-form-actions">
-                <button type="submit" className="bills-btn-primary" disabled={validatingPassword} style={{ background: "#dc2626", boxShadow: "0 2px 8px rgba(220,38,38,0.3)" }}>
-                  {validatingPassword ? "Checking..." : "Delete"}
-                </button>
                 <button
                   type="button"
                   className="bills-btn-secondary"
@@ -791,8 +794,12 @@ export default function AllBills() {
                     setPassword("");
                     setPasswordError("");
                   }}
+                  disabled={validatingPassword}
                 >
                   Cancel
+                </button>
+                <button type="submit" className="bills-btn-primary" disabled={validatingPassword} style={{ background: "#dc2626", boxShadow: "0 2px 8px rgba(220,38,38,0.3)" }}>
+                  {validatingPassword ? "Checking..." : "Delete"}
                 </button>
               </div>
             </form>

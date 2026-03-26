@@ -469,6 +469,48 @@ function AllSpares() {
     return latest.raw;
   };
 
+  // Helper: detect missing purchase price in any stock entry/color entry
+  // Matches Models-style UI: show a dot + pending dates list.
+  const getSparePriceStatus = (spare) => {
+    const pendingDatesSet = new Set();
+
+    const isMissing = (v) => {
+      if (v === undefined || v === null) return true;
+      if (typeof v === "string") return v.trim() === "" || Number(v) <= 0;
+      const n = Number(v);
+      return Number.isNaN(n) || n <= 0;
+    };
+
+    if (spare) {
+      if (Array.isArray(spare.stockEntries)) {
+        spare.stockEntries.forEach((entry) => {
+          const rawDate = entry?.purchaseDate || "";
+          const dateLabel = rawDate.toString().trim();
+          if (isMissing(entry?.purchasePrice) && dateLabel) {
+            pendingDatesSet.add(dateLabel);
+          }
+        });
+      }
+
+      if (Array.isArray(spare.colorQuantity)) {
+        spare.colorQuantity.forEach((cq) => {
+          const rawDate = cq?.purchaseDate || "";
+          const dateLabel = rawDate.toString().trim();
+          if (isMissing(cq?.purchasePrice) && dateLabel) {
+            pendingDatesSet.add(dateLabel);
+          }
+        });
+      }
+    }
+
+    const pendingDates = Array.from(pendingDatesSet);
+
+    return {
+      hasPending: pendingDates.length > 0,
+      pendingDates,
+    };
+  };
+
   // Fetch suggestions for names
   const fetchNameSuggestions = async (searchStr) => {
     try {
@@ -1164,7 +1206,48 @@ function AllSpares() {
                       fontWeight: "600",
                     }}
                   >
-                    {spare.name}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                      <div>{spare.name}</div>
+                      {(() => {
+                        const priceStatus = getSparePriceStatus(spare);
+                        return (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              fontSize: "0.75rem",
+                              marginTop: "-0.05rem",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: "7px",
+                                height: "7px",
+                                borderRadius: "999px",
+                                backgroundColor: priceStatus.hasPending
+                                  ? "#f59e0b"
+                                  : "#16a34a",
+                                boxShadow: priceStatus.hasPending
+                                  ? "0 0 0 3px rgba(245, 158, 11, 0.25)"
+                                  : "0 0 0 3px rgba(22, 163, 74, 0.25)",
+                              }}
+                            />
+                            {priceStatus.hasPending ? (
+                              <span style={{ color: "#92400e" }}>
+                                Price listing pending for{" "}
+                                {priceStatus.pendingDates.join(", ")}
+                              </span>
+                            ) : (
+                              <span style={{ color: "#166534" }}>
+                                All price entries up to date
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </td>
                   <td
                     style={{

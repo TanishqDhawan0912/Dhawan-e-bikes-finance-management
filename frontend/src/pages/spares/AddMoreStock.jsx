@@ -3542,10 +3542,23 @@ function AddMoreStock() {
                     type="number"
                     value={editingEntry?.purchasePrice || ""}
                     onChange={(e) =>
-                      setEditingEntry({
-                        ...editingEntry,
-                        purchasePrice: e.target.value,
-                      })
+                      {
+                        const nextVal = e.target.value;
+                        setEditingEntry({
+                          ...editingEntry,
+                          purchasePrice: nextVal,
+                        });
+                        // In color-tracking mode, purchase price is stored per-color
+                        // (Spare.colorQuantity[].purchasePrice). Keep them in sync.
+                        if (isColorTrackingEnabled && Array.isArray(editEntryColors) && editEntryColors.length > 0) {
+                          setEditEntryColors((prev) =>
+                            prev.map((cq) => ({
+                              ...cq,
+                              purchasePrice: nextVal,
+                            }))
+                          );
+                        }
+                      }
                     }
                     style={{
                       width: "100%",
