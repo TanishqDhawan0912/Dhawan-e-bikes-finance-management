@@ -13,6 +13,8 @@ const accessoryDetailSchema = new mongoose.Schema(
     name: { type: String, default: "", trim: true },
     sellingPrice: { type: Number, default: 0, min: 0 },
     sku: { type: String, default: "", trim: true },
+    /** FIFO purchase cost for this line (one unit), set when bill deducts stock */
+    unitPurchaseCost: { type: Number, default: 0, min: 0 },
   },
   { _id: false }
 );

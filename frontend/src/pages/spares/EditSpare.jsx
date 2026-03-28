@@ -128,13 +128,7 @@ export default function EditSpare() {
     fetchAllModels();
   }, [fetchSpare, fetchAllModels]);
 
-  // Set page title
-  useEffect(() => {
-    // Use setTimeout to ensure it runs after any other title settings
-    setTimeout(() => {
-      document.title = "Edit Spares Here";
-    }, 100);
-  }, []);
+  // Keep browser tab title consistent app-wide (set in index.html)
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

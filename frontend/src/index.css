@@ -2233,6 +2233,57 @@ button {
   box-shadow: 0 8px 16px rgba(15, 23, 42, 0.18);
 }
 
+/* Admin → Finance: home-style large tiles (Jobcard / Bills) */
+.admin-finance-landing {
+  margin-top: 0.5rem;
+  padding: 2rem 1.25rem 2.5rem;
+  background: #eef2f7;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.admin-finance-tile-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: 2rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+button.admin-finance-tile {
+  flex: 1 1 280px;
+  max-width: 420px;
+  min-height: 160px;
+  margin: 0;
+  padding: 2.5rem 1.5rem;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  text-align: center;
+  font-size: clamp(1.75rem, 4vw, 2.35rem);
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.2;
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out,
+    border-color 0.12s ease-out;
+}
+
+button.admin-finance-tile:hover {
+  border-color: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+button.admin-finance-tile:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+}
+
 /* Jobcard Styles */
 .jobcard-container {
   max-width: 800px;

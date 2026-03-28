@@ -4,6 +4,10 @@ const Battery = require("../models/Battery");
 const Charger = require("../models/Charger");
 const Spare = require("../models/Spare");
 const mongoose = require("mongoose");
+const {
+  fifoDeductFromSpare,
+  fifoRestoreToSpare,
+} = require("../utils/spareFifo");
 
 const isObjectId = (v) => mongoose.Types.ObjectId.isValid(String(v || ""));
 
@@ -13,33 +17,6 @@ const getLeadBatteryUnitsFromVoltage = (voltageRaw) => {
   if (s.includes("60")) return 5;
   if (s.includes("48")) return 4;
   return 0;
-};
-
-const adjustSpareStockForAccessory = (spare, units, mode) => {
-  if (!spare || units <= 0) return;
-  const factor = mode === "restore" ? 1 : -1;
-  const delta = factor * units;
-
-  if (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0) {
-    if (delta < 0) {
-      let toDeduct = Math.abs(delta);
-      for (const cq of spare.colorQuantity) {
-        if (!cq || toDeduct <= 0) continue;
-        const current = Number(cq.quantity) || 0;
-        const take = Math.min(current, toDeduct);
-        cq.quantity = current - take;
-        toDeduct -= take;
-      }
-    } else {
-      const first = spare.colorQuantity[0];
-      if (first) {
-        first.quantity = Math.max(0, (Number(first.quantity) || 0) + delta);
-      }
-    }
-    return;
-  }
-
-  spare.quantity = Math.max(0, (Number(spare.quantity) || 0) + delta);
 };
 
 const adjustBillInventory = async (billLike, mode = "deduct") => {
@@ -133,20 +110,26 @@ const adjustBillInventory = async (billLike, mode = "deduct") => {
     }
   }
 
-  // 4) Accessory spare stock
+  // 4) Accessory spare stock — one unit per accessory line, FIFO by purchase date.
+  // Bills do not specify color; FIFO runs across all colorQuantity layers when used.
   if (Array.isArray(billLike.accessoryDetails) && billLike.accessoryDetails.length > 0) {
-    const accessoryCounts = new Map();
     for (const item of billLike.accessoryDetails) {
-      const id = String(item?.id || "").trim();
-      if (!isObjectId(id)) continue;
-      accessoryCounts.set(id, (accessoryCounts.get(id) || 0) + 1);
-    }
-
-    for (const [spareId, units] of accessoryCounts.entries()) {
+      const spareId = String(item?.id || "").trim();
+      if (!isObjectId(spareId)) continue;
       const spare = await Spare.findById(spareId);
       if (!spare) continue;
-      adjustSpareStockForAccessory(spare, units, mode);
+      if (mode === "deduct") {
+        const { totalCost, deducted } = fifoDeductFromSpare(spare, 1, {
+          colorKey: null,
+        });
+        item.unitPurchaseCost = deducted > 0 ? totalCost : 0;
+      } else {
+        fifoRestoreToSpare(spare, 1, { colorKey: null });
+      }
       await spare.save();
+    }
+    if (typeof billLike.markModified === "function") {
+      billLike.markModified("accessoryDetails");
     }
   }
 };

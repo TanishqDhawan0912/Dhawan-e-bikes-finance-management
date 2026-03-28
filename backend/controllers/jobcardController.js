@@ -1,5 +1,9 @@
 const Jobcard = require("../models/Jobcard");
 const Spare = require("../models/Spare");
+const {
+  fifoDeductFromSpare,
+  fifoRestoreToSpare,
+} = require("../utils/spareFifo");
 const Battery = require("../models/Battery");
 const BatteryScrap = require("../models/BatteryScrap");
 const Charger = require("../models/Charger");
@@ -181,8 +185,6 @@ const adjustSpareInventoryForJobcard = async (jobcard, mode = "deduct") => {
     return;
   }
 
-  const factor = mode === "restore" ? 1 : -1;
-
   for (const part of jobcard.parts) {
     if (!part || part.isCustom === true || !part.spareId) {
       continue;
@@ -200,40 +202,57 @@ const adjustSpareInventoryForJobcard = async (jobcard, mode = "deduct") => {
       continue;
     }
 
-    const qty = Number(part.quantity) || 0;
+    const qty = Math.floor(Number(part.quantity) || 0);
     if (qty <= 0) continue;
-
-    const qtyDelta = factor * qty;
 
     const spare = await Spare.findById(part.spareId);
     if (!spare) continue;
 
-    const colorKey = (part.selectedColor || "").trim().toLowerCase();
+    const colorKeyRaw = (part.selectedColor || "").trim();
+    const useColorFifo =
+      spare.hasColors === true &&
+      Array.isArray(spare.colorQuantity) &&
+      spare.colorQuantity.length > 0 &&
+      colorKeyRaw;
 
-    if (spare.hasColors && Array.isArray(spare.colorQuantity) && colorKey) {
-      const colorEntry = spare.colorQuantity.find(
-        (cq) =>
-          cq &&
-          typeof cq.color === "string" &&
-          cq.color.trim().toLowerCase() === colorKey
-      );
-
-      if (colorEntry) {
-        const newQty = Math.max(
-          0,
-          (Number(colorEntry.quantity) || 0) + qtyDelta
-        );
-        colorEntry.quantity = newQty;
+    if (mode === "deduct") {
+      let totalCost = 0;
+      let deducted = 0;
+      if (useColorFifo) {
+        const first = fifoDeductFromSpare(spare, qty, {
+          colorKey: colorKeyRaw,
+        });
+        totalCost += first.totalCost;
+        deducted += first.deducted;
+        if (deducted < qty) {
+          const second = fifoDeductFromSpare(spare, qty - deducted, {
+            colorKey: null,
+          });
+          totalCost += second.totalCost;
+          deducted += second.deducted;
+        }
       } else {
-        // Fallback to global quantity if matching color is not found
-        spare.quantity = Math.max(0, (Number(spare.quantity) || 0) + qtyDelta);
+        const r = fifoDeductFromSpare(spare, qty, { colorKey: null });
+        totalCost = r.totalCost;
+        deducted = r.deducted;
+      }
+      part.fifoLinePurchaseCost = totalCost;
+      if (deducted < qty) {
+        console.warn(
+          `[jobcard] FIFO short spare ${spare._id}: need ${qty}, deducted ${deducted}`
+        );
       }
     } else {
-      // No color-based stock; use main quantity
-      spare.quantity = Math.max(0, (Number(spare.quantity) || 0) + qtyDelta);
+      fifoRestoreToSpare(spare, qty, {
+        colorKey: useColorFifo ? colorKeyRaw : null,
+      });
     }
 
     await spare.save();
+  }
+
+  if (mode === "deduct" && typeof jobcard.markModified === "function") {
+    jobcard.markModified("parts");
   }
 };
 

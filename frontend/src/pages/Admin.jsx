@@ -17,6 +17,29 @@ export default function Admin() {
   const [sparesLoading, setSparesLoading] = useState(false);
   const [sparesError, setSparesError] = useState("");
   const [showLowStockModal, setShowLowStockModal] = useState(false);
+  const [batteries, setBatteries] = useState([]);
+  const [batteriesLoading, setBatteriesLoading] = useState(false);
+  const [batteriesError, setBatteriesError] = useState("");
+  const [showBatteryLowStockModal, setShowBatteryLowStockModal] =
+    useState(false);
+  const [chargers, setChargers] = useState([]);
+  const [chargersLoading, setChargersLoading] = useState(false);
+  const [chargersError, setChargersError] = useState("");
+  const [bills, setBills] = useState([]);
+  const [billsLoading, setBillsLoading] = useState(false);
+  const [billsError, setBillsError] = useState("");
+  const [jobcards, setJobcards] = useState([]);
+  const [jobcardsLoading, setJobcardsLoading] = useState(false);
+  const [jobcardsError, setJobcardsError] = useState("");
+  /** null = finance home (pick Bills vs Jobcards); otherwise full detail for that area */
+  const [financeSubView, setFinanceSubView] = useState(null); // null | "bills" | "jobcards"
+  const [financeRangeMode, setFinanceRangeMode] = useState("day"); // "day" | "month"
+  const [financeSelectedDate, setFinanceSelectedDate] = useState(
+    new Date().toISOString().split("T")[0]
+  ); // yyyy-mm-dd
+  const [financeSelectedMonth, setFinanceSelectedMonth] = useState(
+    new Date().toISOString().slice(0, 7)
+  ); // yyyy-mm
   const [models, setModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState("");
@@ -119,6 +142,124 @@ export default function Admin() {
   useEffect(() => {
     if (activeSection === "spares") {
       fetchSparesForAdmin();
+    }
+  }, [activeSection]);
+
+  // Fetch batteries data for admin batteries section
+  const fetchBatteriesForAdmin = async () => {
+    try {
+      setBatteriesLoading(true);
+      setBatteriesError("");
+
+      const timestamp = Date.now();
+      const response = await fetch(
+        `http://localhost:5000/api/batteries?t=${timestamp}`
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Error fetching batteries");
+      }
+
+      setBatteries(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Admin - Error fetching batteries:", error);
+      setBatteriesError(
+        error.message || "Error fetching batteries. Please try again."
+      );
+    } finally {
+      setBatteriesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection === "batteries") {
+      fetchBatteriesForAdmin();
+    }
+  }, [activeSection]);
+
+  const fetchChargersForAdmin = async () => {
+    try {
+      setChargersLoading(true);
+      setChargersError("");
+      const timestamp = Date.now();
+      const response = await fetch(
+        `http://localhost:5000/api/chargers?t=${timestamp}`
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Error fetching chargers");
+      }
+      setChargers(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Admin - Error fetching chargers:", error);
+      setChargersError(
+        error.message || "Error fetching chargers. Please try again."
+      );
+    } finally {
+      setChargersLoading(false);
+    }
+  };
+
+  const fetchBillsForAdmin = async () => {
+    try {
+      setBillsLoading(true);
+      setBillsError("");
+      const timestamp = Date.now();
+      const response = await fetch(
+        `http://localhost:5000/api/bills?t=${timestamp}`
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Error fetching bills");
+      }
+      setBills(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Admin - Error fetching bills:", error);
+      setBillsError(error.message || "Error fetching bills. Please try again.");
+    } finally {
+      setBillsLoading(false);
+    }
+  };
+
+  const fetchJobcardsForAdmin = async () => {
+    try {
+      setJobcardsLoading(true);
+      setJobcardsError("");
+      const timestamp = Date.now();
+      const response = await fetch(
+        `http://localhost:5000/api/jobcards?status=finalized&t=${timestamp}`
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Error fetching jobcards");
+      }
+      setJobcards(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Admin - Error fetching jobcards:", error);
+      setJobcardsError(
+        error.message || "Error fetching jobcards. Please try again."
+      );
+    } finally {
+      setJobcardsLoading(false);
+    }
+  };
+
+  // When finance section is active, fetch the data needed for profit calculations
+  useEffect(() => {
+    if (activeSection !== "finance") return;
+    fetchBillsForAdmin();
+    fetchJobcardsForAdmin();
+    // Needed to estimate cost (profit = revenue - cost)
+    fetchSparesForAdmin();
+    fetchModels();
+    fetchBatteriesForAdmin();
+    fetchChargersForAdmin();
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (activeSection !== "finance") {
+      setFinanceSubView(null);
     }
   }, [activeSection]);
 
@@ -726,13 +867,15 @@ export default function Admin() {
         // Non-color-tracked spare: compare total quantity to global minStockLevel
         let totalQuantity = 0;
 
-        if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
+        // Match main Spares table logic:
+        // Prefer stored `quantity` when present; otherwise sum stockEntries.
+        if (typeof spare.quantity === "number") {
+          totalQuantity = spare.quantity;
+        } else if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
           totalQuantity = spare.stockEntries.reduce(
             (sum, entry) => sum + (entry.quantity || 0),
             0
           );
-        } else if (typeof spare.quantity === "number") {
-          totalQuantity = spare.quantity;
         }
 
         const minLevel = spare.minStockLevel || 0;
@@ -764,6 +907,458 @@ export default function Admin() {
     () => lowStockItems.length,
     [lowStockItems]
   );
+
+  // Batteries admin summary
+  const totalBatteryVarieties = useMemo(
+    () => (Array.isArray(batteries) ? batteries.length : 0),
+    [batteries]
+  );
+
+  // Total sets available (sum of totalSets)
+  const totalBatterySetsAvailable = useMemo(() => {
+    if (!Array.isArray(batteries) || batteries.length === 0) return 0;
+    return batteries.reduce(
+      (sum, b) => sum + (Number(b?.totalSets) || 0),
+      0
+    );
+  }, [batteries]);
+
+  const getBatteryLastPurchaseDate = (battery) => {
+    if (!battery) return "N/A";
+    const entries = Array.isArray(battery.stockEntries) ? battery.stockEntries : [];
+    if (entries.length === 0) return battery.purchaseDate ? formatDate(battery.purchaseDate) : "N/A";
+
+    const sorted = [...entries].sort(
+      (a, b) => new Date(b.purchaseDate || 0) - new Date(a.purchaseDate || 0)
+    );
+    const latest = sorted[0]?.purchaseDate;
+    return latest ? formatDate(latest) : "N/A";
+  };
+
+  const batteryLowStockItems = useMemo(() => {
+    if (!Array.isArray(batteries) || batteries.length === 0) return [];
+
+    return batteries
+      .map((b) => {
+        const currentSets = Number(b?.totalSets) || 0;
+        const minSets = Number(b?.minStockLevel) || 0;
+        if (minSets <= 0) return null;
+        if (currentSets >= minSets) return null;
+
+        return {
+          id: b._id,
+          name: b.name || "N/A",
+          batteryType: b.batteryType || "N/A",
+          ampereValue: b.ampereValue || "N/A",
+          supplierName: b.supplierName || "N/A",
+          currentSets,
+          minSets,
+          lastPurchaseDate: getBatteryLastPurchaseDate(b),
+        };
+      })
+      .filter(Boolean);
+  }, [batteries]);
+
+  const batteryLowStockCount = useMemo(
+    () => batteryLowStockItems.length,
+    [batteryLowStockItems]
+  );
+
+  // -------- FINANCE (Profit) --------
+  const normalizeDateLabel = (raw) => {
+    if (!raw) return "";
+    const s = String(raw).trim();
+    if (!s) return "";
+    if (s.includes("T")) return s.split("T")[0];
+    return s;
+  };
+
+  const toYmd = (raw) => {
+    const s = normalizeDateLabel(raw);
+    if (!s) return "";
+    // dd/mm/yyyy -> yyyy-mm-dd
+    if (s.includes("/")) {
+      const parts = s.split("/");
+      if (parts.length === 3) {
+        const [dd, mm, yyyy] = parts;
+        if (yyyy && mm && dd) {
+          return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(
+            2,
+            "0"
+          )}`;
+        }
+      }
+    }
+    return s;
+  };
+
+  const isSameDay = (raw, ymd) => toYmd(raw) === ymd;
+  const isSameMonth = (raw, yyyyMm) => {
+    const s = toYmd(raw);
+    return s && s.startsWith(`${yyyyMm}-`);
+  };
+
+  const effectiveYmd =
+    financeRangeMode === "day"
+      ? financeSelectedDate
+      : `${financeSelectedMonth}-01`;
+  const effectiveMonth =
+    financeRangeMode === "month"
+      ? financeSelectedMonth
+      : financeSelectedDate.slice(0, 7);
+
+  /** Unit cost for profit math: purchase price from the latest dated stock row (not a weighted average). */
+  const getSpareUnitCost = (spareId) => {
+    if (!spareId) return 0;
+    const spare = Array.isArray(spares)
+      ? spares.find((s) => String(s._id) === String(spareId))
+      : null;
+    if (!spare) return 0;
+
+    const rowPurchaseTime = (raw) => {
+      if (raw == null || raw === "") return -Infinity;
+      if (typeof raw === "string") {
+        const t = parsePurchaseDate(raw);
+        return Number.isNaN(t) ? -Infinity : t;
+      }
+      const x = new Date(raw).getTime();
+      return Number.isNaN(x) ? -Infinity : x;
+    };
+
+    const latestPurchasePrice = (rows, dateKey, priceKey) => {
+      if (!Array.isArray(rows) || rows.length === 0) return 0;
+      let bestI = -1;
+      let bestT = -Infinity;
+      rows.forEach((row, i) => {
+        if (!row) return;
+        const t = rowPurchaseTime(row[dateKey]);
+        if (t > bestT || (t === bestT && i > bestI)) {
+          bestT = t;
+          bestI = i;
+        }
+      });
+      if (bestI >= 0 && bestT > -Infinity) {
+        return Number(rows[bestI][priceKey]) || 0;
+      }
+      const last = rows[rows.length - 1];
+      return Number(last?.[priceKey]) || 0;
+    };
+
+    if (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0) {
+      return latestPurchasePrice(
+        spare.colorQuantity,
+        "purchaseDate",
+        "purchasePrice"
+      );
+    }
+
+    if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
+      return latestPurchasePrice(
+        spare.stockEntries,
+        "purchaseDate",
+        "purchasePrice"
+      );
+    }
+
+    return 0;
+  };
+
+  const getBatteryUnitCost = (batteryId) => {
+    if (!batteryId) return 0;
+    const b = Array.isArray(batteries)
+      ? batteries.find((x) => String(x._id) === String(batteryId))
+      : null;
+    if (!b) return 0;
+    const entries = Array.isArray(b.stockEntries) ? b.stockEntries : [];
+    if (entries.length === 0) return 0;
+    const sorted = [...entries].sort(
+      (a, c) => new Date(c.purchaseDate || 0) - new Date(a.purchaseDate || 0)
+    );
+    const latest = sorted[0] || {};
+    const perSet =
+      latest.batteriesPerSet !== undefined && latest.batteriesPerSet !== null
+        ? Number(latest.batteriesPerSet)
+        : Number(b.batteriesPerSet) || 0;
+    const pricePerSet = Number(latest.purchasePrice) || 0;
+    return perSet > 0 ? pricePerSet / perSet : pricePerSet;
+  };
+
+  const getChargerUnitCost = (chargerId) => {
+    if (!chargerId) return 0;
+    const c = Array.isArray(chargers)
+      ? chargers.find((x) => String(x._id) === String(chargerId))
+      : null;
+    if (!c) return 0;
+    const entries = Array.isArray(c.stockEntries) ? c.stockEntries : [];
+    if (entries.length === 0) return 0;
+    const sorted = [...entries].sort(
+      (a, b) => new Date(b.purchaseDate || 0) - new Date(a.purchaseDate || 0)
+    );
+    return Number(sorted[0]?.purchasePrice) || 0;
+  };
+
+  const getModelUnitCost = (modelId) => {
+    if (!modelId) return 0;
+    const m = Array.isArray(models)
+      ? models.find((x) => String(x._id) === String(modelId))
+      : null;
+    if (!m) return 0;
+    const direct = Number(m.purchasePrice) || 0;
+    if (direct > 0) return direct;
+    if (Array.isArray(m.stockEntries) && m.stockEntries.length > 0) {
+      const totalQty = m.stockEntries.reduce(
+        (sum, e) => sum + (Number(e.quantity) || 0),
+        0
+      );
+      const totalVal = m.stockEntries.reduce((sum, e) => {
+        const qty = Number(e.quantity) || 0;
+        const price = Number(e.purchasePrice) || 0;
+        return sum + qty * price;
+      }, 0);
+      return totalQty > 0 ? totalVal / totalQty : 0;
+    }
+    return 0;
+  };
+
+  const billRevenue = (bill) => Number(bill?.netAmount) || 0;
+
+  const billEstimatedCost = (bill) => {
+    if (!bill) return 0;
+    let cost = 0;
+    cost += getModelUnitCost(bill.modelId);
+
+    if (bill.withBattery && bill.batteryId && bill.batteryId !== "custom") {
+      const type = String(bill.batteryTypeForBill || "").toLowerCase();
+      const v = String(bill.batteryVoltageForBill || "");
+      const units =
+        type === "lead"
+          ? v.includes("72")
+            ? 6
+            : v.includes("60")
+            ? 5
+            : v.includes("48")
+            ? 4
+            : 0
+          : 1;
+      cost += (Number(units) || 0) * getBatteryUnitCost(bill.batteryId);
+    }
+
+    if (bill.withCharger && bill.chargerId && bill.chargerId !== "custom") {
+      cost += getChargerUnitCost(bill.chargerId);
+    }
+
+    if (Array.isArray(bill.accessoryDetails) && bill.accessoryDetails.length > 0) {
+      bill.accessoryDetails.forEach((a) => {
+        const stored = Number(a?.unitPurchaseCost) || 0;
+        cost += stored > 0 ? stored : getSpareUnitCost(a?.id) * 1;
+      });
+    }
+
+    return cost;
+  };
+
+  // Jobcard profit rule (service only, for now):
+  // profit = paidAmount - sum(purchaseCost of service spares)
+  const buildJobcardServiceProfitDetail = (jc) => {
+    const paidAmount = Number(jc?.paidAmount) || 0;
+    const parts = Array.isArray(jc?.parts) ? jc.parts : [];
+    const serviceParts = parts.filter(
+      (p) => p && String(p.partType || "").toLowerCase() === "service"
+    );
+
+    const lines = serviceParts
+      .map((p) => {
+        const qty = Number(p.quantity) || 0;
+        const spareId = p.spareId?._id || p.spareId;
+        const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
+        let unitCost;
+        let lineCost;
+        if (storedFifo > 0) {
+          lineCost = storedFifo;
+          unitCost = qty > 0 ? storedFifo / qty : 0;
+        } else {
+          unitCost = getSpareUnitCost(spareId);
+          lineCost = qty * unitCost;
+        }
+        return {
+          name: p.spareName || "N/A",
+          quantity: qty,
+          unitCost,
+          lineCost,
+        };
+      })
+      .filter((l) => l.quantity > 0);
+
+    const totalCost = lines.reduce((sum, l) => sum + (l.lineCost || 0), 0);
+    const profit = paidAmount - totalCost;
+
+    return {
+      id: jc?._id,
+      jobcardNumber: jc?.jobcardNumber || "N/A",
+      date: jc?.date || "",
+      customerName: jc?.customerName || "N/A",
+      paidAmount,
+      lines,
+      totalCost,
+      profit,
+    };
+  };
+
+  const buildBillProfitDetail = (bill) => {
+    const revenue = billRevenue(bill);
+    const costBreakdown = [];
+
+    const modelCost = getModelUnitCost(bill?.modelId);
+    costBreakdown.push({
+      label: bill?.modelPurchased ? `Model: ${bill.modelPurchased}` : "Model",
+      cost: modelCost,
+    });
+
+    if (bill?.withBattery && bill?.batteryId && bill?.batteryId !== "custom") {
+      const type = String(bill?.batteryTypeForBill || "").toLowerCase();
+      const v = String(bill?.batteryVoltageForBill || "");
+      const units =
+        type === "lead"
+          ? v.includes("72")
+            ? 6
+            : v.includes("60")
+            ? 5
+            : v.includes("48")
+            ? 4
+            : 0
+          : 1;
+      const unitCost = getBatteryUnitCost(bill.batteryId);
+      costBreakdown.push({
+        label: `Battery (${bill?.batteryName || "N/A"})`,
+        cost: (Number(units) || 0) * unitCost,
+      });
+    }
+
+    if (bill?.withCharger && bill?.chargerId && bill?.chargerId !== "custom") {
+      costBreakdown.push({
+        label: `Charger (${bill?.chargerName || "N/A"})`,
+        cost: getChargerUnitCost(bill.chargerId),
+      });
+    }
+
+    if (Array.isArray(bill?.accessoryDetails) && bill.accessoryDetails.length > 0) {
+      bill.accessoryDetails.forEach((a) => {
+        const stored = Number(a?.unitPurchaseCost) || 0;
+        const lineCost = stored > 0 ? stored : getSpareUnitCost(a?.id) * 1;
+        costBreakdown.push({
+          label: `Accessory: ${a?.name || "N/A"}`,
+          cost: lineCost,
+        });
+      });
+    }
+
+    const totalCost = costBreakdown.reduce((sum, x) => sum + (Number(x.cost) || 0), 0);
+    const profit = revenue - totalCost;
+
+    return {
+      id: bill?._id,
+      billNo: bill?.billNo || "N/A",
+      billDate: bill?.billDate || "",
+      customerName: bill?.customerName || "N/A",
+      revenue,
+      costBreakdown,
+      totalCost,
+      profit,
+    };
+  };
+
+  const financeTotals = useMemo(() => {
+    const billsForDay = (Array.isArray(bills) ? bills : []).filter((b) =>
+      isSameDay(b?.billDate, effectiveYmd)
+    );
+    const billsForMonth = (Array.isArray(bills) ? bills : []).filter((b) =>
+      isSameMonth(b?.billDate, effectiveMonth)
+    );
+    const jobcardsForDay = (Array.isArray(jobcards) ? jobcards : []).filter((j) =>
+      isSameDay(j?.date, effectiveYmd)
+    );
+    const jobcardsForMonth = (Array.isArray(jobcards) ? jobcards : []).filter((j) =>
+      isSameMonth(j?.date, effectiveMonth)
+    );
+
+    const billDetailsDay = billsForDay.map(buildBillProfitDetail);
+    const billDetailsMonth = billsForMonth.map(buildBillProfitDetail);
+    const jobcardDetailsDay = jobcardsForDay.map(buildJobcardServiceProfitDetail);
+    const jobcardDetailsMonth = jobcardsForMonth.map(buildJobcardServiceProfitDetail);
+
+    const sumProfit = (list) => list.reduce((sum, x) => sum + (Number(x.profit) || 0), 0);
+    const sumRevenue = (list) => list.reduce((sum, x) => sum + (Number(x.revenue) || 0), 0);
+    const sumPaid = (list) => list.reduce((sum, x) => sum + (Number(x.paidAmount) || 0), 0);
+
+    return {
+      bill: {
+        day: {
+          revenue: sumRevenue(billDetailsDay),
+          profit: sumProfit(billDetailsDay),
+          details: billDetailsDay,
+        },
+        month: {
+          revenue: sumRevenue(billDetailsMonth),
+          profit: sumProfit(billDetailsMonth),
+          details: billDetailsMonth,
+        },
+      },
+      jobcard: {
+        day: {
+          paid: sumPaid(jobcardDetailsDay),
+          profit: sumProfit(jobcardDetailsDay),
+          details: jobcardDetailsDay,
+        },
+        month: {
+          paid: sumPaid(jobcardDetailsMonth),
+          profit: sumProfit(jobcardDetailsMonth),
+          details: jobcardDetailsMonth,
+        },
+      },
+    };
+  }, [
+    bills,
+    jobcards,
+    spares,
+    models,
+    batteries,
+    chargers,
+    financeRangeMode,
+    financeSelectedDate,
+    financeSelectedMonth,
+  ]);
+
+  // Total inventory value across all batteries:
+  // For each stock entry: (purchasePricePerSet / batteriesPerSet) * entry.quantity
+  const totalBatteriesValue = useMemo(() => {
+    if (!Array.isArray(batteries) || batteries.length === 0) return 0;
+
+    const getPerSetForEntry = (battery, entry) => {
+      const entryPerSet =
+        entry?.batteriesPerSet !== undefined && entry?.batteriesPerSet !== null
+          ? Number(entry.batteriesPerSet)
+          : Number(battery?.batteriesPerSet);
+      return Number.isFinite(entryPerSet) ? entryPerSet : 0;
+    };
+
+    return batteries.reduce((sum, battery) => {
+      if (!battery) return sum;
+      const entries = Array.isArray(battery.stockEntries)
+        ? battery.stockEntries
+        : [];
+      if (entries.length === 0) return sum;
+
+      const valueFromEntries = entries.reduce((subSum, entry) => {
+        const qty = Number(entry?.quantity) || 0; // total batteries (pieces) in this entry
+        const pricePerSet = Number(entry?.purchasePrice) || 0; // purchase price per set
+        const perSet = getPerSetForEntry(battery, entry);
+        const perBatteryPrice = perSet > 0 ? pricePerSet / perSet : pricePerSet;
+        return subSum + qty * perBatteryPrice;
+      }, 0);
+
+      return sum + valueFromEntries;
+    }, 0);
+  }, [batteries]);
 
   const sidebarItems = [
     { id: "spares", name: "Spares", icon: FaTools, color: "#007bff" },
@@ -1103,22 +1698,38 @@ export default function Admin() {
             <h2>Batteries Management</h2>
             <div className="admin-cards">
               <div className="admin-card">
-                <h3>Total Batteries</h3>
-                <p className="card-number">0</p>
-                <small>All battery types</small>
+                <h3>Battery Varieties</h3>
+                <p className="card-number">
+                  {batteriesLoading ? "…" : totalBatteryVarieties}
+                </p>
+                <small>Unique battery types</small>
               </div>
               <div className="admin-card">
-                <h3>In Stock</h3>
-                <p className="card-number">0</p>
-                <small>Available batteries</small>
+                <h3>Total Sets Available</h3>
+                <p className="card-number">
+                  {batteriesLoading ? "…" : totalBatterySetsAvailable}
+                </p>
+                <small>Total sets in stock</small>
               </div>
               <div className="admin-card">
-                <h3>Under Warranty</h3>
-                <p className="card-number">0</p>
-                <small>Warranty active</small>
+                <h3>Total Value</h3>
+                <p className="card-number">
+                  ₹
+                  {batteriesLoading
+                    ? "…"
+                    : totalBatteriesValue.toLocaleString("en-IN")}
+                </p>
+                <small title="Calculated from battery stock entries using per-battery cost derived from each entry’s purchase price and batteries-per-set.">
+                  Inventory value (stock entries)
+                </small>
               </div>
             </div>
-            <div className="admin-actions">
+            {batteriesError && (
+              <div style={{ color: "#dc2626", margin: "0.75rem 0" }}>
+                {batteriesError}
+              </div>
+            )}
+            <div className="admin-actions" style={{ marginBottom: "1.5rem" }}>
               <button
                 className="btn btn-primary"
                 onClick={() => handleNavigateOutsideAdmin("/batteries")}
@@ -1133,11 +1744,189 @@ export default function Admin() {
               </button>
               <button
                 className="btn btn-info"
-                onClick={() => handleNavigateOutsideAdmin("/batteries")}
+                onClick={() => setShowBatteryLowStockModal(true)}
+                disabled={batteriesLoading}
               >
-                Warranty Report
+                Low Stock Report{" "}
+                {!batteriesLoading && batteryLowStockCount > 0
+                  ? `(${batteryLowStockCount})`
+                  : ""}
               </button>
             </div>
+
+            {/* Battery Low Stock Report Modal */}
+            {showBatteryLowStockModal && (
+              <div
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  backgroundColor: "rgba(15, 23, 42, 0.5)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  zIndex: 50,
+                }}
+                onClick={() => setShowBatteryLowStockModal(false)}
+              >
+                <div
+                  style={{
+                    backgroundColor: "white",
+                    borderRadius: "0.75rem",
+                    maxWidth: "1000px",
+                    width: "95%",
+                    maxHeight: "80vh",
+                    display: "flex",
+                    flexDirection: "column",
+                    boxShadow:
+                      "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div
+                    style={{
+                      padding: "1rem 1.5rem",
+                      borderBottom: "1px solid #e5e7eb",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div>
+                      <h3
+                        style={{
+                          margin: 0,
+                          fontSize: "1.125rem",
+                          fontWeight: 600,
+                          color: "#111827",
+                        }}
+                      >
+                        Low Stock Report
+                      </h3>
+                      <p
+                        style={{
+                          margin: "0.25rem 0 0 0",
+                          fontSize: "0.875rem",
+                          color: "#6b7280",
+                        }}
+                      >
+                        Showing batteries where sets are below minimum stock level.
+                      </p>
+                    </div>
+                    <button
+                      className="btn"
+                      style={{
+                        backgroundColor: "#ef4444",
+                        color: "white",
+                        padding: "0.25rem 0.75rem",
+                        fontSize: "0.875rem",
+                      }}
+                      onClick={() => setShowBatteryLowStockModal(false)}
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <div style={{ padding: "1rem 1.5rem", overflow: "auto" }}>
+                    {batteryLowStockItems.length === 0 ? (
+                      <div
+                        style={{
+                          padding: "2rem",
+                          textAlign: "center",
+                          color: "#6b7280",
+                          fontSize: "0.95rem",
+                        }}
+                      >
+                        No batteries are currently below their minimum stock level.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: "auto" }}>
+                        <table
+                          style={{
+                            width: "100%",
+                            borderCollapse: "collapse",
+                            fontSize: "0.85rem",
+                          }}
+                        >
+                          <thead>
+                            <tr
+                              style={{
+                                backgroundColor: "#f9fafb",
+                                borderBottom: "1px solid #e5e7eb",
+                              }}
+                            >
+                              {[
+                                "Battery Name",
+                                "Type",
+                                "Ampere",
+                                "Supplier",
+                                "Current Sets",
+                                "Min Sets",
+                                "Last Purchase Date",
+                              ].map((header) => (
+                                <th
+                                  key={header}
+                                  style={{
+                                    padding: "0.75rem 0.75rem",
+                                    textAlign: "left",
+                                    fontWeight: 600,
+                                    color: "#374151",
+                                    fontSize: "0.75rem",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.05em",
+                                    borderRight: "1px solid #e5e7eb",
+                                  }}
+                                >
+                                  {header}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {batteryLowStockItems.map((item) => (
+                              <tr
+                                key={item.id}
+                                style={{
+                                  borderBottom: "1px solid #f3f4f6",
+                                  backgroundColor: "white",
+                                }}
+                              >
+                                <td style={{ padding: "0.75rem", fontWeight: 600 }}>
+                                  {item.name}
+                                </td>
+                                <td style={{ padding: "0.75rem" }}>
+                                  {item.batteryType}
+                                </td>
+                                <td style={{ padding: "0.75rem" }}>
+                                  {item.ampereValue}
+                                </td>
+                                <td style={{ padding: "0.75rem" }}>
+                                  {item.supplierName}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "0.75rem",
+                                    color: "#b91c1c",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {item.currentSets}
+                                </td>
+                                <td style={{ padding: "0.75rem", fontWeight: 600 }}>
+                                  {item.minSets}
+                                </td>
+                                <td style={{ padding: "0.75rem" }}>
+                                  {item.lastPurchaseDate}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       case "models": {
@@ -2165,49 +2954,612 @@ export default function Admin() {
           </div>
         );
       }
-      case "finance":
+      case "finance": {
+        const billBucket =
+          financeRangeMode === "day"
+            ? financeTotals.bill.day
+            : financeTotals.bill.month;
+        const jobcardBucket =
+          financeRangeMode === "day"
+            ? financeTotals.jobcard.day
+            : financeTotals.jobcard.month;
+        const financePeriodLabel =
+          financeRangeMode === "day"
+            ? new Date(`${financeSelectedDate}T12:00:00`).toLocaleDateString(
+                "en-IN",
+                {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                }
+              )
+            : new Date(`${financeSelectedMonth}-01T12:00:00`).toLocaleDateString(
+                "en-IN",
+                { month: "long", year: "numeric" }
+              );
+        const financeInputStyle = {
+          padding: "0.5rem 0.75rem",
+          borderRadius: "4px",
+          border: "1px solid #ced4da",
+          fontSize: "0.9rem",
+          minWidth: "160px",
+          fontFamily: "inherit",
+        };
+
         return (
           <div className="admin-content">
             <h2>Finance Management</h2>
-            <div className="admin-cards">
-              <div className="admin-card">
-                <h3>Total Loans</h3>
-                <p className="card-number">0</p>
-                <small>Active loans</small>
-              </div>
-              <div className="admin-card">
-                <h3>Monthly Revenue</h3>
-                <p className="card-number">₹0</p>
-                <small>This month</small>
-              </div>
-              <div className="admin-card">
-                <h3>Pending Payments</h3>
-                <p className="card-number">0</p>
-                <small>Overdue payments</small>
-              </div>
-            </div>
-            <div className="admin-actions">
-              <button
-                className="btn btn-primary"
-                onClick={() => navigate("/finance")}
+
+            {financeSubView !== null && (
+              <div
+                className="admin-actions"
+                style={{
+                  marginBottom: "1rem",
+                  width: "100%",
+                  justifyContent: "flex-end",
+                }}
               >
-                New Loan
-              </button>
-              <button
-                className="btn btn-secondary"
-                onClick={() => navigate("/finance")}
+                <button
+                  type="button"
+                  className="btn btn-success"
+                  onClick={() => setFinanceSubView(null)}
+                >
+                  ← Back to finance
+                </button>
+              </div>
+            )}
+
+            {financeSubView !== null && (
+              <div
+                className="admin-actions"
+                style={{
+                  marginBottom: "1.5rem",
+                  alignItems: "center",
+                }}
               >
-                View All Loans
-              </button>
-              <button
-                className="btn btn-info"
-                onClick={() => navigate("/finance")}
+                <span style={{ color: "#666", fontSize: "0.9rem" }}>Period</span>
+                <button
+                  type="button"
+                  className={
+                    financeRangeMode === "day" ? "btn btn-primary" : "btn btn-secondary"
+                  }
+                  onClick={() => setFinanceRangeMode("day")}
+                >
+                  Date
+                </button>
+                <button
+                  type="button"
+                  className={
+                    financeRangeMode === "month" ? "btn btn-primary" : "btn btn-secondary"
+                  }
+                  onClick={() => setFinanceRangeMode("month")}
+                >
+                  Month
+                </button>
+                {financeRangeMode === "day" ? (
+                  <input
+                    type="date"
+                    value={financeSelectedDate}
+                    onChange={(e) => setFinanceSelectedDate(e.target.value)}
+                    aria-label="Select date"
+                    style={financeInputStyle}
+                  />
+                ) : (
+                  <input
+                    type="month"
+                    value={financeSelectedMonth}
+                    onChange={(e) => setFinanceSelectedMonth(e.target.value)}
+                    aria-label="Select month"
+                    style={financeInputStyle}
+                  />
+                )}
+              </div>
+            )}
+
+            {financeSubView === null && (
+              <div className="admin-finance-landing">
+                <div className="admin-finance-tile-grid">
+                  <button
+                    type="button"
+                    className="admin-finance-tile"
+                    onClick={() => setFinanceSubView("jobcards")}
+                  >
+                    Jobcard
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-finance-tile"
+                    onClick={() => setFinanceSubView("bills")}
+                  >
+                    Bills
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Bills Profit (full section) */}
+              {financeSubView === "bills" && (
+                <div
+                  className="admin-card"
+                  style={{
+                    padding: 0,
+                    overflow: "hidden",
+                    marginBottom: 0,
+                  }}
+                >
+                <div
+                  style={{
+                    padding: "1rem 1.5rem",
+                    borderBottom: "1px solid #e9ecef",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: "1rem",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, color: "#333", fontSize: "1.05rem" }}>
+                      Bills — profit breakdown
+                    </div>
+                    <div style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.25rem" }}>
+                      {financePeriodLabel} · net revenue minus model, battery, charger, and
+                      accessories cost
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "0.8rem", color: "#666" }}>Profit</div>
+                    <div
+                      className="card-number"
+                      style={{
+                        margin: 0,
+                        fontSize: "1.65rem",
+                        color:
+                          (billBucket.profit || 0) >= 0 ? "#198754" : "#dc3545",
+                      }}
+                    >
+                      ₹
+                      {billsLoading
+                        ? "…"
+                        : (billBucket.profit || 0).toLocaleString("en-IN")}
+                    </div>
+                    <div style={{ fontSize: "0.8rem", color: "#999", marginTop: "0.15rem" }}>
+                      Net revenue ₹
+                      {billsLoading
+                        ? "…"
+                        : (billBucket.revenue || 0).toLocaleString("en-IN")}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ padding: "1rem 1.5rem" }}>
+                  {billsLoading ? (
+                    <div style={{ color: "#6b7280" }}>Loading bills…</div>
+                  ) : billBucket.details.length === 0 ? (
+                    <div style={{ color: "#6b7280" }}>
+                      No bills in this{" "}
+                      {financeRangeMode === "day" ? "day" : "month"}.
+                    </div>
+                  ) : (
+                    <div style={{ display: "grid", gap: "0.75rem" }}>
+                      {billBucket.details.slice(0, 25).map((b) => (
+                        <details
+                          key={b.id}
+                          style={{
+                            border: "1px solid #e5e7eb",
+                            borderRadius: "0.5rem",
+                            padding: "0.75rem 0.9rem",
+                            background: "#fafafa",
+                          }}
+                        >
+                          <summary
+                            style={{
+                              cursor: "pointer",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              gap: "1rem",
+                              listStyle: "none",
+                            }}
+                          >
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 700, color: "#111827" }}>
+                                Bill {b.billNo} • {b.billDate}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: "0.85rem",
+                                  color: "#6b7280",
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}
+                              >
+                                {b.customerName}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+                                Profit
+                              </div>
+                              <div
+                                style={{
+                                  fontWeight: 800,
+                                  color: b.profit >= 0 ? "#16a34a" : "#dc2626",
+                                }}
+                              >
+                                ₹{(b.profit || 0).toLocaleString("en-IN")}
+                              </div>
+                            </div>
+                          </summary>
+
+                          <div style={{ marginTop: "0.75rem" }}>
+                            <div
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 140px",
+                                gap: "0.5rem 1rem",
+                                fontSize: "0.9rem",
+                              }}
+                            >
+                              <div style={{ color: "#374151", fontWeight: 700 }}>
+                                Revenue (Net Amount)
+                              </div>
+                              <div style={{ textAlign: "right", fontWeight: 700 }}>
+                                ₹{(b.revenue || 0).toLocaleString("en-IN")}
+                              </div>
+
+                              <div
+                                style={{
+                                  gridColumn: "1 / -1",
+                                  height: "1px",
+                                  background: "#e5e7eb",
+                                  margin: "0.25rem 0",
+                                }}
+                              />
+
+                              {b.costBreakdown.map((c, idx) => (
+                                <div
+                                  key={`${b.id}-c-${idx}`}
+                                  style={{
+                                    display: "contents",
+                                  }}
+                                >
+                                  <div style={{ color: "#374151" }}>{c.label}</div>
+                                  <div style={{ textAlign: "right", color: "#111827" }}>
+                                    ₹{(Number(c.cost) || 0).toLocaleString("en-IN")}
+                                  </div>
+                                </div>
+                              ))}
+
+                              <div
+                                style={{
+                                  gridColumn: "1 / -1",
+                                  height: "1px",
+                                  background: "#e5e7eb",
+                                  margin: "0.25rem 0",
+                                }}
+                              />
+
+                              <div style={{ fontWeight: 800, color: "#111827" }}>
+                                Total Cost
+                              </div>
+                              <div style={{ textAlign: "right", fontWeight: 800 }}>
+                                ₹{(b.totalCost || 0).toLocaleString("en-IN")}
+                              </div>
+
+                              <div style={{ fontWeight: 900, color: "#111827" }}>
+                                Profit
+                              </div>
+                              <div
+                                style={{
+                                  textAlign: "right",
+                                  fontWeight: 900,
+                                  color: b.profit >= 0 ? "#16a34a" : "#dc2626",
+                                }}
+                              >
+                                ₹{(b.profit || 0).toLocaleString("en-IN")}
+                              </div>
+                            </div>
+                          </div>
+                        </details>
+                      ))}
+                      {billBucket.details.length > 25 && (
+                        <div style={{ color: "#6b7280", fontSize: "0.85rem" }}>
+                          Showing 25 of {billBucket.details.length} bills.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              )}
+
+              {/* Jobcards Profit (full section) */}
+              {financeSubView === "jobcards" && (
+                <div
+                  className="admin-card"
+                  style={{
+                    padding: 0,
+                    overflow: "hidden",
+                    marginBottom: 0,
+                  }}
+                >
+                <div
+                  style={{
+                    padding: "1rem 1.5rem",
+                    borderBottom: "1px solid #e9ecef",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: "1rem",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, color: "#333", fontSize: "1.05rem" }}>
+                      Jobcards — service profit
+                    </div>
+                    <div style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.25rem" }}>
+                      {financePeriodLabel} · finalized jobcards, service lines only: paid amount
+                      minus spare purchase cost
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "0.8rem", color: "#666" }}>Profit</div>
+                    <div
+                      className="card-number"
+                      style={{
+                        margin: 0,
+                        fontSize: "1.65rem",
+                        color:
+                          (jobcardBucket.profit || 0) >= 0 ? "#198754" : "#dc3545",
+                      }}
+                    >
+                      ₹
+                      {jobcardsLoading
+                        ? "…"
+                        : (jobcardBucket.profit || 0).toLocaleString("en-IN")}
+                    </div>
+                    <div style={{ fontSize: "0.8rem", color: "#999", marginTop: "0.15rem" }}>
+                      Total paid (jobcards) ₹
+                      {jobcardsLoading
+                        ? "…"
+                        : (jobcardBucket.paid || 0).toLocaleString("en-IN")}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ padding: "1rem 1.5rem" }}>
+                  {jobcardsLoading ? (
+                    <div style={{ color: "#6b7280" }}>Loading jobcards…</div>
+                  ) : jobcardBucket.details.length === 0 ? (
+                    <div style={{ color: "#6b7280" }}>
+                      No finalized jobcards in this{" "}
+                      {financeRangeMode === "day" ? "day" : "month"}.
+                    </div>
+                  ) : (
+                    <div style={{ display: "grid", gap: "0.75rem" }}>
+                      {jobcardBucket.details
+                        .slice(0, 25)
+                        .map((j) => (
+                          <details
+                            key={j.id}
+                            style={{
+                              border: "1px solid #e5e7eb",
+                              borderRadius: "0.5rem",
+                              padding: "0.75rem 0.9rem",
+                              background: "#fafafa",
+                            }}
+                          >
+                            <summary
+                              style={{
+                                cursor: "pointer",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                gap: "1rem",
+                                listStyle: "none",
+                              }}
+                            >
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 700, color: "#111827" }}>
+                                  {j.jobcardNumber} • {j.date}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#6b7280",
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                  }}
+                                >
+                                  {j.customerName}
+                                </div>
+                              </div>
+                              <div style={{ textAlign: "right" }}>
+                                <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+                                  Profit
+                                </div>
+                                <div
+                                  style={{
+                                    fontWeight: 800,
+                                    color: j.profit >= 0 ? "#16a34a" : "#dc2626",
+                                  }}
+                                >
+                                  ₹{(j.profit || 0).toLocaleString("en-IN")}
+                                </div>
+                              </div>
+                            </summary>
+
+                            <div style={{ marginTop: "0.75rem" }}>
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "1fr 80px 120px 120px",
+                                  gap: "0.35rem 0.75rem",
+                                  fontSize: "0.9rem",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    fontWeight: 800,
+                                    color: "#374151",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.05em",
+                                  }}
+                                >
+                                  Item
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    fontWeight: 800,
+                                    color: "#374151",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.05em",
+                                    textAlign: "right",
+                                  }}
+                                >
+                                  Qty
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    fontWeight: 800,
+                                    color: "#374151",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.05em",
+                                    textAlign: "right",
+                                  }}
+                                >
+                                  Unit Cost
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    fontWeight: 800,
+                                    color: "#374151",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.05em",
+                                    textAlign: "right",
+                                  }}
+                                >
+                                  Cost
+                                </div>
+
+                                {j.lines.length === 0 ? (
+                                  <div style={{ gridColumn: "1 / -1", color: "#6b7280" }}>
+                                    No service spares in this jobcard.
+                                  </div>
+                                ) : (
+                                  j.lines.map((l, idx) => (
+                                    <div
+                                      key={`${j.id}-l-${idx}`}
+                                      style={{ display: "contents" }}
+                                    >
+                                      <div style={{ color: "#111827" }}>{l.name}</div>
+                                      <div style={{ textAlign: "right" }}>{l.quantity}</div>
+                                      <div style={{ textAlign: "right" }}>
+                                        ₹{(l.unitCost || 0).toFixed(2)}
+                                      </div>
+                                      <div style={{ textAlign: "right" }}>
+                                        ₹{(l.lineCost || 0).toFixed(2)}
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+
+                                <div
+                                  style={{
+                                    gridColumn: "1 / -1",
+                                    height: "1px",
+                                    background: "#e5e7eb",
+                                    margin: "0.35rem 0",
+                                  }}
+                                />
+
+                                <div style={{ fontWeight: 800, color: "#111827" }}>
+                                  Paid Amount
+                                </div>
+                                <div />
+                                <div />
+                                <div style={{ textAlign: "right", fontWeight: 800 }}>
+                                  ₹{(j.paidAmount || 0).toLocaleString("en-IN")}
+                                </div>
+
+                                <div style={{ fontWeight: 800, color: "#111827" }}>
+                                  Service Cost
+                                </div>
+                                <div />
+                                <div />
+                                <div style={{ textAlign: "right", fontWeight: 800 }}>
+                                  ₹{(j.totalCost || 0).toLocaleString("en-IN")}
+                                </div>
+
+                                <div style={{ fontWeight: 900, color: "#111827" }}>
+                                  Profit
+                                </div>
+                                <div />
+                                <div />
+                                <div
+                                  style={{
+                                    textAlign: "right",
+                                    fontWeight: 900,
+                                    color: j.profit >= 0 ? "#16a34a" : "#dc2626",
+                                  }}
+                                >
+                                  ₹{(j.profit || 0).toLocaleString("en-IN")}
+                                </div>
+                              </div>
+                            </div>
+                          </details>
+                        ))}
+                      {jobcardBucket.details.length > 25 && (
+                        <div style={{ color: "#6b7280", fontSize: "0.85rem" }}>
+                          Showing 25 of {jobcardBucket.details.length} jobcards.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              )}
+            {(billsError ||
+              jobcardsError ||
+              chargersError ||
+              sparesError ||
+              modelsError ||
+              batteriesError) && (
+              <div
+                style={{
+                  padding: "0.75rem 1rem",
+                  marginBottom: "1rem",
+                  borderRadius: "0.375rem",
+                  backgroundColor: "#fef2f2",
+                  color: "#b91c1c",
+                  fontSize: "0.875rem",
+                }}
               >
-                Finance Report
-              </button>
-            </div>
+                {[
+                  billsError,
+                  jobcardsError,
+                  chargersError,
+                  sparesError,
+                  modelsError,
+                  batteriesError,
+                ]
+                  .filter(Boolean)
+                  .join(" • ")}
+              </div>
+            )}
           </div>
         );
+      }
       default:
         return (
           <div className="admin-content">Select a section from the sidebar</div>
@@ -2455,6 +3807,15 @@ export default function Admin() {
 
         .btn-info:hover {
           background: #138496;
+        }
+
+        .btn-success {
+          background: #28a745;
+          color: white;
+        }
+
+        .btn-success:hover {
+          background: #218838;
         }
 
         .btn-logout {

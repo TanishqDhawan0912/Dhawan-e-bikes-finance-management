@@ -42,6 +42,12 @@ const spareSchema = new mongoose.Schema(
           min: 0,
           default: 0,
         },
+        /** Pieces bought in this color row (does not decrease when stock is sold; FIFO uses quantity) */
+        originalQuantity: {
+          type: Number,
+          required: false,
+          min: 0,
+        },
         minStockLevel: {
           type: Number,
           required: true,
@@ -76,6 +82,12 @@ const spareSchema = new mongoose.Schema(
         quantity: {
           type: Number,
           required: true,
+          min: 0,
+        },
+        /** Pieces bought in this batch (static); quantity is current remaining */
+        originalQuantity: {
+          type: Number,
+          required: false,
           min: 0,
         },
         purchasePrice: {

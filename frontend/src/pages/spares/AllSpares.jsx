@@ -9,6 +9,27 @@ import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { getTextColorForBackground } from "../../utils/themeUtils";
 
+/** Same piece count as Add More Stock "Total Stock": layers first, then legacy quantity. */
+function getSpareTotalStockPieces(spare) {
+  if (!spare) return 0;
+  if (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0) {
+    return spare.colorQuantity.reduce(
+      (sum, cq) => sum + parseInt(cq.quantity || 0, 10),
+      0
+    );
+  }
+  if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
+    return spare.stockEntries.reduce(
+      (sum, entry) => sum + parseInt(entry.quantity || 0, 10),
+      0
+    );
+  }
+  const q = spare.quantity;
+  if (typeof q === "number" && !Number.isNaN(q)) return q;
+  const parsed = parseInt(q, 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 // Suggestions Portal Component
 function SuggestionsPortal({
   suggestions,
@@ -1271,19 +1292,7 @@ function AllSpares() {
                       fontWeight: "600",
                     }}
                   >
-                    {spare.colorQuantity && spare.colorQuantity.length > 0
-                      ? spare.colorQuantity.reduce(
-                          (total, cq) => total + (cq.quantity || 0),
-                          0
-                        )
-                      : typeof spare.quantity === "number"
-                      ? spare.quantity
-                      : spare.stockEntries && spare.stockEntries.length > 0
-                      ? spare.stockEntries.reduce(
-                          (total, entry) => total + (entry.quantity || 0),
-                          0
-                        )
-                      : 0}
+                    {getSpareTotalStockPieces(spare)}
                   </td>
                   <td
                     style={{

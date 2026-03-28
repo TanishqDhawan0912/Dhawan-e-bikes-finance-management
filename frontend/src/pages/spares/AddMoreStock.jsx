@@ -62,6 +62,20 @@ const style = {
   position: "relative",
 };
 
+/** Purchased amount for a stock layer (fixed after first save); falls back to current qty if unset */
+function spareLayerPurchasedQty(row) {
+  if (!row) return 0;
+  const o = row.originalQuantity;
+  if (o !== undefined && o !== null && !Number.isNaN(Number(o))) {
+    return Math.max(0, parseInt(o, 10));
+  }
+  return Math.max(0, parseInt(row.quantity || 0, 10));
+}
+
+function spareLayerLeftQty(row) {
+  return Math.max(0, parseInt(row?.quantity || 0, 10));
+}
+
 function AddMoreStock() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -754,11 +768,26 @@ function AddMoreStock() {
         ? editEntryColors.reduce((total, cq) => total + cq.quantity, 0)
         : parseInt(editingEntry?.quantity || 0);
 
+      const existingStockRow = currentStockEntries[editingEntryIndex];
+      const newQtyNonColor = parseInt(editingEntry?.quantity || 0, 10);
+      const preservedEntryOriginal =
+        existingStockRow &&
+        existingStockRow.originalQuantity != null &&
+        !Number.isNaN(Number(existingStockRow.originalQuantity))
+          ? Number(existingStockRow.originalQuantity)
+          : existingStockRow
+          ? spareLayerPurchasedQty(existingStockRow)
+          : newQtyNonColor;
+
       // Update the entry with total quantity and purchase price
       const updatedEntry = {
         ...editingEntry,
         quantity: totalQuantity,
         purchasePrice: editingEntry?.purchasePrice || 0,
+        ...(!isColorTrackingEnabled && {
+          quantity: newQtyNonColor,
+          originalQuantity: preservedEntryOriginal,
+        }),
         color:
           editEntryColors.length > 0
             ? editEntryColors[0].color
@@ -858,6 +887,15 @@ function AddMoreStock() {
         // Get the purchase date for this entry
         const entryPurchaseDate = displayDate(editingEntry?.purchaseDate || "");
 
+        const colorOrigKeyFn = (cq) =>
+          `${String(cq.color || "").toLowerCase().trim()}|${displayDate(
+            cq.purchaseDate || ""
+          )}`;
+        const origPurchaseByKey = new Map();
+        currentColorQuantity.forEach((cq) => {
+          origPurchaseByKey.set(colorOrigKeyFn(cq), spareLayerPurchasedQty(cq));
+        });
+
         // Subtract previous entry color quantities from global colorQuantity
         // Match by both color name AND purchase date to avoid affecting other dates
         prevColors.forEach((prev) => {
@@ -899,6 +937,7 @@ function AddMoreStock() {
             updatedColorQuantity.push({
               color: newCq.color,
               quantity: newCq.quantity,
+              originalQuantity: parseInt(newCq.quantity, 10),
               minStockLevel: newCq.minStockLevel || 0,
               purchasePrice: newCq.purchasePrice || 0,
               purchaseDate: editingEntry?.purchaseDate || "",
@@ -909,6 +948,21 @@ function AddMoreStock() {
         // Normalize min stock levels so the latest value for each color
         // becomes the default across all entries
         updatedColorQuantity = normalizeColorMinStockLevels(updatedColorQuantity);
+
+        updatedColorQuantity.forEach((cq) => {
+          if (displayDate(cq.purchaseDate || "") !== entryPurchaseDate) return;
+          const k = colorOrigKeyFn(cq);
+          if (
+            cq.originalQuantity === undefined ||
+            cq.originalQuantity === null
+          ) {
+            const preserved = origPurchaseByKey.get(k);
+            cq.originalQuantity =
+              preserved != null
+                ? preserved
+                : Math.max(0, parseInt(cq.quantity || 0, 10));
+          }
+        });
       }
 
       // Check if quantity is zero and handle removal
@@ -1827,9 +1881,11 @@ function AddMoreStock() {
           isQuantityZero(currentStockEntries[0].quantity)
         ) {
           // Replace the zero quantity entry with the new entry
+          const q0 = parseInt(newStockEntry.quantity, 10);
           updatedStockEntries = [
             {
-              quantity: parseInt(newStockEntry.quantity),
+              quantity: q0,
+              originalQuantity: q0,
               purchasePrice: parseFloat(newStockEntry.purchasePrice),
               purchaseDate: newStockEntry.purchaseDate,
             },
@@ -1856,10 +1912,12 @@ function AddMoreStock() {
           }
 
           // Add the new entry when no duplicate date
+          const q1 = parseInt(newStockEntry.quantity, 10);
           updatedStockEntries = [
             ...filteredEntries,
             {
-              quantity: parseInt(newStockEntry.quantity),
+              quantity: q1,
+              originalQuantity: q1,
               purchasePrice: hasPurchasePrice
                 ? parseFloat(newStockEntry.purchasePrice)
                 : 0,
@@ -1875,18 +1933,24 @@ function AddMoreStock() {
         // Create a color entry for each color-quantity pair
         const newColorEntries = newStockEntry.colorQuantities
           .filter((cq) => cq.color && cq.quantity && parseInt(cq.quantity) > 0)
-          .map((cq) => ({
-            color:
-              cq.color === "other"
-                ? (cq.customColor ? cq.customColor.trim() : "")
-                : cq.color.trim(),
-            quantity: parseInt(cq.quantity),
-            minStockLevel: cq.minStockLevel ? parseInt(cq.minStockLevel) : 0,
-            purchasePrice: hasPurchasePrice
-              ? parseFloat(newStockEntry.purchasePrice)
-              : 0,
+          .map((cq) => {
+            const qCol = parseInt(cq.quantity, 10);
+            return {
+              color:
+                cq.color === "other"
+                  ? cq.customColor
+                    ? cq.customColor.trim()
+                    : ""
+                  : cq.color.trim(),
+              quantity: qCol,
+              originalQuantity: qCol,
+              minStockLevel: cq.minStockLevel ? parseInt(cq.minStockLevel) : 0,
+              purchasePrice: hasPurchasePrice
+                ? parseFloat(newStockEntry.purchasePrice)
+                : 0,
               purchaseDate: newStockEntry.purchaseDate,
-          }));
+            };
+          });
 
         updatedColorQuantity = [...currentColorQuantity, ...newColorEntries];
 
@@ -3417,6 +3481,26 @@ function AddMoreStock() {
                 }}
               >
                 <div>
+                  {!isColorTrackingEnabled &&
+                    spare?.[stockField]?.[editingEntryIndex] && (
+                      <div
+                        style={{
+                          fontSize: "0.8rem",
+                          color: "#64748b",
+                          marginBottom: "0.5rem",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        Purchased (this entry):{" "}
+                        <strong>
+                          {spareLayerPurchasedQty(
+                            spare[stockField][editingEntryIndex]
+                          )}
+                        </strong>{" "}
+                        pcs — fixed record of what was bought; does not change
+                        when items are sold.
+                      </div>
+                    )}
                   <label
                     style={{
                       display: "block",
@@ -3426,7 +3510,9 @@ function AddMoreStock() {
                       color: "#374151",
                     }}
                   >
-                    Total Quantity
+                    {isColorTrackingEnabled
+                      ? "Total quantity (from colors)"
+                      : "Quantity left (this entry)"}
                   </label>
                   <input
                     type="number"
@@ -4813,11 +4899,13 @@ function AddMoreStock() {
                                   </span>
                                   <span
                                     style={{
-                                      fontSize: "0.75rem",
-                                      opacity: 0.8,
+                                      fontSize: "0.7rem",
+                                      opacity: 0.85,
+                                      textAlign: "left",
                                     }}
                                   >
-                                    ({colorQty.quantity})
+                                    ({spareLayerPurchasedQty(colorQty)} bought,{" "}
+                                    {spareLayerLeftQty(colorQty)} left)
                                   </span>
                                   </div>
                                   {selected &&
@@ -5213,17 +5301,39 @@ function AddMoreStock() {
                                   gap: "0.5rem",
                                 }}
                               >
-                                <div>
+                                <div style={{ gridColumn: "1 / -1" }}>
                                   <div
                                     style={{
                                       fontSize: "0.75rem",
                                       color: "#64748b",
+                                      marginBottom: "0.35rem",
                                     }}
                                   >
                                     Quantity
                                   </div>
-                                  <div style={{ fontWeight: 700 }}>
-                                    {activeColor.quantity}
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexWrap: "wrap",
+                                      gap: "1rem",
+                                      fontWeight: 600,
+                                      fontSize: "0.9rem",
+                                    }}
+                                  >
+                                    <span>
+                                      Purchased:{" "}
+                                      <strong>
+                                        {spareLayerPurchasedQty(activeColor)}
+                                      </strong>{" "}
+                                      pcs
+                                    </span>
+                                    <span style={{ color: "#0f766e" }}>
+                                      Left:{" "}
+                                      <strong>
+                                        {spareLayerLeftQty(activeColor)}
+                                      </strong>{" "}
+                                      pcs
+                                    </span>
                                   </div>
                                 </div>
                                 <div>
@@ -5569,31 +5679,79 @@ function AddMoreStock() {
                         color: "#64748b",
                         textTransform: "uppercase",
                         letterSpacing: "0.05em",
-                        marginBottom: "0.25rem",
+                        marginBottom: "0.5rem",
                       }}
                     >
                       Quantity
                     </div>
                     <div
                       style={{
-                        fontSize: "1.5rem",
-                        fontWeight: "700",
-                        color: "#1e293b",
-                        display: "flex",
-                        alignItems: "baseline",
-                        gap: "0.25rem",
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "0.75rem",
+                        alignItems: "start",
                       }}
                     >
-                      {entry.quantity}
-                      <span
-                        style={{
-                          fontSize: "0.875rem",
-                          fontWeight: "400",
-                          color: "#64748b",
-                        }}
-                      >
-                        pieces
-                      </span>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "0.7rem",
+                            color: "#64748b",
+                            marginBottom: "0.15rem",
+                          }}
+                        >
+                          Purchased (this entry)
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.35rem",
+                            fontWeight: "700",
+                            color: "#334155",
+                          }}
+                        >
+                          {spareLayerPurchasedQty(entry)}
+                          <span
+                            style={{
+                              fontSize: "0.8rem",
+                              fontWeight: "400",
+                              color: "#64748b",
+                              marginLeft: "0.2rem",
+                            }}
+                          >
+                            pcs
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "0.7rem",
+                            color: "#64748b",
+                            marginBottom: "0.15rem",
+                          }}
+                        >
+                          Left now
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.35rem",
+                            fontWeight: "700",
+                            color: "#0f766e",
+                          }}
+                        >
+                          {spareLayerLeftQty(entry)}
+                          <span
+                            style={{
+                              fontSize: "0.8rem",
+                              fontWeight: "400",
+                              color: "#64748b",
+                              marginLeft: "0.2rem",
+                            }}
+                          >
+                            pcs
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 

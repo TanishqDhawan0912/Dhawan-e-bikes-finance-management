@@ -189,6 +189,12 @@ const jobcardPartSchema = new mongoose.Schema({
       trim: true,
     },
   ],
+  /** Total FIFO purchase cost for this line when inventory was deducted (finalize/settle) */
+  fifoLinePurchaseCost: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
 });
 
 const jobcardSchema = new mongoose.Schema(
