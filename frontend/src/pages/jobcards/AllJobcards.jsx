@@ -140,6 +140,30 @@ export default function AllJobcards() {
     return isWarranty ? "W" : "NW";
   };
 
+  /** New or old charger sale when customer also provides an old charger (voltage + condition). */
+  const partShowsCustomerOldChargerTradeIn = (part) => {
+    if (!part) return false;
+    if (String(part.partType || "").toLowerCase() !== "sales") return false;
+    if (String(part.salesType || "").toLowerCase() !== "charger") return false;
+    return (
+      part.oldChargerAvailable === true ||
+      String(part.oldChargerAvailable) === "true"
+    );
+  };
+
+  const customerOldChargerTradeInSummary = (part) => {
+    const v = String(part?.oldChargerVoltage || "").trim();
+    const w = String(part?.oldChargerWorking || "").toLowerCase();
+    const workingLabel =
+      w === "notworking" || w === "not_working" || w === "not working"
+        ? "Not working"
+        : "Working";
+    const bits = [];
+    if (v) bits.push(v);
+    bits.push(workingLabel);
+    return bits.join(" · ");
+  };
+
   const formatWarrantyType = (warrantyType) => {
     if (!warrantyType || warrantyType === "none") return "None";
     return warrantyType.charAt(0).toUpperCase() + warrantyType.slice(1);
@@ -192,6 +216,18 @@ export default function AllJobcards() {
       return dateA - dateB;
     });
   };
+
+  /** Sum of all recorded payments (paymentHistory or legacy paidAmount). */
+  const getTotalPaidByCustomer = (jobcard) =>
+    getAllPayments(jobcard).reduce(
+      (sum, p) => sum + (Number(p.amount) || 0),
+      0
+    );
+
+  /** Parts + labour before discount (stored totalAmount is net after discount). */
+  const getJobcardGrossBillAmount = (jobcard) =>
+    calculatePartsTotal(jobcard?.parts || []) +
+    (Number(jobcard?.labour) || 0);
 
   const formatPaymentDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -445,9 +481,18 @@ export default function AllJobcards() {
                   <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}>{capitalizeText(jobcard.place)}</p>
                 </div>
                 <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Total Amount</p>
-                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#059669" }}>
-                    ₹{jobcard.totalAmount?.toFixed(2) || "0.00"}
+                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Total bill amount</p>
+                  <p
+                    style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#059669" }}
+                    title="Parts + labour before discount"
+                  >
+                    ₹{getJobcardGrossBillAmount(jobcard).toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Amount paid by customer</p>
+                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#2563eb" }}>
+                    ₹{getTotalPaidByCustomer(jobcard).toFixed(2)}
                   </p>
                 </div>
                 <div>
@@ -544,6 +589,9 @@ export default function AllJobcards() {
                         (Number(part.scrapQuantity) || 0) > 0
                           ? Math.max(0, Number(part.scrapQuantity) || 0)
                           : 0;
+                      const showOldChargerTrade =
+                        partShowsCustomerOldChargerTradeIn(part);
+                      const partChipStacked = scrapQty > 0 || showOldChargerTrade;
                       return (
                       <span
                         key={index}
@@ -556,9 +604,9 @@ export default function AllJobcards() {
                           fontWeight: 500,
                           boxShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
                           display: "inline-flex",
-                          flexDirection: scrapQty > 0 ? "column" : "row",
-                          alignItems: scrapQty > 0 ? "stretch" : "center",
-                          gap: scrapQty > 0 ? "0.35rem" : "0.5rem",
+                          flexDirection: partChipStacked ? "column" : "row",
+                          alignItems: partChipStacked ? "stretch" : "center",
+                          gap: partChipStacked ? "0.35rem" : "0.5rem",
                         }}
                       >
                         <span
@@ -590,7 +638,7 @@ export default function AllJobcards() {
                           )}
                           <span
                             style={{
-                              marginLeft: scrapQty > 0 ? 0 : "auto",
+                              marginLeft: partChipStacked ? 0 : "auto",
                               padding: "0.125rem 0.375rem",
                               backgroundColor: "rgba(255, 255, 255, 0.2)",
                               borderRadius: "0.25rem",
@@ -621,6 +669,28 @@ export default function AllJobcards() {
                             }
                           >
                             Customer scrap available: ×{scrapQty}
+                          </span>
+                        )}
+                        {showOldChargerTrade && (
+                          <span
+                            style={{
+                              fontSize: "0.72rem",
+                              fontWeight: 600,
+                              padding: "0.2rem 0.45rem",
+                              backgroundColor: "rgba(254, 243, 199, 0.95)",
+                              color: "#92400e",
+                              borderRadius: "0.25rem",
+                              border: "1px solid rgba(251, 191, 36, 0.6)",
+                              alignSelf: "flex-start",
+                            }}
+                            title={
+                              part.oldChargerName
+                                ? `Customer old charger: ${part.oldChargerName}`
+                                : "Old charger received from customer with this charger sale"
+                            }
+                          >
+                            Customer old charger:{" "}
+                            {customerOldChargerTradeInSummary(part)}
                           </span>
                         )}
                       </span>
@@ -1024,6 +1094,8 @@ export default function AllJobcards() {
                           (Number(part.scrapQuantity) || 0) > 0
                             ? Math.max(0, Number(part.scrapQuantity) || 0)
                             : 0;
+                        const modalShowOldChargerTrade =
+                          partShowsCustomerOldChargerTradeIn(part);
 
                         return (
                           <tr
@@ -1086,6 +1158,27 @@ export default function AllJobcards() {
                                     }}
                                   >
                                     Customer scrap available: ×{modalScrapQty}
+                                  </span>
+                                )}
+                                {modalShowOldChargerTrade && (
+                                  <span
+                                    style={{
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                      color: "#92400e",
+                                      backgroundColor: "#fffbeb",
+                                      padding: "0.2rem 0.45rem",
+                                      borderRadius: "0.25rem",
+                                      border: "1px solid #fcd34d",
+                                    }}
+                                    title={
+                                      part.oldChargerName
+                                        ? `Customer old charger: ${part.oldChargerName}`
+                                        : "Old charger received from customer with this charger sale"
+                                    }
+                                  >
+                                    Customer old charger:{" "}
+                                    {customerOldChargerTradeInSummary(part)}
                                   </span>
                                 )}
                               </div>

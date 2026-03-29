@@ -4669,6 +4669,36 @@ export default function Admin() {
               {financeJobcardProfitModalJob &&
                 (() => {
                   const j = financeJobcardProfitModalJob;
+                  /** Align modal rows with jobcard parts: Service / Sales / Replacement */
+                  const profitModalSectionForLine = (l) => {
+                    const k = l?.kind;
+                    if (k === "service") return "service";
+                    if (k === "battery-replacement") return "replacement";
+                    return "sales";
+                  };
+                  const profitModalSections = [
+                    {
+                      id: "service",
+                      title: "Service",
+                      lines: (j.lines || []).filter(
+                        (l) => profitModalSectionForLine(l) === "service"
+                      ),
+                    },
+                    {
+                      id: "sales",
+                      title: "Sales",
+                      lines: (j.lines || []).filter(
+                        (l) => profitModalSectionForLine(l) === "sales"
+                      ),
+                    },
+                    {
+                      id: "replacement",
+                      title: "Replacement",
+                      lines: (j.lines || []).filter(
+                        (l) => profitModalSectionForLine(l) === "replacement"
+                      ),
+                    },
+                  ];
                   return (
                     <div
                       style={{
@@ -4825,34 +4855,74 @@ export default function Admin() {
                                 jobcard.
                               </div>
                             ) : (
-                              j.lines.map((l, idx) => (
-                                <div
-                                  key={`${j.id}-modal-l-${idx}`}
-                                  style={{ display: "contents" }}
-                                >
-                                  <div style={{ color: "#111827" }}>
-                                    {l.name}
-                                    <span
+                              profitModalSections
+                                .filter((sec) => sec.lines.length > 0)
+                                .map((sec, secIdx) => (
+                                  <div
+                                    key={`${j.id}-sec-${sec.id}`}
+                                    style={{ display: "contents" }}
+                                  >
+                                    <div
                                       style={{
-                                        marginLeft: "0.35rem",
-                                        fontSize: "0.72rem",
-                                        fontWeight: 600,
-                                        color: "#64748b",
-                                        textTransform: "capitalize",
+                                        gridColumn: "1 / -1",
+                                        marginTop: secIdx === 0 ? 0 : "0.5rem",
+                                        marginBottom: "0.15rem",
+                                        padding: "0.35rem 0.5rem",
+                                        background:
+                                          sec.id === "service"
+                                            ? "#eff6ff"
+                                            : sec.id === "sales"
+                                            ? "#f5f3ff"
+                                            : "#ecfdf5",
+                                        borderRadius: "0.35rem",
+                                        border: `1px solid ${
+                                          sec.id === "service"
+                                            ? "#bfdbfe"
+                                            : sec.id === "sales"
+                                            ? "#ddd6fe"
+                                            : "#a7f3d0"
+                                        }`,
+                                        fontSize: "0.7rem",
+                                        fontWeight: 800,
+                                        color: "#334155",
+                                        textTransform: "uppercase",
+                                        letterSpacing: "0.06em",
                                       }}
                                     >
-                                      ({l.kindDisplay || l.kind})
-                                    </span>
+                                      {sec.title}
+                                    </div>
+                                    {sec.lines.map((l, idx) => (
+                                      <div
+                                        key={`${j.id}-modal-l-${sec.id}-${idx}`}
+                                        style={{ display: "contents" }}
+                                      >
+                                        <div style={{ color: "#111827" }}>
+                                          {l.name}
+                                          <span
+                                            style={{
+                                              marginLeft: "0.35rem",
+                                              fontSize: "0.72rem",
+                                              fontWeight: 600,
+                                              color: "#64748b",
+                                              textTransform: "capitalize",
+                                            }}
+                                          >
+                                            ({l.kindDisplay || l.kind})
+                                          </span>
+                                        </div>
+                                        <div style={{ textAlign: "right" }}>
+                                          {l.quantity}
+                                        </div>
+                                        <div style={{ textAlign: "right" }}>
+                                          ₹{(l.unitCost || 0).toFixed(2)}
+                                        </div>
+                                        <div style={{ textAlign: "right" }}>
+                                          ₹{(l.lineCost || 0).toFixed(2)}
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
-                                  <div style={{ textAlign: "right" }}>{l.quantity}</div>
-                                  <div style={{ textAlign: "right" }}>
-                                    ₹{(l.unitCost || 0).toFixed(2)}
-                                  </div>
-                                  <div style={{ textAlign: "right" }}>
-                                    ₹{(l.lineCost || 0).toFixed(2)}
-                                  </div>
-                                </div>
-                              ))
+                                ))
                             )}
 
                             {Array.isArray(j.missingPurchaseCostLabels) &&

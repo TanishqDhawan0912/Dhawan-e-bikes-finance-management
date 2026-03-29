@@ -34,6 +34,52 @@ export default function PendingJobcard() {
     return date ? `${label} (${date})` : label;
   };
 
+  const getTotalPaidByCustomer = (jc) => {
+    if (!jc) return 0;
+    if (jc.paymentHistory && jc.paymentHistory.length > 0) {
+      return jc.paymentHistory.reduce(
+        (sum, p) => sum + (Number(p.amount) || 0),
+        0
+      );
+    }
+    return Number(jc.paidAmount) || 0;
+  };
+
+  const calculatePartsTotalForPreview = (parts) => {
+    if (!parts || parts.length === 0) return 0;
+    return parts.reduce((sum, part) => {
+      if (part.partType === "replacement" || part.replacementType) return sum;
+      return sum + (Number(part.price) || 0) * (Number(part.quantity) || 1);
+    }, 0);
+  };
+
+  /** Parts + labour before discount (totalAmount on card is net after discount). */
+  const getJobcardGrossBillAmount = (jc) =>
+    calculatePartsTotalForPreview(jc?.parts) + (Number(jc?.labour) || 0);
+
+  const partShowsCustomerOldChargerTradeIn = (part) => {
+    if (!part) return false;
+    if (String(part.partType || "").toLowerCase() !== "sales") return false;
+    if (String(part.salesType || "").toLowerCase() !== "charger") return false;
+    return (
+      part.oldChargerAvailable === true ||
+      String(part.oldChargerAvailable) === "true"
+    );
+  };
+
+  const customerOldChargerTradeInSummary = (part) => {
+    const v = String(part?.oldChargerVoltage || "").trim();
+    const w = String(part?.oldChargerWorking || "").toLowerCase();
+    const workingLabel =
+      w === "notworking" || w === "not_working" || w === "not working"
+        ? "Not working"
+        : "Working";
+    const bits = [];
+    if (v) bits.push(v);
+    bits.push(workingLabel);
+    return bits.join(" · ");
+  };
+
   // Capture editedJobcardId when returning from Edit Jobcard (Update)
   useEffect(() => {
     const editedId = location.state?.editedJobcardId;
@@ -561,9 +607,18 @@ export default function PendingJobcard() {
                   <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}>{jobcard.place}</p>
                 </div>
                 <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Total Amount</p>
-                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#059669" }}>
-                    ₹{jobcard.totalAmount?.toFixed(2) || "0.00"}
+                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Total bill amount</p>
+                  <p
+                    style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#059669" }}
+                    title="Parts + labour before discount"
+                  >
+                    ₹{getJobcardGrossBillAmount(jobcard).toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Amount paid by customer</p>
+                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#2563eb" }}>
+                    ₹{getTotalPaidByCustomer(jobcard).toFixed(2)}
                   </p>
                 </div>
                 <div>
@@ -660,6 +715,10 @@ export default function PendingJobcard() {
                                   (Number(part.scrapQuantity) || 0) > 0
                                     ? Math.max(0, Number(part.scrapQuantity) || 0)
                                     : 0;
+                                const showOldChargerTrade =
+                                  partShowsCustomerOldChargerTradeIn(part);
+                                const partChipStacked =
+                                  scrapQty > 0 || showOldChargerTrade;
                                 return (
                                 <span
                                   key={`${category.key}-${index}`}
@@ -671,9 +730,13 @@ export default function PendingJobcard() {
                                     color: "#ffffff",
                                     fontWeight: 500,
                                     display: "inline-flex",
-                                    flexDirection: scrapQty > 0 ? "column" : "row",
-                                    alignItems: scrapQty > 0 ? "stretch" : "center",
-                                    gap: scrapQty > 0 ? "0.35rem" : "0.45rem",
+                                    flexDirection: partChipStacked
+                                      ? "column"
+                                      : "row",
+                                    alignItems: partChipStacked
+                                      ? "stretch"
+                                      : "center",
+                                    gap: partChipStacked ? "0.35rem" : "0.45rem",
                                   }}
                                 >
                                   <span
@@ -767,7 +830,7 @@ export default function PendingJobcard() {
                                   })()}
                                   <span
                                     style={{
-                                      marginLeft: scrapQty > 0 ? 0 : "auto",
+                                      marginLeft: partChipStacked ? 0 : "auto",
                                       padding: "0.1rem 0.35rem",
                                       backgroundColor: "rgba(255, 255, 255, 0.2)",
                                       borderRadius: "0.25rem",
@@ -798,6 +861,28 @@ export default function PendingJobcard() {
                                       }
                                     >
                                       Customer scrap available: ×{scrapQty}
+                                    </span>
+                                  )}
+                                  {showOldChargerTrade && (
+                                    <span
+                                      style={{
+                                        fontSize: "0.7rem",
+                                        fontWeight: 600,
+                                        padding: "0.2rem 0.45rem",
+                                        backgroundColor: "rgba(254, 243, 199, 0.95)",
+                                        color: "#92400e",
+                                        borderRadius: "0.25rem",
+                                        border: "1px solid rgba(251, 191, 36, 0.6)",
+                                        alignSelf: "flex-start",
+                                      }}
+                                      title={
+                                        part.oldChargerName
+                                          ? `Customer old charger: ${part.oldChargerName}`
+                                          : "Old charger received from customer with this charger sale"
+                                      }
+                                    >
+                                      Customer old charger:{" "}
+                                      {customerOldChargerTradeInSummary(part)}
                                     </span>
                                   )}
                                 </span>

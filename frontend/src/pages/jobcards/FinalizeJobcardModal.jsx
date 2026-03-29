@@ -114,6 +114,29 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
     return isWarranty ? "W" : "NW";
   };
 
+  const partShowsCustomerOldChargerTradeIn = (part) => {
+    if (!part) return false;
+    if (String(part.partType || "").toLowerCase() !== "sales") return false;
+    if (String(part.salesType || "").toLowerCase() !== "charger") return false;
+    return (
+      part.oldChargerAvailable === true ||
+      String(part.oldChargerAvailable) === "true"
+    );
+  };
+
+  const customerOldChargerTradeInSummary = (part) => {
+    const v = String(part?.oldChargerVoltage || "").trim();
+    const w = String(part?.oldChargerWorking || "").toLowerCase();
+    const workingLabel =
+      w === "notworking" || w === "not_working" || w === "not working"
+        ? "Not working"
+        : "Working";
+    const bits = [];
+    if (v) bits.push(v);
+    bits.push(workingLabel);
+    return bits.join(" · ");
+  };
+
   const handleSubmit = async (options = {}) => {
     const { mode, skipZeroWarning } = options || {};
     const totalAmount = calculateBillTotal();
@@ -371,6 +394,9 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
                     (Number(part.scrapQuantity) || 0) > 0
                       ? Math.max(0, Number(part.scrapQuantity) || 0)
                       : 0;
+                  const showOldChargerTrade =
+                    partShowsCustomerOldChargerTradeIn(part);
+                  const partRowHasExtraNote = scrapQty > 0 || showOldChargerTrade;
 
                   return (
                     <div
@@ -383,7 +409,7 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
                         border: "1px solid #e5e7eb",
                         display: "flex",
                         justifyContent: "space-between",
-                        alignItems: scrapQty > 0 ? "flex-start" : "center",
+                        alignItems: partRowHasExtraNote ? "flex-start" : "center",
                       }}
                     >
                       <div style={{ flex: 1 }}>
@@ -448,13 +474,36 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
                             Customer scrap available: ×{scrapQty}
                           </p>
                         )}
+                        {showOldChargerTrade && (
+                          <p
+                            style={{
+                              margin: "0.35rem 0 0",
+                              fontSize: "0.8125rem",
+                              fontWeight: 600,
+                              color: "#92400e",
+                              backgroundColor: "#fffbeb",
+                              padding: "0.25rem 0.5rem",
+                              borderRadius: "0.25rem",
+                              border: "1px solid #fcd34d",
+                              display: "inline-block",
+                            }}
+                            title={
+                              part.oldChargerName
+                                ? `Customer old charger: ${part.oldChargerName}`
+                                : "Old charger received from customer with this charger sale"
+                            }
+                          >
+                            Customer old charger:{" "}
+                            {customerOldChargerTradeInSummary(part)}
+                          </p>
+                        )}
                       </div>
                       <div
                         style={{
                           fontSize: "1rem",
                           fontWeight: 600,
                           color: "#059669",
-                          paddingTop: scrapQty > 0 ? "0.125rem" : 0,
+                          paddingTop: partRowHasExtraNote ? "0.125rem" : 0,
                         }}
                       >
                         ₹{lineAmount.toFixed(2)}
