@@ -95,7 +95,7 @@ export default function NewJobcard() {
   });
   const [showSearch, setShowSearch] = useState(false);
   const [showCustomSpare, setShowCustomSpare] = useState(false);
-  const [editingPrice, setEditingPrice] = useState(null); // { id, cat } | null
+  const [editingPrice, setEditingPrice] = useState(null); // { lineKey, cat } | null
   const [editingPriceValue, setEditingPriceValue] = useState("");
   const [editingOldScootyPartId, setEditingOldScootyPartId] = useState(null);
   const [customSpareData, setCustomSpareData] = useState({
@@ -107,9 +107,37 @@ export default function NewJobcard() {
   const [validationError, setValidationError] = useState("");
   const errorRef = useRef(null);
 
+  const newPartLineId = () =>
+    `line-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+
+  /** Stable per-row key for list updates (duplicate spares share the same inventory id). */
+  const getPartLineKey = (part) => {
+    if (!part) return "";
+    if (part.lineId != null && String(part.lineId).length > 0) {
+      return String(part.lineId);
+    }
+    if (part.id != null && String(part.id).length > 0) {
+      return String(part.id);
+    }
+    if (part._id != null) return String(part._id);
+    return "";
+  };
+
+  const getInventorySpareId = (part) => {
+    if (!part || part.isCustom) return null;
+    const candidates = [part.id, part.spareId];
+    for (const x of candidates) {
+      if (x == null) continue;
+      const s = String(x);
+      if (isValidObjectId(s)) return s;
+    }
+    return null;
+  };
+
   const startEditPrice = (part, cat) => {
-    if (!part?.id || !cat) return;
-    setEditingPrice({ id: part.id, cat });
+    const lineKey = getPartLineKey(part);
+    if (!lineKey || !cat) return;
+    setEditingPrice({ lineKey, cat });
     const qty = Number(part.selectedQuantity || 1) || 1;
     const isBatterySaleTotal =
       part.partType === "sales" && part.salesType === "battery";
@@ -138,11 +166,11 @@ export default function NewJobcard() {
       alert("Enter a valid price (0 or more)");
       return;
     }
-    const { id, cat } = editingPrice;
+    const { lineKey, cat } = editingPrice;
     setSelectedParts((prev) => ({
       ...prev,
       [cat]: (prev[cat] || []).map((p) =>
-        p.id === id
+        getPartLineKey(p) === lineKey
           ? (() => {
               const qty = Number(p.selectedQuantity || 1) || 1;
               const isBatterySaleTotal =
@@ -376,6 +404,10 @@ export default function NewJobcard() {
         : part?.spareId || `part-${index}`;
 
       grouped[mappedType].push({
+        lineId:
+          part?._id != null
+            ? `saved-${String(part._id)}`
+            : `saved-${mappedType}-${index}-${String(editJobcard?._id || "jc")}`,
         id: resolvedId,
         name: part?.spareName || "Part",
         price: Number(part?.price || 0),
@@ -633,8 +665,16 @@ export default function NewJobcard() {
 
     // Add part to the active tab's parts list (only if a tab is active)
     if (activeTab) {
+      const stockId =
+        part._id != null
+          ? String(part._id)
+          : part.id != null
+          ? String(part.id)
+          : undefined;
       const partData = {
         ...part,
+        lineId: newPartLineId(),
+        ...(stockId ? { id: stockId } : {}),
         selectedQuantity: 1,
         inventoryQuantity:
           hasColors && initialColorQuantity !== null
@@ -707,11 +747,11 @@ export default function NewJobcard() {
     return gross - deduction;
   };
 
-  const handleColorChange = (partId, color, partType) => {
+  const handleColorChange = (lineKey, color, partType) => {
     setSelectedParts((prev) => ({
       ...prev,
       [partType]: prev[partType].map((part) => {
-        if (part.id === partId) {
+        if (getPartLineKey(part) === lineKey) {
           // If color tracking is enabled, update inventoryQuantity based on selected color
           let newInventoryQuantity = part.quantity;
           if (
@@ -743,18 +783,18 @@ export default function NewJobcard() {
     }));
   };
 
-  const removePart = (partId, partType) => {
+  const removePart = (lineKey, partType) => {
     setSelectedParts((prev) => ({
       ...prev,
-      [partType]: prev[partType].filter((part) => part.id !== partId),
+      [partType]: prev[partType].filter((part) => getPartLineKey(part) !== lineKey),
     }));
   };
 
-  const increaseQuantity = (partId, partType) => {
+  const increaseQuantity = (lineKey, partType) => {
     setSelectedParts((prev) => ({
       ...prev,
       [partType]: prev[partType].map((part) => {
-        if (part.id === partId) {
+        if (getPartLineKey(part) === lineKey) {
           const maxQuantity = getMaxQuantity(part);
           const currentSelectedQty = part.selectedQuantity || 1;
           if (currentSelectedQty < maxQuantity) {
@@ -766,11 +806,11 @@ export default function NewJobcard() {
     }));
   };
 
-  const decreaseQuantity = (partId, partType) => {
+  const decreaseQuantity = (lineKey, partType) => {
     setSelectedParts((prev) => ({
       ...prev,
       [partType]: prev[partType].map((part) => {
-        if (part.id === partId) {
+        if (getPartLineKey(part) === lineKey) {
           const currentSelectedQty = part.selectedQuantity || 1;
           if (currentSelectedQty > 1) {
             return { ...part, selectedQuantity: currentSelectedQty - 1 };
@@ -1045,7 +1085,8 @@ export default function NewJobcard() {
         : sellingPricePerSet;
 
     const batteryPart = {
-      id: selectedBattery._id,
+      lineId: newPartLineId(),
+      id: String(selectedBattery._id),
       name: selectedBattery.name,
       price: pricePerBattery, // Price per individual battery
       selectedQuantity: qty, // Quantity is number of individual batteries
@@ -1095,7 +1136,8 @@ export default function NewJobcard() {
     }
 
     const chargerPart = {
-      id: selectedCharger._id,
+      lineId: newPartLineId(),
+      id: String(selectedCharger._id),
       name: selectedCharger.name,
       price: selectedCharger.sellingPrice || 0,
       selectedQuantity: qty,
@@ -1143,6 +1185,7 @@ export default function NewJobcard() {
     }
 
     const controllerPart = {
+      lineId: newPartLineId(),
       id: selectedControllerSpare?._id || `controller-${Date.now()}`,
       spareId: selectedControllerSpare?._id || null,
       name,
@@ -1185,6 +1228,7 @@ export default function NewJobcard() {
     }
 
     const motorPart = {
+      lineId: newPartLineId(),
       id: selectedMotorSpare?._id || `motor-${Date.now()}`,
       spareId: selectedMotorSpare?._id || null,
       name,
@@ -1368,7 +1412,8 @@ export default function NewJobcard() {
         : salesBattery.sellingPrice || 0;
 
     const batteryPart = {
-      id: salesBattery._id,
+      lineId: newPartLineId(),
+      id: String(salesBattery._id),
       name: salesBattery.name,
       price: pricePerBattery,
       selectedQuantity: qty,
@@ -1417,8 +1462,10 @@ export default function NewJobcard() {
     }
     // Old battery price input is total for entered quantity.
     const unitPrice = qty > 0 ? enteredTotalPrice / qty : 0;
+    const obid = `old-battery-${Date.now()}`;
     const part = {
-      id: `old-battery-${Date.now()}`,
+      id: obid,
+      lineId: obid,
       name: "Old Battery",
       price: unitPrice,
       selectedQuantity: qty,
@@ -1473,7 +1520,8 @@ export default function NewJobcard() {
     }
 
     const chargerPart = {
-      id: salesCharger._id,
+      lineId: newPartLineId(),
+      id: String(salesCharger._id),
       name: salesCharger.name,
       price: getSalesChargerPrice(
         salesChargerWarrantyStatus,
@@ -1557,8 +1605,10 @@ export default function NewJobcard() {
       alert("Please enter a valid price");
       return;
     }
+    const ocid = `old-charger-${Date.now()}`;
     const part = {
-      id: `old-charger-${Date.now()}`,
+      id: ocid,
+      lineId: ocid,
       name: "Old Charger",
       price,
       selectedQuantity: qty,
@@ -1686,7 +1736,7 @@ export default function NewJobcard() {
     if (!part || part.salesType !== "oldScooty") return;
     setSelectedSalesType("oldScooty");
     setActiveTab("sales");
-    setEditingOldScootyPartId(part.id);
+    setEditingOldScootyPartId(getPartLineKey(part));
     setOldScootyData((prev) => ({
       ...prev,
       pmcNo: part.pmcNo || "",
@@ -1737,54 +1787,62 @@ export default function NewJobcard() {
       alert("Please select a charger from the list");
       return;
     }
-    const oldScootyPart = {
-      id: editingOldScootyPartId || `oldScooty-${Date.now()}`,
-      pmcNo: (oldScootyData.pmcNo || "").trim(),
-      name: oldScootyData.name.trim(),
-      price: parseFloat(oldScootyData.price),
-      selectedQuantity: 1,
-      hasColors: false,
-      isCustom: true,
-      partType: "sales",
-      salesType: "oldScooty",
-      batteryChemistry: oldScootyData.batteryChemistry,
-      batteryVoltage: oldScootyData.batteryVoltage,
-      batteryType: oldScootyData.batteryType,
-      batteryName:
-        oldScootyData.batteryType === "newBattery" && oldScootySelectedBattery
-          ? oldScootySelectedBattery.name
-          : null,
-      warrantyStatus:
-        oldScootyData.batteryType === "newBattery"
-          ? oldScootyData.warrantyStatus
-          : null,
-      chargerType: oldScootyData.chargerType,
-      chargerName:
-        oldScootyData.chargerType === "newCharger" && oldScootySelectedCharger
-          ? oldScootySelectedCharger.name
-          : null,
-      chargerChemistry: oldScootyData.chargerChemistry,
-      chargerVoltage: oldScootyData.chargerVoltage,
-      chargerWarrantyStatus:
-        oldScootyData.chargerType === "newCharger"
-          ? oldScootyData.chargerWarrantyStatus
-          : null,
-      sparesUsed: (oldScootyData.sparesUsed || []).map((s) => ({
-        spareId: s.spareId || null,
-        name: (s.name || "").trim(),
-        quantity:
-          typeof s.quantity === "number"
-            ? s.quantity
-            : parseInt(s.quantity, 10) || 1,
-        color: s.color ? String(s.color).trim() : "",
-        fromOldScooty: Boolean(s.fromOldScooty),
-      })),
-    };
-
     setSelectedParts((prev) => {
       const sales = prev.sales || [];
+      const existing =
+        editingOldScootyPartId != null
+          ? sales.find((p) => getPartLineKey(p) === editingOldScootyPartId)
+          : null;
+      const oid = existing?.id || `oldScooty-${Date.now()}`;
+      const lineRowId = existing?.lineId || oid;
+      const oldScootyPart = {
+        id: oid,
+        lineId: lineRowId,
+        pmcNo: (oldScootyData.pmcNo || "").trim(),
+        name: oldScootyData.name.trim(),
+        price: parseFloat(oldScootyData.price),
+        selectedQuantity: 1,
+        hasColors: false,
+        isCustom: true,
+        partType: "sales",
+        salesType: "oldScooty",
+        batteryChemistry: oldScootyData.batteryChemistry,
+        batteryVoltage: oldScootyData.batteryVoltage,
+        batteryType: oldScootyData.batteryType,
+        batteryName:
+          oldScootyData.batteryType === "newBattery" && oldScootySelectedBattery
+            ? oldScootySelectedBattery.name
+            : null,
+        warrantyStatus:
+          oldScootyData.batteryType === "newBattery"
+            ? oldScootyData.warrantyStatus
+            : null,
+        chargerType: oldScootyData.chargerType,
+        chargerName:
+          oldScootyData.chargerType === "newCharger" && oldScootySelectedCharger
+            ? oldScootySelectedCharger.name
+            : null,
+        chargerChemistry: oldScootyData.chargerChemistry,
+        chargerVoltage: oldScootyData.chargerVoltage,
+        chargerWarrantyStatus:
+          oldScootyData.chargerType === "newCharger"
+            ? oldScootyData.chargerWarrantyStatus
+            : null,
+        sparesUsed: (oldScootyData.sparesUsed || []).map((s) => ({
+          spareId: s.spareId || null,
+          name: (s.name || "").trim(),
+          quantity:
+            typeof s.quantity === "number"
+              ? s.quantity
+              : parseInt(s.quantity, 10) || 1,
+          color: s.color ? String(s.color).trim() : "",
+          fromOldScooty: Boolean(s.fromOldScooty),
+        })),
+      };
       const nextSales = editingOldScootyPartId
-        ? sales.map((p) => (p.id === editingOldScootyPartId ? oldScootyPart : p))
+        ? sales.map((p) =>
+            getPartLineKey(p) === editingOldScootyPartId ? oldScootyPart : p
+          )
         : [oldScootyPart, ...sales];
       return { ...prev, sales: nextSales };
     });
@@ -1942,8 +2000,10 @@ export default function NewJobcard() {
       return;
     }
 
+    const cid = `custom-${Date.now()}`;
     const customPart = {
-      id: `custom-${Date.now()}`, // Unique ID for custom parts
+      id: cid,
+      lineId: cid,
       name: customSpareData.name.trim(),
       price: parseFloat(customSpareData.price),
       selectedQuantity: qtyNumber,
@@ -2063,23 +2123,8 @@ export default function NewJobcard() {
           const qty = part.selectedQuantity || 1;
           const total = getPartTotal(part);
           const effectivePrice = qty > 0 ? total / qty : part.price;
-          // Only use part.id as spareId if it's a valid ObjectId, otherwise use null
-          // Also check if id starts with 'part-' which indicates a temporary ID
-          let spareId = null;
-          if (!part.isCustom && part.id) {
-            // Check if it's a valid ObjectId (24 hex characters)
-            if (isValidObjectId(part.id)) {
-              spareId = part.id;
-            } else if (
-              typeof part.id === "string" &&
-              part.id.startsWith("part-")
-            ) {
-              // Temporary IDs like 'part-0' should be null
-              spareId = null;
-            } else {
-              spareId = null;
-            }
-          }
+          const invId = getInventorySpareId(part);
+          let spareId = !part.isCustom ? invId : null;
 
           const basePart = {
             spareId: spareId,
@@ -2108,26 +2153,23 @@ export default function NewJobcard() {
           if (
             part.salesType === "battery" &&
             String(part.batteryOldNew || "").toLowerCase() === "new" &&
-            part.id &&
-            isValidObjectId(part.id)
+            invId
           ) {
-            basePart.batteryInventoryId = part.id;
+            basePart.batteryInventoryId = invId;
           }
           if (
             part.partType === "replacement" &&
             part.replacementType === "battery" &&
-            part.id &&
-            isValidObjectId(part.id)
+            invId
           ) {
-            basePart.batteryInventoryId = part.id;
+            basePart.batteryInventoryId = invId;
           }
           if (
             part.salesType === "charger" &&
             String(part.chargerOldNew || "").toLowerCase() !== "old" &&
-            part.id &&
-            isValidObjectId(part.id)
+            invId
           ) {
-            basePart.chargerInventoryId = part.id;
+            basePart.chargerInventoryId = invId;
             // spareId is ref Spare; storing Charger _id there makes populate() drop it on read.
             basePart.spareId = null;
           }
@@ -8079,7 +8121,7 @@ export default function NewJobcard() {
                     <div className="parts-list">
                       {selectedParts[activeTab].map((part) => (
                         <div
-                          key={part.id}
+                          key={getPartLineKey(part)}
                           style={{
                             padding: "1.5rem",
                             marginBottom: "1rem",
@@ -8975,7 +9017,7 @@ export default function NewJobcard() {
                                       value={part.selectedColor || ""}
                                       onChange={(e) =>
                                         handleColorChange(
-                                          part.id,
+                                          getPartLineKey(part),
                                           e.target.value,
                                           activeTab
                                         )
@@ -9052,7 +9094,7 @@ export default function NewJobcard() {
                                 gap: "0.5rem",
                               }}
                             >
-                              {editingPrice?.id === part.id &&
+                              {editingPrice?.lineKey === getPartLineKey(part) &&
                               editingPrice?.cat === activeTab ? (
                                 <>
                                   <span style={{ fontWeight: 600 }}>₹</span>
@@ -9196,7 +9238,7 @@ export default function NewJobcard() {
                                     if ((part.selectedQuantity || 1) <= 1) {
                                       alert("Quantity cannot be less than 1");
                                     } else {
-                                      decreaseQuantity(part.id, activeTab);
+                                      decreaseQuantity(getPartLineKey(part), activeTab);
                                     }
                                   }}
                                   disabled={(part.selectedQuantity || 1) <= 1}
@@ -9283,7 +9325,7 @@ export default function NewJobcard() {
                                         `Maximum quantity reached. Available: ${maxQty}`
                                       );
                                     } else {
-                                      increaseQuantity(part.id, activeTab);
+                                      increaseQuantity(getPartLineKey(part), activeTab);
                                     }
                                   }}
                                   disabled={
@@ -9359,7 +9401,7 @@ export default function NewJobcard() {
                             )}
                             <button
                               type="button"
-                              onClick={() => removePart(part.id, activeTab)}
+                              onClick={() => removePart(getPartLineKey(part), activeTab)}
                               style={{
                                 padding: "0.5rem 1rem",
                                 fontSize: "0.875rem",
@@ -9479,7 +9521,7 @@ export default function NewJobcard() {
                       >
                         {(selectedParts[cat] || []).map((part) => (
                           <div
-                            key={part.id}
+                            key={getPartLineKey(part)}
                             style={{
                               padding: "1rem 1.25rem",
                               display: "flex",
@@ -9589,7 +9631,7 @@ export default function NewJobcard() {
                                       gap: "0.5rem",
                                     }}
                                   >
-                                    {editingPrice?.id === part.id &&
+                                    {editingPrice?.lineKey === getPartLineKey(part) &&
                                     editingPrice?.cat === cat ? (
                                       <>
                                         <span>₹</span>
@@ -9712,7 +9754,7 @@ export default function NewJobcard() {
                                       if ((part.selectedQuantity || 1) <= 1) {
                                         alert("Quantity cannot be less than 1");
                                       } else {
-                                        decreaseQuantity(part.id, cat);
+                                        decreaseQuantity(getPartLineKey(part), cat);
                                       }
                                     }}
                                     disabled={(part.selectedQuantity || 1) <= 1}
@@ -9762,7 +9804,7 @@ export default function NewJobcard() {
                                           `Maximum quantity reached. Available: ${maxQty}`
                                         );
                                       } else {
-                                        increaseQuantity(part.id, cat);
+                                        increaseQuantity(getPartLineKey(part), cat);
                                       }
                                     }}
                                     disabled={
@@ -9797,7 +9839,7 @@ export default function NewJobcard() {
                               )}
                               <button
                                 type="button"
-                                onClick={() => removePart(part.id, cat)}
+                                onClick={() => removePart(getPartLineKey(part), cat)}
                                 style={{
                                   padding: "0.4rem 0.75rem",
                                   fontSize: "0.8125rem",
@@ -9929,7 +9971,7 @@ export default function NewJobcard() {
                       >
                         {(selectedParts[cat] || []).map((part) => (
                           <div
-                            key={part.id}
+                            key={getPartLineKey(part)}
                             style={{
                               padding: "1rem 1.25rem",
                               display: "flex",
@@ -10039,7 +10081,7 @@ export default function NewJobcard() {
                                       gap: "0.5rem",
                                     }}
                                   >
-                                    {editingPrice?.id === part.id &&
+                                    {editingPrice?.lineKey === getPartLineKey(part) &&
                                     editingPrice?.cat === cat ? (
                                       <>
                                         <span>₹</span>
@@ -10162,7 +10204,7 @@ export default function NewJobcard() {
                                       if ((part.selectedQuantity || 1) <= 1) {
                                         alert("Quantity cannot be less than 1");
                                       } else {
-                                        decreaseQuantity(part.id, cat);
+                                        decreaseQuantity(getPartLineKey(part), cat);
                                       }
                                     }}
                                     disabled={(part.selectedQuantity || 1) <= 1}
@@ -10212,7 +10254,7 @@ export default function NewJobcard() {
                                           `Maximum quantity reached. Available: ${maxQty}`
                                         );
                                       } else {
-                                        increaseQuantity(part.id, cat);
+                                        increaseQuantity(getPartLineKey(part), cat);
                                       }
                                     }}
                                     disabled={
@@ -10247,7 +10289,7 @@ export default function NewJobcard() {
                               )}
                               <button
                                 type="button"
-                                onClick={() => removePart(part.id, cat)}
+                                onClick={() => removePart(getPartLineKey(part), cat)}
                                 style={{
                                   padding: "0.4rem 0.75rem",
                                   fontSize: "0.8125rem",

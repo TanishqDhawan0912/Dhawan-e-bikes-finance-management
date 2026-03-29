@@ -218,17 +218,16 @@ const createOldScooty = async (req, res) => {
 
     let created = await oldScooty.save();
 
-    // Deduct spares from inventory if scooty is marked ready.
-    if (created.status === "ready" && normalizedSpares.length) {
-      await adjustSpareInventoryForOldScooty(normalizedSpares, "deduct");
+    // Deduct stock spares whenever lines reference inventory (not only when "ready").
+    const sparesToDeduct = normalizedSpares.filter((s) => s.spareId);
+    if (sparesToDeduct.length) {
+      await adjustSpareInventoryForOldScooty(sparesToDeduct, "deduct");
       created.inventoryAdjusted = true;
-      created.consumedSparesUsed = normalizedSpares
-        .filter((s) => s.spareId)
-        .map((s) => ({
-          spareId: s.spareId,
-          quantity: Math.max(1, Number(s.quantity) || 1),
-          color: s.color ? String(s.color).trim() : "",
-        }));
+      created.consumedSparesUsed = sparesToDeduct.map((s) => ({
+        spareId: s.spareId,
+        quantity: Math.max(1, Number(s.quantity) || 1),
+        color: s.color ? String(s.color).trim() : "",
+      }));
       created = await created.save();
     } else {
       created.inventoryAdjusted = false;
@@ -366,17 +365,16 @@ const updateOldScooty = async (req, res) => {
     existing.status = status === "ready" ? "ready" : "not-ready";
     existing.sparesUsed = normalizedSpares;
 
-    // Apply new deduction only if marked ready.
-    if (existing.status === "ready" && normalizedSpares.length) {
-      await adjustSpareInventoryForOldScooty(normalizedSpares, "deduct");
+    // Apply new deduction for any stock-linked spare lines (same as create — not gated on "ready").
+    const sparesToDeduct = normalizedSpares.filter((s) => s.spareId);
+    if (sparesToDeduct.length) {
+      await adjustSpareInventoryForOldScooty(sparesToDeduct, "deduct");
       existing.inventoryAdjusted = true;
-      existing.consumedSparesUsed = normalizedSpares
-        .filter((s) => s.spareId)
-        .map((s) => ({
-          spareId: s.spareId,
-          quantity: Math.max(1, Number(s.quantity) || 1),
-          color: s.color ? String(s.color).trim() : "",
-        }));
+      existing.consumedSparesUsed = sparesToDeduct.map((s) => ({
+        spareId: s.spareId,
+        quantity: Math.max(1, Number(s.quantity) || 1),
+        color: s.color ? String(s.color).trim() : "",
+      }));
     } else {
       existing.inventoryAdjusted = false;
       existing.consumedSparesUsed = [];

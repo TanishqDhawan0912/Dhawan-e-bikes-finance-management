@@ -9,6 +9,13 @@ import DatePicker from "../../components/DatePicker";
 
 const API_BASE = "http://localhost:5000/api/old-scooties";
 
+/** Spare id from API may be an ObjectId string or a populated `{ _id }` ref. */
+const normalizeOldScootySpareId = (raw) => {
+  if (raw == null || raw === "") return null;
+  if (typeof raw === "object" && raw._id != null) return raw._id;
+  return raw;
+};
+
 export default function OldScooties() {
   useSessionTimeout();
 
@@ -207,7 +214,7 @@ export default function OldScooties() {
         entryDate: entryDate,
         status,
         sparesUsed: oldScootySpares.map((s) => ({
-          spareId: s.spareId || null,
+          spareId: normalizeOldScootySpareId(s.spareId),
           name: s.name,
           quantity:
             typeof s.quantity === "number"
@@ -309,7 +316,7 @@ export default function OldScooties() {
     setOldScootySpares(
       Array.isArray(item.sparesUsed)
         ? item.sparesUsed.map((s) => ({
-            spareId: s.spareId || null,
+            spareId: normalizeOldScootySpareId(s.spareId),
             name: s.name || "",
             quantity:
               typeof s.quantity === "number"
@@ -355,7 +362,9 @@ export default function OldScooties() {
     if (!name) return;
     const qty = parseInt(oldScootySpareQty, 10) || 1;
     if (qty <= 0) return;
-    const spareId = selectedSpareForOldScooty?._id || null;
+    const spareId = normalizeOldScootySpareId(
+      selectedSpareForOldScooty?._id ?? null
+    );
     const hasColors = selectedSpareForOldScooty?.hasColors && (selectedSpareForOldScooty?.colorQuantity?.length || 0) > 0;
     const color = hasColors ? (oldScootySpareColor || "") : "";
     setOldScootySpares((prev) => [
