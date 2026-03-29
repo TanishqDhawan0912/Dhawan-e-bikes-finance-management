@@ -9,6 +9,13 @@ const jobcardPartSchema = new mongoose.Schema({
     required: false,
     default: null,
   },
+  /** For new battery sales / battery replacement stock: Battery document id (may match spareId when id was stored there). */
+  batteryInventoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Battery",
+    required: false,
+    default: null,
+  },
   spareName: {
     type: String,
     required: true,

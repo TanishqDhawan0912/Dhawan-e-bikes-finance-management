@@ -1265,7 +1265,7 @@ export default function NewBill({
                         Select a model above to see description variants.
                       </p>
                     )}
-                  </div>
+    </div>
                   <div className="form-group">
                     <label>
                       Color selected <span className="required">*</span>

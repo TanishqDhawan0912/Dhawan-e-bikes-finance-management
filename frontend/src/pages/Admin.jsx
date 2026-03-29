@@ -56,6 +56,21 @@ import {
   FaMoneyBillWave,
 } from "react-icons/fa";
 
+/** Jobcard row date shown as dd/mm/yyyy in finance lists */
+function formatFinanceJobcardDate(raw) {
+  if (raw == null || raw === "") return "—";
+  const s = String(raw).trim();
+  const head = s.split(" ")[0];
+  if (head.includes("/") && !/^\d{4}-\d{2}-\d{2}$/.test(head)) {
+    return head;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(head)) {
+    return formatDate(`${head}T12:00:00`);
+  }
+  const out = formatDate(s);
+  return out || s;
+}
+
 export default function Admin() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -1266,112 +1281,236 @@ export default function Admin() {
     return cost;
   };
 
-  // Jobcard profit: paidAmount − COGS for service lines + sales (spare, new battery, new charger; old scooty uses stored line cost if any)
-  const buildJobcardServiceAndSalesProfitDetail = (jc) => {
-    const paidAmount = Number(jc?.paidAmount) || 0;
-    const parts = Array.isArray(jc?.parts) ? jc.parts : [];
-    const lines = [];
-
-    const addSpareCostLine = (p, namePrefix) => {
-      const qty = Number(p.quantity) || 0;
-      if (qty <= 0) return;
-      const spareId = p.spareId?._id || p.spareId;
-      if (!spareId) return;
-      const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
-      let unitCost;
-      let lineCost;
-      if (storedFifo > 0) {
-        lineCost = storedFifo;
-        unitCost = qty > 0 ? storedFifo / qty : 0;
-      } else {
-        unitCost = getSpareUnitCost(spareId);
-        lineCost = qty * unitCost;
+  /** Per display label, sum quantity; preserve first-seen order. */
+  const aggregateThingQtyByLabel = (entries) => {
+    const qtyByName = new Map();
+    const order = [];
+    for (const e of entries) {
+      const n = String(e?.name || "").trim() || "Unnamed";
+      const q = Number(e?.quantity) || 0;
+      if (q <= 0) continue;
+      if (!qtyByName.has(n)) {
+        qtyByName.set(n, 0);
+        order.push(n);
       }
-      lines.push({
-        name: `${namePrefix}${p.spareName || "N/A"}`,
-        quantity: qty,
-        unitCost,
-        lineCost,
-      });
-    };
+      qtyByName.set(n, qtyByName.get(n) + q);
+    }
+    return order.map((name) => ({ name, quantity: qtyByName.get(name) }));
+  };
 
-    for (const p of parts) {
-      if (!p) continue;
-      const partType = String(p.partType || "").toLowerCase();
+  const pushThingExtra = (extras, v) => {
+    const s = String(v || "").trim();
+    if (!s || extras.includes(s)) return;
+    extras.push(s);
+  };
 
-      if (partType === "service") {
-        addSpareCostLine(p, "");
-        continue;
-      }
+  const classifyJobcardThingCategory = (part) => {
+    const pt = String(part?.partType || "service").toLowerCase();
+    if (pt === "replacement" || part?.replacementType) return "replacement";
+    if (pt === "sales") return "sales";
+    return "service";
+  };
 
-      if (partType !== "sales") continue;
+  /** Human-readable line for jobcard “things” chips (service / replacement / sales). */
+  const formatJobcardThingLabel = (part) => {
+    const partName = String(part?.spareName || "").trim() || "Part";
+    const color = String(part?.selectedColor || "").trim();
+    let main = color ? `${partName} (${color})` : partName;
 
-      const salesType = String(p.salesType || "").toLowerCase();
-      const hasSpareRef = !!(p.spareId?._id || p.spareId);
+    const pt = String(part?.partType || "service").toLowerCase();
+    const st = String(part?.salesType || "").toLowerCase();
+    const rt = String(part?.replacementType || "").toLowerCase();
 
-      if (salesType === "spare" || (salesType === "" && hasSpareRef)) {
-        addSpareCostLine(p, "Sales · ");
-        continue;
-      }
-
-      if (salesType === "battery") {
-        if (String(p.batteryOldNew || "").toLowerCase() === "old") continue;
-        const batteryId =
-          p.batteryInventoryId || p.batteryId || p.spareId || p.id || null;
-        const qtyUnits =
-          Number(
-            p.selectedQuantity !== undefined && p.selectedQuantity !== null
-              ? p.selectedQuantity
-              : p.quantity
-          ) || 0;
-        if (!batteryId || qtyUnits <= 0) continue;
-        const perUnit = getBatteryUnitCost(batteryId);
-        const lineCost = qtyUnits * perUnit;
-        lines.push({
-          name: `Sales · ${p.spareName || "Battery"}`,
-          quantity: qtyUnits,
-          unitCost: qtyUnits > 0 ? lineCost / qtyUnits : 0,
-          lineCost,
-        });
-        continue;
-      }
-
-      if (salesType === "charger") {
-        if (String(p.chargerOldNew || "").toLowerCase() === "old") continue;
-        const chargerId =
-          p.chargerInventoryId || p.chargerId || p.spareId || p.id || null;
-        const qty =
-          Number(
-            p.selectedQuantity !== undefined && p.selectedQuantity !== null
-              ? p.selectedQuantity
-              : p.quantity
-          ) || 0;
-        if (!chargerId || qty <= 0) continue;
-        const unitCost = getChargerUnitCost(chargerId);
-        const lineCost = qty * unitCost;
-        lines.push({
-          name: `Sales · ${p.spareName || "Charger"}`,
-          quantity: qty,
-          unitCost,
-          lineCost,
-        });
-        continue;
-      }
-
-      if (salesType === "oldscooty") {
-        const qty = Number(p.quantity) || 1;
-        const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
-        if (storedFifo <= 0) continue;
-        lines.push({
-          name: `Sales · ${p.spareName || "Old scooty"}`,
-          quantity: qty,
-          unitCost: qty > 0 ? storedFifo / qty : storedFifo,
-          lineCost: storedFifo,
-        });
+    if (pt === "sales" && st === "oldScooty") {
+      const rawPmc = String(part?.pmcNo || "").trim();
+      if (rawPmc) {
+        const pmcDisplay = `PMC-${rawPmc.replace(/^PMC-?/i, "")}`;
+        main = `${pmcDisplay} — ${main}`;
       }
     }
 
+    const extras = [];
+    const isReplacement = pt === "replacement" || Boolean(part?.replacementType);
+
+    if (isReplacement) {
+      if (rt) pushThingExtra(extras, rt.charAt(0).toUpperCase() + rt.slice(1));
+      if (part?.replacementFromCompany) pushThingExtra(extras, "From company");
+      if (part?.voltage) pushThingExtra(extras, `${part.voltage}V`);
+      if (part?.batteryType) pushThingExtra(extras, String(part.batteryType));
+      if (part?.ampereValue) pushThingExtra(extras, `${part.ampereValue}A`);
+      if (part?.oldChargerName)
+        pushThingExtra(extras, `Old charger: ${part.oldChargerName}`);
+    } else if (pt === "sales") {
+      if (st === "battery") {
+        pushThingExtra(extras, "Battery");
+        if (part?.batteryType) pushThingExtra(extras, String(part.batteryType));
+        if (part?.voltage) pushThingExtra(extras, `${part.voltage}V`);
+        if (part?.batteryOldNew)
+          pushThingExtra(extras, part.batteryOldNew === "new" ? "New" : "Old");
+      } else if (st === "charger") {
+        pushThingExtra(extras, "Charger");
+        if (part?.ampereValue) pushThingExtra(extras, `${part.ampereValue}A`);
+        if (part?.voltage) pushThingExtra(extras, `${part.voltage}V`);
+      } else if (st === "oldScooty") {
+        pushThingExtra(extras, "Old scooty");
+      } else if (st === "spare") {
+        pushThingExtra(extras, "Spare sale");
+      }
+    }
+
+    if (part?.isCustom) pushThingExtra(extras, "Custom");
+
+    const w = String(part?.warrantyStatus || "").trim();
+    if (w && !/^(none|no[- ]?warranty|nw)$/i.test(w)) pushThingExtra(extras, w);
+
+    return extras.length ? `${main} · ${extras.join(" · ")}` : main;
+  };
+
+  const resolveBatteryInventoryIdFromJobcardPart = (part) => {
+    if (!part) return null;
+    const raw =
+      part.batteryInventoryId ??
+      part.batteryId ??
+      part.spareId ??
+      part.id;
+    if (raw == null || raw === "") return null;
+    const id = typeof raw === "object" && raw._id != null ? raw._id : raw;
+    return id ? String(id) : null;
+  };
+
+  // Jobcard profit: service + spare sales + battery sales/replacements (FIFO when stored on part).
+  // profit = paidAmount - sum(purchaseCost of those lines)
+  const buildJobcardServiceAndSalesProfitDetail = (jc) => {
+    const paidAmount = Number(jc?.paidAmount) || 0;
+    const parts = Array.isArray(jc?.parts) ? jc.parts : [];
+
+    const isProfitSpareLine = (p) => {
+      if (!p || p.isCustom === true || !p.spareId) return false;
+      const pt = String(p.partType || "").toLowerCase();
+      const st = String(p.salesType || "").toLowerCase();
+      if (pt === "service") return true;
+      if (pt === "sales" && st === "spare") return true;
+      return false;
+    };
+
+    const isProfitBatteryLine = (p) => {
+      if (!p || p.isCustom === true) return false;
+      const battId = resolveBatteryInventoryIdFromJobcardPart(p);
+      if (!battId) return false;
+      const pt = String(p.partType || "").toLowerCase();
+      const st = String(p.salesType || "").toLowerCase();
+      const rt = String(p.replacementType || "").toLowerCase();
+      if (
+        pt === "sales" &&
+        st === "battery" &&
+        String(p.batteryOldNew || "").toLowerCase() === "new"
+      ) {
+        return true;
+      }
+      if (pt === "replacement" && rt === "battery") return true;
+      return false;
+    };
+
+    const profitParts = parts.filter(
+      (p) => isProfitSpareLine(p) || isProfitBatteryLine(p)
+    );
+
+    const lines = profitParts
+      .map((p) => {
+        if (isProfitBatteryLine(p)) {
+          const qty =
+            Number(
+              p.selectedQuantity !== undefined && p.selectedQuantity !== null
+                ? p.selectedQuantity
+                : p.quantity
+            ) || 0;
+          const battId = resolveBatteryInventoryIdFromJobcardPart(p);
+          const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
+          let unitCost;
+          let lineCost;
+          if (storedFifo > 0) {
+            lineCost = storedFifo;
+            unitCost = qty > 0 ? storedFifo / qty : 0;
+          } else {
+            unitCost = getBatteryUnitCost(battId);
+            lineCost = qty * unitCost;
+          }
+          const pt = String(p.partType || "").toLowerCase();
+          const isSale = pt === "sales";
+          const kind = isSale ? "battery-sale" : "battery-replacement";
+          const kindDisplay = isSale ? "battery sale" : "battery replacement";
+          const baseName =
+            String(p.spareName || p.batteryName || "Battery").trim() ||
+            "Battery";
+          return {
+            name: baseName,
+            kind,
+            kindDisplay,
+            quantity: qty,
+            unitCost,
+            lineCost,
+          };
+        }
+
+        const qty = Number(p.quantity) || 0;
+        const spareId = p.spareId?._id || p.spareId;
+        const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
+        let unitCost;
+        let lineCost;
+        if (storedFifo > 0) {
+          lineCost = storedFifo;
+          unitCost = qty > 0 ? storedFifo / qty : 0;
+        } else {
+          unitCost = getSpareUnitCost(spareId);
+          lineCost = qty * unitCost;
+        }
+        const pt = String(p.partType || "").toLowerCase();
+        const kind = pt === "sales" ? "sales" : "service";
+        const kindDisplay = kind;
+        const baseName = String(p.spareName || "").trim() || "N/A";
+        const color = String(p.selectedColor || "").trim();
+        const name = color ? `${baseName} (${color})` : baseName;
+        return {
+          name,
+          kind,
+          kindDisplay,
+          quantity: qty,
+          unitCost,
+          lineCost,
+        };
+      })
+      .filter((l) => l.quantity > 0);
+
+    const thingBuckets = { service: [], replacement: [], sales: [] };
+    for (const p of parts) {
+      if (!p) continue;
+      const qty = Number(p.quantity) || 0;
+      if (qty <= 0) continue;
+      const cat = classifyJobcardThingCategory(p);
+      thingBuckets[cat].push({
+        name: formatJobcardThingLabel(p),
+        quantity: qty,
+      });
+    }
+    const serviceThingSummaries = aggregateThingQtyByLabel(thingBuckets.service);
+    const replacementThingSummaries = aggregateThingQtyByLabel(
+      thingBuckets.replacement
+    );
+    const salesThingSummaries = aggregateThingQtyByLabel(thingBuckets.sales);
+
     const totalCost = lines.reduce((sum, l) => sum + (l.lineCost || 0), 0);
+    const serviceSpareCost = lines
+      .filter((l) => l.kind === "service")
+      .reduce((sum, l) => sum + (l.lineCost || 0), 0);
+    const salesSpareCost = lines
+      .filter((l) => l.kind === "sales")
+      .reduce((sum, l) => sum + (l.lineCost || 0), 0);
+    const batteryInventoryCost = lines
+      .filter(
+        (l) =>
+          l.kind === "battery-sale" || l.kind === "battery-replacement"
+      )
+      .reduce((sum, l) => sum + (l.lineCost || 0), 0);
     const profit = paidAmount - totalCost;
 
     return {
@@ -1382,7 +1521,13 @@ export default function Admin() {
       paidAmount,
       lines,
       totalCost,
+      serviceSpareCost,
+      salesSpareCost,
+      batteryInventoryCost,
       profit,
+      serviceThingSummaries,
+      replacementThingSummaries,
+      salesThingSummaries,
     };
   };
 
@@ -3837,12 +3982,11 @@ export default function Admin() {
                 >
                   <div>
                     <div style={{ fontWeight: 600, color: "#333", fontSize: "1.05rem" }}>
-                      Jobcards — service and sales profit
+                      Jobcards — service & sales profit
                     </div>
                     <div style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.25rem" }}>
-                      {financePeriodLabel} · finalized jobcards: paid amount minus estimated
-                      purchase cost for service spares and sales (spares, new batteries, new
-                      chargers; old scooty only if a line cost is stored)
+                      {financePeriodLabel} · finalized jobcards; service and spare-sales lines:
+                      paid amount minus spare purchase cost
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
@@ -3895,40 +4039,289 @@ export default function Admin() {
                             <summary
                               style={{
                                 cursor: "pointer",
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                gap: "1rem",
                                 listStyle: "none",
+                                display: "block",
                               }}
                             >
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontWeight: 700, color: "#111827" }}>
-                                  {j.jobcardNumber} • {j.date}
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "1fr auto",
+                                  gap: "0.65rem 1rem",
+                                  alignItems: "start",
+                                }}
+                              >
+                                <div style={{ minWidth: 0 }}>
+                                  <div
+                                    style={{
+                                      fontWeight: 700,
+                                      color: "#111827",
+                                      fontSize: "0.95rem",
+                                      lineHeight: 1.35,
+                                    }}
+                                  >
+                                    {j.jobcardNumber}
+                                    <span
+                                      style={{
+                                        color: "#cbd5e1",
+                                        fontWeight: 500,
+                                        margin: "0 0.4rem",
+                                      }}
+                                    >
+                                      ·
+                                    </span>
+                                    <span style={{ fontWeight: 600, color: "#475569" }}>
+                                      {formatFinanceJobcardDate(j.date)}
+                                    </span>
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: "0.85rem",
+                                      color: "#64748b",
+                                      marginTop: "0.2rem",
+                                      whiteSpace: "nowrap",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                    }}
+                                  >
+                                    {j.customerName}
+                                  </div>
+                                  <div
+                                    style={{
+                                      marginTop: "0.55rem",
+                                      padding: "0.55rem 0.7rem",
+                                      background: "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
+                                      borderRadius: "0.5rem",
+                                      border: "1px solid #e2e8f0",
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        fontSize: "0.65rem",
+                                        fontWeight: 700,
+                                        color: "#64748b",
+                                        textTransform: "uppercase",
+                                        letterSpacing: "0.07em",
+                                        marginBottom: "0.4rem",
+                                      }}
+                                    >
+                                      Profit calculation
+                                    </div>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        flexWrap: "wrap",
+                                        alignItems: "center",
+                                        gap: "0.25rem 0.5rem",
+                                        fontSize: "0.8125rem",
+                                        color: "#334155",
+                                        lineHeight: 1.5,
+                                      }}
+                                    >
+                                      <span>
+                                        <span style={{ color: "#64748b" }}>Paid</span>{" "}
+                                        <strong style={{ color: "#0f172a" }}>
+                                          ₹{(j.paidAmount || 0).toLocaleString("en-IN")}
+                                        </strong>
+                                      </span>
+                                      <span style={{ color: "#94a3b8", fontWeight: 600 }}>−</span>
+                                      <span>
+                                        <span style={{ color: "#64748b" }}>
+                                          Purchase cost (FIFO)
+                                        </span>{" "}
+                                        <strong style={{ color: "#0f172a" }}>
+                                          ₹{(j.totalCost || 0).toLocaleString("en-IN")}
+                                        </strong>
+                                      </span>
+                                      <span style={{ color: "#94a3b8", fontWeight: 600 }}>=</span>
+                                      <span>
+                                        <span style={{ color: "#64748b" }}>Profit</span>{" "}
+                                        <strong
+                                          style={{
+                                            color:
+                                              j.profit >= 0 ? "#15803d" : "#b91c1c",
+                                          }}
+                                        >
+                                          ₹{(j.profit || 0).toLocaleString("en-IN")}
+                                        </strong>
+                                      </span>
+                                    </div>
+                                    {(j.serviceThingSummaries.length > 0 ||
+                                      j.replacementThingSummaries.length > 0 ||
+                                      j.salesThingSummaries.length > 0) && (
+                                      <div
+                                        style={{
+                                          marginTop: "0.5rem",
+                                          paddingTop: "0.5rem",
+                                          borderTop: "1px solid #e2e8f0",
+                                          display: "flex",
+                                          flexDirection: "column",
+                                          gap: "0.35rem",
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            fontSize: "0.65rem",
+                                            fontWeight: 700,
+                                            color: "#64748b",
+                                            textTransform: "uppercase",
+                                            letterSpacing: "0.07em",
+                                          }}
+                                        >
+                                          Things on this jobcard
+                                        </div>
+                                        {[
+                                          {
+                                            key: "service",
+                                            label: "Service",
+                                            rows: j.serviceThingSummaries,
+                                          },
+                                          {
+                                            key: "replacement",
+                                            label: "Replacement",
+                                            rows: j.replacementThingSummaries,
+                                          },
+                                          {
+                                            key: "sales",
+                                            label: "Sales",
+                                            rows: j.salesThingSummaries,
+                                          },
+                                        ]
+                                          .filter((s) => s.rows.length > 0)
+                                          .map((section) => (
+                                            <div
+                                              key={section.key}
+                                              style={{
+                                                display: "flex",
+                                                flexWrap: "wrap",
+                                                alignItems: "baseline",
+                                                gap: "0.35rem 0.5rem",
+                                              }}
+                                            >
+                                              <span
+                                                style={{
+                                                  fontSize: "0.68rem",
+                                                  fontWeight: 700,
+                                                  color: "#94a3b8",
+                                                  textTransform: "uppercase",
+                                                  letterSpacing: "0.04em",
+                                                  flexShrink: 0,
+                                                }}
+                                              >
+                                                {section.label}
+                                              </span>
+                                              <div
+                                                style={{
+                                                  display: "flex",
+                                                  flexWrap: "wrap",
+                                                  gap: "0.3rem",
+                                                  minWidth: 0,
+                                                }}
+                                              >
+                                                {section.rows
+                                                  .slice(0, 5)
+                                                  .map((row, i) => (
+                                                    <span
+                                                      key={`${j.id}-${section.key}-${i}`}
+                                                      title={`${row.name} · Qty ${row.quantity}`}
+                                                      style={{
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        gap: "0.35rem",
+                                                        fontSize: "0.7rem",
+                                                        fontWeight: 600,
+                                                        color: "#334155",
+                                                        background: "#fff",
+                                                        border: "1px solid #e2e8f0",
+                                                        borderRadius: "999px",
+                                                        padding: "0.15rem 0.5rem",
+                                                        lineHeight: 1.35,
+                                                        maxWidth: "min(240px, 100%)",
+                                                        minWidth: 0,
+                                                      }}
+                                                    >
+                                                      <span
+                                                        style={{
+                                                          minWidth: 0,
+                                                          overflow: "hidden",
+                                                          textOverflow: "ellipsis",
+                                                          whiteSpace: "nowrap",
+                                                        }}
+                                                      >
+                                                        {row.name}
+                                                      </span>
+                                                      <span
+                                                        style={{
+                                                          fontSize: "0.65rem",
+                                                          fontWeight: 800,
+                                                          color: "#64748b",
+                                                          flexShrink: 0,
+                                                          fontVariantNumeric: "tabular-nums",
+                                                        }}
+                                                      >
+                                                        ×{row.quantity}
+                                                      </span>
+                                                    </span>
+                                                  ))}
+                                                {section.rows.length > 5 && (
+                                                  <span
+                                                    style={{
+                                                      fontSize: "0.68rem",
+                                                      fontWeight: 600,
+                                                      color: "#64748b",
+                                                      background: "#f1f5f9",
+                                                      border: "1px solid #e2e8f0",
+                                                      borderRadius: "999px",
+                                                      padding: "0.15rem 0.45rem",
+                                                    }}
+                                                  >
+                                                    +{section.rows.length - 5} more
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ))}
+                                      </div>
+                                    )}
+                                    {j.totalCost === 0 && j.lines.length === 0 && (
+                                      <div
+                                        style={{
+                                          fontSize: "0.72rem",
+                                          color: "#94a3b8",
+                                          marginTop: "0.35rem",
+                                          lineHeight: 1.4,
+                                        }}
+                                      >
+                                        No service, spare-sales, or billable battery lines with
+                                        inventory cost on this jobcard — purchase cost is ₹0;
+                                        profit equals paid amount.
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    color: "#6b7280",
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                  }}
-                                >
-                                  {j.customerName}
-                                </div>
-                              </div>
-                              <div style={{ textAlign: "right" }}>
-                                <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                                  Profit
-                                </div>
-                                <div
-                                  style={{
-                                    fontWeight: 800,
-                                    color: j.profit >= 0 ? "#16a34a" : "#dc2626",
-                                  }}
-                                >
-                                  ₹{(j.profit || 0).toLocaleString("en-IN")}
+                                <div style={{ textAlign: "right", minWidth: "108px" }}>
+                                  <div
+                                    style={{
+                                      fontSize: "0.65rem",
+                                      fontWeight: 700,
+                                      color: "#94a3b8",
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.06em",
+                                    }}
+                                  >
+                                    Profit
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: "1.4rem",
+                                      fontWeight: 800,
+                                      color: j.profit >= 0 ? "#16a34a" : "#dc2626",
+                                      lineHeight: 1.15,
+                                      marginTop: "0.15rem",
+                                    }}
+                                  >
+                                    ₹{(j.profit || 0).toLocaleString("en-IN")}
+                                  </div>
                                 </div>
                               </div>
                             </summary>
@@ -3993,7 +4386,8 @@ export default function Admin() {
 
                                 {j.lines.length === 0 ? (
                                   <div style={{ gridColumn: "1 / -1", color: "#6b7280" }}>
-                                    No service or sales cost lines for this jobcard.
+                                    No FIFO cost lines (service, spare sales, or batteries) in this
+                                    jobcard.
                                   </div>
                                 ) : (
                                   j.lines.map((l, idx) => (
@@ -4001,7 +4395,20 @@ export default function Admin() {
                                       key={`${j.id}-l-${idx}`}
                                       style={{ display: "contents" }}
                                     >
-                                      <div style={{ color: "#111827" }}>{l.name}</div>
+                                      <div style={{ color: "#111827" }}>
+                                        {l.name}
+                                        <span
+                                          style={{
+                                            marginLeft: "0.35rem",
+                                            fontSize: "0.72rem",
+                                            fontWeight: 600,
+                                            color: "#64748b",
+                                            textTransform: "capitalize",
+                                          }}
+                                        >
+                                          ({l.kindDisplay || l.kind})
+                                        </span>
+                                      </div>
                                       <div style={{ textAlign: "right" }}>{l.quantity}</div>
                                       <div style={{ textAlign: "right" }}>
                                         ₹{(l.unitCost || 0).toFixed(2)}
@@ -4022,8 +4429,22 @@ export default function Admin() {
                                   }}
                                 />
 
+                                <div
+                                  style={{
+                                    gridColumn: "1 / -1",
+                                    fontSize: "0.72rem",
+                                    fontWeight: 700,
+                                    color: "#64748b",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.05em",
+                                    marginTop: "0.15rem",
+                                  }}
+                                >
+                                  Summary (same as preview above)
+                                </div>
+
                                 <div style={{ fontWeight: 800, color: "#111827" }}>
-                                  Paid Amount
+                                  Paid amount (jobcard)
                                 </div>
                                 <div />
                                 <div />
@@ -4031,8 +4452,90 @@ export default function Admin() {
                                   ₹{(j.paidAmount || 0).toLocaleString("en-IN")}
                                 </div>
 
+                                {j.lines.length > 0 && (
+                                  <>
+                                    <div
+                                      style={{
+                                        fontWeight: 600,
+                                        color: "#475569",
+                                        fontSize: "0.88rem",
+                                        gridColumn: "1 / -1",
+                                        marginTop: "0.15rem",
+                                      }}
+                                    >
+                                      Purchase cost (FIFO)
+                                    </div>
+                                    <div
+                                      style={{
+                                        color: "#64748b",
+                                        fontSize: "0.85rem",
+                                        paddingLeft: "0.35rem",
+                                      }}
+                                    >
+                                      · Service lines
+                                    </div>
+                                    <div />
+                                    <div />
+                                    <div
+                                      style={{
+                                        textAlign: "right",
+                                        fontSize: "0.85rem",
+                                        color: "#334155",
+                                      }}
+                                    >
+                                      ₹{(j.serviceSpareCost || 0).toLocaleString("en-IN")}
+                                    </div>
+                                    <div
+                                      style={{
+                                        color: "#64748b",
+                                        fontSize: "0.85rem",
+                                        paddingLeft: "0.35rem",
+                                      }}
+                                    >
+                                      · Sales spare lines
+                                    </div>
+                                    <div />
+                                    <div />
+                                    <div
+                                      style={{
+                                        textAlign: "right",
+                                        fontSize: "0.85rem",
+                                        color: "#334155",
+                                      }}
+                                    >
+                                      ₹{(j.salesSpareCost || 0).toLocaleString("en-IN")}
+                                    </div>
+                                    {(j.batteryInventoryCost || 0) > 0 && (
+                                      <>
+                                        <div
+                                          style={{
+                                            color: "#64748b",
+                                            fontSize: "0.85rem",
+                                            paddingLeft: "0.35rem",
+                                          }}
+                                        >
+                                          · Batteries (FIFO)
+                                        </div>
+                                        <div />
+                                        <div />
+                                        <div
+                                          style={{
+                                            textAlign: "right",
+                                            fontSize: "0.85rem",
+                                            color: "#334155",
+                                          }}
+                                        >
+                                          ₹{(j.batteryInventoryCost || 0).toLocaleString(
+                                            "en-IN"
+                                          )}
+                                        </div>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+
                                 <div style={{ fontWeight: 800, color: "#111827" }}>
-                                  Purchase cost (est.)
+                                  Total purchase cost (FIFO)
                                 </div>
                                 <div />
                                 <div />

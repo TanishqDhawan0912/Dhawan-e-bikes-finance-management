@@ -2105,6 +2105,22 @@ export default function NewJobcard() {
           )
             basePart.scrapPricePerUnit = part.scrapPricePerUnit;
           if (part.batteryOldNew) basePart.batteryOldNew = part.batteryOldNew;
+          if (
+            part.salesType === "battery" &&
+            String(part.batteryOldNew || "").toLowerCase() === "new" &&
+            part.id &&
+            isValidObjectId(part.id)
+          ) {
+            basePart.batteryInventoryId = part.id;
+          }
+          if (
+            part.partType === "replacement" &&
+            part.replacementType === "battery" &&
+            part.id &&
+            isValidObjectId(part.id)
+          ) {
+            basePart.batteryInventoryId = part.id;
+          }
           if (part.chargerOldNew) basePart.chargerOldNew = part.chargerOldNew;
           if (part.ampereValue) basePart.ampereValue = part.ampereValue;
           if (part.warrantyStatus)

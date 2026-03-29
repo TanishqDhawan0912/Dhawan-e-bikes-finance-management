@@ -39,14 +39,24 @@ const createBattery = async (req, res) => {
       purchaseDate: purchaseDate ? new Date(purchaseDate) : undefined,
       stockEntries:
         Array.isArray(stockEntries) && stockEntries.length > 0
-          ? stockEntries.map((entry) => ({
-              quantity: entry.quantity || 0,
-              purchasePrice: entry.purchasePrice || 0,
-              purchaseDate: entry.purchaseDate
-                ? new Date(entry.purchaseDate)
-                : new Date(),
-              batteriesPerSet: entry.batteriesPerSet || undefined,
-            }))
+          ? stockEntries.map((entry) => {
+              const qty = Math.max(0, Number(entry.quantity) || 0);
+              let orig =
+                entry.originalQuantity !== undefined &&
+                entry.originalQuantity !== null
+                  ? Math.max(0, Math.floor(Number(entry.originalQuantity)))
+                  : qty;
+              if (orig < qty) orig = qty;
+              return {
+                quantity: qty,
+                originalQuantity: orig,
+                purchasePrice: entry.purchasePrice || 0,
+                purchaseDate: entry.purchaseDate
+                  ? new Date(entry.purchaseDate)
+                  : new Date(),
+                batteriesPerSet: entry.batteriesPerSet || undefined,
+              };
+            })
           : [],
     });
 
@@ -180,14 +190,56 @@ const updateBattery = async (req, res) => {
       battery.purchaseDate = purchaseDate ? new Date(purchaseDate) : undefined;
     }
     if (Array.isArray(stockEntries)) {
-      battery.stockEntries = stockEntries.map((entry) => ({
-        quantity: entry.quantity || 0,
-        purchasePrice: entry.purchasePrice || 0,
-        purchaseDate: entry.purchaseDate
-          ? new Date(entry.purchaseDate)
-          : new Date(),
-        batteriesPerSet: entry.batteriesPerSet || undefined,
-      }));
+      const prevEntries = Array.isArray(battery.stockEntries)
+        ? battery.stockEntries
+        : [];
+      const findPrevEntry = (entry, idx) => {
+        if (entry && entry._id) {
+          const idStr = String(entry._id);
+          const found = prevEntries.find(
+            (p) => p && p._id && String(p._id) === idStr
+          );
+          if (found) return found;
+        }
+        return prevEntries[idx] || null;
+      };
+      battery.stockEntries = stockEntries.map((entry, idx) => {
+        const qty = Math.max(0, Number(entry.quantity) || 0);
+        const prev = findPrevEntry(entry, idx);
+        let orig;
+        if (
+          entry.originalQuantity !== undefined &&
+          entry.originalQuantity !== null &&
+          entry.originalQuantity !== ""
+        ) {
+          orig = Math.max(0, Math.floor(Number(entry.originalQuantity)));
+        } else if (
+          prev &&
+          prev.originalQuantity !== undefined &&
+          prev.originalQuantity !== null &&
+          prev.originalQuantity !== ""
+        ) {
+          orig = Math.max(0, Math.floor(Number(prev.originalQuantity)));
+        } else if (prev) {
+          // Do not collapse purchased to lower "left" after jobcard FIFO; keep prior snapshot.
+          const prevQty = Math.max(0, Math.floor(Number(prev.quantity) || 0));
+          orig = Math.max(qty, prevQty);
+        } else {
+          orig = qty;
+        }
+        if (orig < qty) orig = qty;
+        const row = {
+          quantity: qty,
+          originalQuantity: orig,
+          purchasePrice: entry.purchasePrice || 0,
+          purchaseDate: entry.purchaseDate
+            ? new Date(entry.purchaseDate)
+            : new Date(),
+          batteriesPerSet: entry.batteriesPerSet || undefined,
+        };
+        if (entry._id) row._id = entry._id;
+        return row;
+      });
       // When stock entries are updated, keep totals in sync
       battery.recalculateFromStockEntries();
     }

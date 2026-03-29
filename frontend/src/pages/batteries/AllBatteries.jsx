@@ -2,6 +2,21 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatDate } from "../../utils/dateUtils";
 
+/** Left = sum of remaining pieces in layers; aligns with FIFO stockEntries.quantity. */
+function batteryStockAggregates(battery) {
+  const entries = Array.isArray(battery.stockEntries) ? battery.stockEntries : [];
+  if (entries.length === 0) {
+    const left =
+      battery.batteryType === "lithium"
+        ? battery.totalSets || 0
+        : (battery.batteriesPerSet || 0) * (battery.totalSets || 0) +
+          (battery.openBatteries || 0);
+    return { left, hasLayers: false };
+  }
+  const left = entries.reduce((s, e) => s + (Number(e.quantity) || 0), 0);
+  return { left, hasLayers: true };
+}
+
 export default function AllBatteries() {
   const navigate = useNavigate();
   const [batteries, setBatteries] = useState([]);
@@ -439,7 +454,7 @@ export default function AllBatteries() {
                     fontWeight: "700",
                   }}
                 >
-                  Total Batteries
+                  Left count
                 </th>
                 <th
                   style={{
@@ -511,7 +526,9 @@ export default function AllBatteries() {
               </tr>
             </thead>
             <tbody>
-              {filteredBatteries.map((battery) => (
+              {filteredBatteries.map((battery) => {
+                const stockAgg = batteryStockAggregates(battery);
+                return (
                 <tr key={battery._id}>
                   <td
                     style={{
@@ -615,7 +632,9 @@ export default function AllBatteries() {
                       fontWeight: "600",
                     }}
                   >
-                    {battery.totalSets || 0}
+                    {battery.batteryType === "lithium" && stockAgg.hasLayers
+                      ? stockAgg.left
+                      : battery.totalSets || 0}
                   </td>
                   <td
                     style={{
@@ -625,11 +644,26 @@ export default function AllBatteries() {
                       textAlign: "center",
                       fontWeight: "600",
                     }}
+                    title={
+                      stockAgg.hasLayers
+                        ? "Sum of remaining pieces in all stock entries (FIFO)"
+                        : "From sets × per set + open (no entry layers yet)"
+                    }
                   >
-                    {battery.batteryType === "lithium"
-                      ? battery.totalSets || 0
-                      : (battery.batteriesPerSet || 0) * (battery.totalSets || 0) +
-                        (battery.openBatteries || 0)}
+                    {stockAgg.left}
+                    {!stockAgg.hasLayers && (
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "0.65rem",
+                          fontWeight: "500",
+                          color: "#9ca3af",
+                          marginTop: "0.15rem",
+                        }}
+                      >
+                        (no layers)
+                      </span>
+                    )}
                   </td>
                   <td
                     style={{
@@ -750,7 +784,8 @@ export default function AllBatteries() {
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>

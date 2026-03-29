@@ -6,6 +6,7 @@ const {
 } = require("../utils/spareFifo");
 const Battery = require("../models/Battery");
 const BatteryScrap = require("../models/BatteryScrap");
+const { adjustBatteryStockByUnits } = require("../utils/batteryInventoryAdjust");
 const Charger = require("../models/Charger");
 const OldCharger = require("../models/OldCharger");
 const OldChargerSummary = require("../models/OldChargerSummary");
@@ -17,6 +18,23 @@ const {
 } = require("../utils/oldChargerSummaryAdjust");
 
 const VALID_OLD_CHARGER_INVENTORY_VOLTAGES = ["48V", "60V", "72V"];
+
+/** Jobcard parts store the battery doc id on spareId (new battery sales); may be populated. */
+function resolveBatteryInventoryIdFromPart(part) {
+  if (!part) return null;
+  const candidates = [
+    part.batteryInventoryId,
+    part.batteryId,
+    part.spareId,
+    part.id,
+  ];
+  for (const c of candidates) {
+    if (c == null) continue;
+    const id = typeof c === "object" && c !== null && c._id != null ? c._id : c;
+    if (id) return id;
+  }
+  return null;
+}
 
 function parseVoltageForOldChargerJobcard(v) {
   if (!v || typeof v !== "string") return "48V";
@@ -404,7 +422,7 @@ const adjustBatteryInventoryForReplacements = async (
     return;
   }
 
-  const factor = mode === "restore" ? 1 : -1;
+  const stockMode = mode === "restore" ? "restore" : "deduct";
 
   for (const part of jobcard.parts) {
     if (
@@ -415,20 +433,11 @@ const adjustBatteryInventoryForReplacements = async (
       continue;
     }
 
-    // Support different keys used for the battery reference
-    const batteryId =
-      part.batteryInventoryId ||
-      part.batteryId ||
-      part.spareId ||
-      part.id ||
-      null;
+    const batteryId = resolveBatteryInventoryIdFromPart(part);
     if (!batteryId) {
       continue;
     }
 
-    // In jobcard parts, quantity / selectedQuantity represent the number of
-    // individual batteries used. We therefore adjust total *batteries* in
-    // stock, and then re-derive totalSets/openBatteries from that.
     const qtyUnits =
       Number(
         part.selectedQuantity !== undefined && part.selectedQuantity !== null
@@ -444,25 +453,23 @@ const adjustBatteryInventoryForReplacements = async (
       continue;
     }
 
-    const perSet = Number(battery.batteriesPerSet) || 0;
-    const totalUnitsBefore =
-      (Number(battery.totalSets) || 0) * (perSet || 0) +
-      (Number(battery.openBatteries) || 0);
-
-    let totalUnitsAfter = totalUnitsBefore + factor * qtyUnits;
-    if (totalUnitsAfter < 0) {
-      totalUnitsAfter = 0;
-    }
-
-    if (perSet > 0) {
-      battery.totalSets = Math.floor(totalUnitsAfter / perSet);
-      battery.openBatteries = totalUnitsAfter % perSet;
+    if (mode === "deduct") {
+      const r = adjustBatteryStockByUnits(battery, qtyUnits, stockMode);
+      part.fifoLinePurchaseCost = Math.max(0, Number(r.totalCost) || 0);
     } else {
-      battery.totalSets = 0;
-      battery.openBatteries = totalUnitsAfter;
+      adjustBatteryStockByUnits(battery, qtyUnits, stockMode);
     }
-
+    if (
+      Array.isArray(battery.stockEntries) &&
+      battery.stockEntries.length > 0
+    ) {
+      battery.markModified("stockEntries");
+    }
     await battery.save();
+  }
+
+  if (mode === "deduct" && typeof jobcard.markModified === "function") {
+    jobcard.markModified("parts");
   }
 };
 
@@ -479,7 +486,7 @@ const adjustBatteryInventoryForNewBatterySales = async (
     return;
   }
 
-  const factor = mode === "restore" ? 1 : -1;
+  const stockMode = mode === "restore" ? "restore" : "deduct";
 
   for (const part of jobcard.parts) {
     if (
@@ -491,12 +498,7 @@ const adjustBatteryInventoryForNewBatterySales = async (
       continue;
     }
 
-    const batteryId =
-      part.batteryInventoryId ||
-      part.batteryId ||
-      part.spareId ||
-      part.id ||
-      null;
+    const batteryId = resolveBatteryInventoryIdFromPart(part);
     if (!batteryId) continue;
 
     const qtyUnits =
@@ -510,23 +512,23 @@ const adjustBatteryInventoryForNewBatterySales = async (
     const battery = await Battery.findById(batteryId);
     if (!battery) continue;
 
-    const perSet = Number(battery.batteriesPerSet) || 0;
-    const totalUnitsBefore =
-      (Number(battery.totalSets) || 0) * (perSet || 0) +
-      (Number(battery.openBatteries) || 0);
-
-    let totalUnitsAfter = totalUnitsBefore + factor * qtyUnits;
-    if (totalUnitsAfter < 0) totalUnitsAfter = 0;
-
-    if (perSet > 0) {
-      battery.totalSets = Math.floor(totalUnitsAfter / perSet);
-      battery.openBatteries = totalUnitsAfter % perSet;
+    if (mode === "deduct") {
+      const r = adjustBatteryStockByUnits(battery, qtyUnits, stockMode);
+      part.fifoLinePurchaseCost = Math.max(0, Number(r.totalCost) || 0);
     } else {
-      battery.totalSets = 0;
-      battery.openBatteries = totalUnitsAfter;
+      adjustBatteryStockByUnits(battery, qtyUnits, stockMode);
     }
-
+    if (
+      Array.isArray(battery.stockEntries) &&
+      battery.stockEntries.length > 0
+    ) {
+      battery.markModified("stockEntries");
+    }
     await battery.save();
+  }
+
+  if (mode === "deduct" && typeof jobcard.markModified === "function") {
+    jobcard.markModified("parts");
   }
 };
 

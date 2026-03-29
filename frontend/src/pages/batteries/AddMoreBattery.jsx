@@ -6,6 +6,61 @@ import {
   formatDateForInput,
 } from "../../utils/dateUtils";
 
+/** Units bought in this batch (fixed); null if unknown — never use quantity as purchased. */
+function batteryLayerPurchasedQty(row) {
+  if (!row) return null;
+  const o = row.originalQuantity;
+  if (o !== undefined && o !== null && o !== "" && !Number.isNaN(Number(o))) {
+    return Math.max(0, Math.floor(Number(o)));
+  }
+  return null;
+}
+
+function formatPurchasedPieces(row) {
+  const p = batteryLayerPurchasedQty(row);
+  return p != null ? String(p) : "—";
+}
+
+/** Normalize entries for PUT; omit originalQuantity when unknown so the API can keep DB/prev values. */
+function toStockEntryPayload(e) {
+  const qty = Math.max(0, Math.floor(Number(e.quantity) || 0));
+  const out = {
+    quantity: qty,
+    purchasePrice: Number(e.purchasePrice) || 0,
+    purchaseDate: e.purchaseDate,
+  };
+  const rawOq = e.originalQuantity;
+  if (rawOq !== undefined && rawOq !== null && rawOq !== "") {
+    let oq = Math.max(0, Math.floor(Number(rawOq)));
+    if (oq < qty) oq = qty;
+    out.originalQuantity = oq;
+  }
+  if (e.batteriesPerSet !== undefined && e.batteriesPerSet !== null) {
+    out.batteriesPerSet = e.batteriesPerSet;
+  }
+  if (e._id) out._id = e._id;
+  return out;
+}
+
+function batteryLayerLeftQty(row) {
+  return Math.max(0, Math.floor(Number(row?.quantity) || 0));
+}
+
+/** Oldest purchaseDate = #1 (FIFO arrival order). Ties: lower array index first. */
+function stockEntryArrivalRankByIndex(stockEntries) {
+  const entries = Array.isArray(stockEntries) ? stockEntries : [];
+  const rows = entries.map((e, i) => {
+    const t = new Date(e?.purchaseDate || 0).getTime();
+    return { i, t: Number.isNaN(t) ? 0 : t };
+  });
+  rows.sort((a, b) => (a.t !== b.t ? a.t - b.t : a.i - b.i));
+  const map = {};
+  rows.forEach((r, idx) => {
+    map[r.i] = idx + 1;
+  });
+  return map;
+}
+
 export default function AddMoreBattery() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -19,6 +74,7 @@ export default function AddMoreBattery() {
     totalSets: "",
     openBatteries: "",
     totalQuantity: "",
+    purchasedPieces: "", // lead edit: original batch size (pieces); add mode unused in UI
     purchasePrice: "",
     purchaseDate: getTodayForInput(), // yyyy-mm-dd for the date picker
   });
@@ -32,6 +88,18 @@ export default function AddMoreBattery() {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [pendingEditIndex, setPendingEditIndex] = useState(null);
   const datePickerRef = useRef(null);
+  const stockEntryFormRef = useRef(null);
+
+  const scrollToStockEntryForm = useCallback(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        stockEntryFormRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    });
+  }, []);
 
   const fetchBattery = useCallback(async () => {
     try {
@@ -63,8 +131,11 @@ export default function AddMoreBattery() {
       if (hasEntries) return;
 
       const totalQuantity =
-        (battery.batteriesPerSet || 0) * (battery.totalSets || 0) +
-        (battery.openBatteries || 0);
+        battery.batteryType === "lithium"
+          ? (Number(battery.totalSets) || 0) +
+            (Number(battery.openBatteries) || 0)
+          : (battery.batteriesPerSet || 0) * (battery.totalSets || 0) +
+            (battery.openBatteries || 0);
 
       if (totalQuantity <= 0) return;
 
@@ -78,11 +149,14 @@ export default function AddMoreBattery() {
             stockEntries: [
               {
                 quantity: totalQuantity,
+                originalQuantity: totalQuantity,
                 purchasePrice: 0,
                 purchaseDate:
                   battery.purchaseDate ||
                   new Date().toISOString().split("T")[0],
-                batteriesPerSet: battery.batteriesPerSet || undefined,
+                ...(battery.batteryType === "lithium"
+                  ? {}
+                  : { batteriesPerSet: battery.batteriesPerSet || undefined }),
               },
             ],
           }),
@@ -114,6 +188,7 @@ export default function AddMoreBattery() {
     useState(false);
 
   useEffect(() => {
+    if (battery?.batteryType === "lithium") return;
     if (battery && battery.batteriesPerSet && !batteriesPerSetInitialized) {
       setNewEntry((prev) => ({
         ...prev,
@@ -128,8 +203,19 @@ export default function AddMoreBattery() {
 
   const handleNewEntryChange = (e) => {
     const { name, value } = e.target;
-    // Auto-calculate TOTAL QUANTITY from:
-    // totalQuantity = batteriesPerSet * totalSets + openBatteries
+    // Lithium: one field = packs; quantity in API is "sets" per layer.
+    if (battery?.batteryType === "lithium" && name === "totalSets") {
+      setNewEntry((prev) => ({
+        ...prev,
+        totalSets: value,
+        totalQuantity:
+          value === "" || Math.floor(parseFloat(value) || 0) <= 0
+            ? ""
+            : String(Math.max(0, Math.floor(parseFloat(value) || 0))),
+      }));
+      return;
+    }
+    // Lead: totalQuantity = batteriesPerSet * totalSets + openBatteries
     if (
       name === "batteriesPerSet" ||
       name === "totalSets" ||
@@ -225,10 +311,12 @@ export default function AddMoreBattery() {
 
   const handleClear = () => {
     setNewEntry({
-      batteriesPerSet: battery?.batteriesPerSet || "",
+      batteriesPerSet:
+        battery?.batteryType === "lithium" ? "" : battery?.batteriesPerSet || "",
       totalSets: "",
       openBatteries: "",
       totalQuantity: "",
+      purchasedPieces: "",
       purchasePrice: "",
       purchaseDate: getTodayForInput(),
     });
@@ -326,11 +414,18 @@ export default function AddMoreBattery() {
   const handleAddEntry = async () => {
     if (!battery) return;
 
-    const quantityNum = parseFloat(newEntry.totalQuantity) || 0;
+    const isLithiumBattery = battery.batteryType === "lithium";
+    const leftNum = isLithiumBattery
+      ? Math.max(0, Math.floor(parseFloat(newEntry.totalSets) || 0))
+      : Math.max(0, Math.floor(parseFloat(newEntry.totalQuantity) || 0));
     const priceNum = parseFloat(newEntry.purchasePrice) || 0;
 
-    if (quantityNum <= 0 || priceNum < 0 || !newEntry.purchaseDate) {
-      alert("Please enter valid quantity, price and date.");
+    if (leftNum <= 0 || priceNum < 0 || !newEntry.purchaseDate) {
+      alert(
+        isLithiumBattery
+          ? "Please enter valid total sets, price and date."
+          : "Please enter valid quantity, price and date."
+      );
       return;
     }
 
@@ -338,33 +433,65 @@ export default function AddMoreBattery() {
       ? battery.stockEntries
       : [];
 
-    // Get batteriesPerSet from form, or fall back to battery's value
+    let purchasedNum = leftNum;
+    if (editingIndex !== null) {
+      if (!isLithiumBattery) {
+        const rawPurch = String(newEntry.purchasedPieces ?? "").trim();
+        if (rawPurch !== "") {
+          purchasedNum = Math.max(0, Math.floor(parseInt(rawPurch, 10) || 0));
+          if (purchasedNum < leftNum) {
+            alert(
+              "Purchased quantity cannot be less than quantity left for this entry."
+            );
+            return;
+          }
+        } else {
+          const prevOrig = batteryLayerPurchasedQty(
+            existingEntries[editingIndex]
+          );
+          if (prevOrig != null) {
+            purchasedNum = Math.max(prevOrig, leftNum);
+          }
+        }
+      } else {
+        const prevOrig = batteryLayerPurchasedQty(
+          existingEntries[editingIndex]
+        );
+        if (prevOrig != null) {
+          purchasedNum = Math.max(prevOrig, leftNum);
+        }
+      }
+    }
+
     const entryBatteriesPerSet =
       newEntry.batteriesPerSet !== "" && newEntry.batteriesPerSet !== undefined
         ? parseFloat(newEntry.batteriesPerSet) || battery.batteriesPerSet || 0
         : battery.batteriesPerSet || 0;
 
+    const layerBase = isLithiumBattery
+      ? {
+          quantity: leftNum,
+          originalQuantity: purchasedNum,
+          purchasePrice: priceNum,
+          purchaseDate: newEntry.purchaseDate,
+        }
+      : {
+          quantity: leftNum,
+          originalQuantity: purchasedNum,
+          purchasePrice: priceNum,
+          purchaseDate: newEntry.purchaseDate,
+          batteriesPerSet: entryBatteriesPerSet,
+        };
+
     const updatedEntries =
       editingIndex !== null
-        ? existingEntries.map((entry, idx) =>
-            idx === editingIndex
-              ? {
-                  quantity: quantityNum,
-                  purchasePrice: priceNum,
-                  purchaseDate: newEntry.purchaseDate,
-                  batteriesPerSet: entryBatteriesPerSet,
-                }
-              : entry
-          )
-        : [
-            ...existingEntries,
-            {
-              quantity: quantityNum,
-              purchasePrice: priceNum,
-              purchaseDate: newEntry.purchaseDate,
-              batteriesPerSet: entryBatteriesPerSet,
-            },
-          ];
+        ? existingEntries.map((entry, idx) => {
+            if (idx !== editingIndex) return entry;
+            const merged = { ...entry, ...layerBase };
+            if (isLithiumBattery) delete merged.batteriesPerSet;
+            return merged;
+          })
+        : [...existingEntries, { ...layerBase }];
 
     // Recalculate total sets and open batteries from all entries
     const totalQuantity = updatedEntries.reduce(
@@ -390,7 +517,7 @@ export default function AddMoreBattery() {
           batteriesPerSet: battery.batteriesPerSet, // Keep the original value, don't update it
           totalSets,
           openBatteries,
-          stockEntries: updatedEntries,
+          stockEntries: updatedEntries.map(toStockEntryPayload),
         }),
       });
 
@@ -421,6 +548,26 @@ export default function AddMoreBattery() {
     if (!entry) return;
 
     const qty = entry.quantity || 0;
+    if (battery.batteryType === "lithium") {
+      setNewEntry({
+        batteriesPerSet: "",
+        totalSets: qty ? String(qty) : "",
+        openBatteries: "",
+        totalQuantity: qty ? String(qty) : "",
+        purchasedPieces: "",
+        purchasePrice:
+          entry.purchasePrice !== undefined && entry.purchasePrice !== null
+            ? String(entry.purchasePrice)
+            : "",
+        purchaseDate: entry.purchaseDate
+          ? formatDateForInput(entry.purchaseDate)
+          : getTodayForInput(),
+      });
+      setEditingIndex(index);
+      scrollToStockEntryForm();
+      return;
+    }
+
     // Use entry's batteriesPerSet if available, otherwise fall back to battery's
     const perSet =
       entry.batteriesPerSet !== undefined && entry.batteriesPerSet !== null
@@ -429,11 +576,13 @@ export default function AddMoreBattery() {
     const sets = perSet > 0 ? Math.floor(qty / perSet) : 0;
     const open = perSet > 0 ? qty % perSet : qty;
 
+    const pQty = batteryLayerPurchasedQty(entry);
     setNewEntry({
       batteriesPerSet: perSet ? String(perSet) : "",
       totalSets: sets ? String(sets) : "",
       openBatteries: open ? String(open) : "",
       totalQuantity: qty ? String(qty) : "",
+      purchasedPieces: pQty != null ? String(pQty) : "",
       purchasePrice:
         entry.purchasePrice !== undefined && entry.purchasePrice !== null
           ? String(entry.purchasePrice)
@@ -443,6 +592,7 @@ export default function AddMoreBattery() {
         : getTodayForInput(),
     });
     setEditingIndex(index);
+    scrollToStockEntryForm();
   };
 
   const startEditEntry = (index) => {
@@ -517,7 +667,7 @@ export default function AddMoreBattery() {
           batteriesPerSet: battery.batteriesPerSet,
           totalSets,
           openBatteries,
-          stockEntries: updatedEntries,
+          stockEntries: updatedEntries.map(toStockEntryPayload),
         }),
       });
 
@@ -576,6 +726,7 @@ export default function AddMoreBattery() {
 
   const totalQuantity = getTotalQuantity();
   const totalValue = getTotalValue();
+  const arrivalRankByIndex = stockEntryArrivalRankByIndex(battery.stockEntries);
 
   return (
     <div className="page-content">
@@ -640,14 +791,16 @@ export default function AddMoreBattery() {
         </div>
       </div>
 
-      {/* Add new stock entry */}
+      {/* Add / edit stock entry — scroll target when editing from list below */}
       <div
+        ref={stockEntryFormRef}
         style={{
           background: "white",
           borderRadius: "0.75rem",
           border: "1px solid #e5e7eb",
           padding: "1.5rem",
           marginBottom: "2rem",
+          scrollMarginTop: "1rem",
         }}
       >
         <h3
@@ -669,121 +822,248 @@ export default function AddMoreBattery() {
             alignItems: "flex-end",
           }}
         >
-          <div>
-            <label
-              style={{
-                fontSize: "0.8rem",
-                fontWeight: 500,
-                marginBottom: "0.25rem",
-                display: "block",
-              }}
-            >
-              Batteries Per Set
-            </label>
-            <input
-              type="number"
-              name="batteriesPerSet"
-              value={newEntry.batteriesPerSet}
-              onChange={handleNewEntryChange}
-              onBlur={handleBatteriesPerSetBlur}
-              placeholder="Enter batteries per set"
-              min="0"
-              onWheel={(e) => e.target.blur()}
-              style={{
-                padding: "0.5rem",
-                border: "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-                fontSize: "0.875rem",
-                width: "100%",
-              }}
-            />
-          </div>
-          <div>
-            <label
-              style={{
-                fontSize: "0.8rem",
-                fontWeight: 500,
-                marginBottom: "0.25rem",
-                display: "block",
-              }}
-            >
-              Sets
-            </label>
-            <input
-              type="number"
-              name="totalSets"
-              value={newEntry.totalSets}
-              onChange={handleNewEntryChange}
-              placeholder="Enter sets"
-              min="0"
-              onWheel={(e) => e.target.blur()}
-              style={{
-                padding: "0.5rem",
-                border: "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-                fontSize: "0.875rem",
-                width: "100%",
-              }}
-            />
-          </div>
-          <div>
-            <label
-              style={{
-                fontSize: "0.8rem",
-                fontWeight: 500,
-                marginBottom: "0.25rem",
-                display: "block",
-              }}
-            >
-              Open Batteries
-            </label>
-            <input
-              type="number"
-              name="openBatteries"
-              value={newEntry.openBatteries}
-              onChange={handleNewEntryChange}
-              placeholder="Enter open batteries"
-              min="0"
-              onWheel={(e) => e.target.blur()}
-              style={{
-                padding: "0.5rem",
-                border: "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-                fontSize: "0.875rem",
-                width: "100%",
-              }}
-            />
-          </div>
-          <div>
-            <label
-              style={{
-                fontSize: "0.8rem",
-                fontWeight: 500,
-                marginBottom: "0.25rem",
-                display: "block",
-              }}
-            >
-              Total Quantity
-            </label>
-            <input
-              type="number"
-              name="totalQuantity"
-              value={newEntry.totalQuantity}
-              readOnly
-              placeholder="Auto-calculated"
-              min="0"
-              onWheel={(e) => e.target.blur()}
-              style={{
-                padding: "0.5rem",
-                border: "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-                fontSize: "0.875rem",
-                width: "100%",
-                backgroundColor: "#f3f4f6",
-                cursor: "not-allowed",
-              }}
-            />
-          </div>
+          {battery.batteryType === "lithium" ? (
+            <div>
+              <label
+                style={{
+                  fontSize: "0.8rem",
+                  fontWeight: 500,
+                  marginBottom: "0.25rem",
+                  display: "block",
+                }}
+              >
+                {editingIndex !== null
+                  ? "Sets in this entry"
+                  : "Total sets purchased *"}
+              </label>
+              <input
+                type="number"
+                name="totalSets"
+                value={newEntry.totalSets}
+                onChange={handleNewEntryChange}
+                placeholder="Enter number of packs"
+                min="0"
+                onWheel={(e) => e.target.blur()}
+                style={{
+                  padding: "0.5rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "0.375rem",
+                  fontSize: "0.875rem",
+                  width: "100%",
+                }}
+              />
+            </div>
+          ) : (
+            <>
+              <div>
+                <label
+                  style={{
+                    fontSize: "0.8rem",
+                    fontWeight: 500,
+                    marginBottom: "0.25rem",
+                    display: "block",
+                  }}
+                >
+                  Batteries Per Set
+                </label>
+                <input
+                  type="number"
+                  name="batteriesPerSet"
+                  value={newEntry.batteriesPerSet}
+                  onChange={handleNewEntryChange}
+                  onBlur={handleBatteriesPerSetBlur}
+                  placeholder="Enter batteries per set"
+                  min="0"
+                  onWheel={(e) => e.target.blur()}
+                  style={{
+                    padding: "0.5rem",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "0.375rem",
+                    fontSize: "0.875rem",
+                    width: "100%",
+                  }}
+                />
+              </div>
+              <div>
+                <label
+                  style={{
+                    fontSize: "0.8rem",
+                    fontWeight: 500,
+                    marginBottom: "0.25rem",
+                    display: "block",
+                  }}
+                >
+                  Sets
+                </label>
+                <input
+                  type="number"
+                  name="totalSets"
+                  value={newEntry.totalSets}
+                  onChange={handleNewEntryChange}
+                  placeholder="Enter sets"
+                  min="0"
+                  onWheel={(e) => e.target.blur()}
+                  style={{
+                    padding: "0.5rem",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "0.375rem",
+                    fontSize: "0.875rem",
+                    width: "100%",
+                  }}
+                />
+              </div>
+              <div>
+                <label
+                  style={{
+                    fontSize: "0.8rem",
+                    fontWeight: 500,
+                    marginBottom: "0.25rem",
+                    display: "block",
+                  }}
+                >
+                  Open Batteries
+                </label>
+                <input
+                  type="number"
+                  name="openBatteries"
+                  value={newEntry.openBatteries}
+                  onChange={handleNewEntryChange}
+                  placeholder="Enter open batteries"
+                  min="0"
+                  onWheel={(e) => e.target.blur()}
+                  style={{
+                    padding: "0.5rem",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "0.375rem",
+                    fontSize: "0.875rem",
+                    width: "100%",
+                  }}
+                />
+              </div>
+              {editingIndex !== null ? (
+                <>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "0.8rem",
+                        fontWeight: 500,
+                        marginBottom: "0.25rem",
+                        display: "block",
+                      }}
+                    >
+                      Purchased (pieces)
+                    </label>
+                    <input
+                      type="number"
+                      name="purchasedPieces"
+                      value={newEntry.purchasedPieces}
+                      onChange={handleNewEntryChange}
+                      placeholder="Original batch size"
+                      min="0"
+                      onWheel={(e) => e.target.blur()}
+                      style={{
+                        padding: "0.5rem",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "0.375rem",
+                        fontSize: "0.875rem",
+                        width: "100%",
+                      }}
+                    />
+                    <div
+                      style={{
+                        fontSize: "0.7rem",
+                        color: "#6b7280",
+                        marginTop: "0.2rem",
+                      }}
+                    >
+                      Original units in this batch; must be ≥ left. If empty,
+                      the saved purchased total is kept when available.
+                    </div>
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: "0.8rem",
+                        fontWeight: 500,
+                        marginBottom: "0.25rem",
+                        display: "block",
+                      }}
+                    >
+                      Left (pieces)
+                    </label>
+                    <input
+                      type="number"
+                      name="totalQuantity"
+                      value={newEntry.totalQuantity}
+                      readOnly
+                      placeholder="Auto-calculated"
+                      min="0"
+                      onWheel={(e) => e.target.blur()}
+                      style={{
+                        padding: "0.5rem",
+                        border: "1px solid #d1d5db",
+                        borderRadius: "0.375rem",
+                        fontSize: "0.875rem",
+                        width: "100%",
+                        backgroundColor: "#f3f4f6",
+                        cursor: "not-allowed",
+                      }}
+                    />
+                    <div
+                      style={{
+                        fontSize: "0.7rem",
+                        color: "#6b7280",
+                        marginTop: "0.2rem",
+                      }}
+                    >
+                      Current stock in this batch: batteries per set × sets +
+                      open batteries.
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <label
+                    style={{
+                      fontSize: "0.8rem",
+                      fontWeight: 500,
+                      marginBottom: "0.25rem",
+                      display: "block",
+                    }}
+                  >
+                    Total batteries purchased
+                  </label>
+                  <input
+                    type="number"
+                    name="totalQuantity"
+                    value={newEntry.totalQuantity}
+                    readOnly
+                    placeholder="Auto-calculated"
+                    min="0"
+                    onWheel={(e) => e.target.blur()}
+                    style={{
+                      padding: "0.5rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "0.375rem",
+                      fontSize: "0.875rem",
+                      width: "100%",
+                      backgroundColor: "#f3f4f6",
+                      cursor: "not-allowed",
+                    }}
+                  />
+                  <div
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#6b7280",
+                      marginTop: "0.2rem",
+                    }}
+                  >
+                    Auto-calculated: batteries per set × sets + open batteries.
+                  </div>
+                </div>
+              )}
+            </>
+          )}
           {isPriceVerified ? (
             <div>
               <label
@@ -794,7 +1074,9 @@ export default function AddMoreBattery() {
                   display: "block",
                 }}
               >
-                Purchase Price Set *
+                {battery.batteryType === "lithium"
+                  ? "Purchase price (set) *"
+                  : "Purchase Price Set *"}
               </label>
               <input
                 type="number"
@@ -824,7 +1106,9 @@ export default function AddMoreBattery() {
                   display: "block",
                 }}
               >
-                Purchase Price Set *
+                {battery.batteryType === "lithium"
+                  ? "Purchase price (set) *"
+                  : "Purchase Price Set *"}
               </label>
               <button
                 type="button"
@@ -926,7 +1210,7 @@ export default function AddMoreBattery() {
               display: "flex",
               gap: "0.5rem",
               justifyContent: "flex-end",
-              gridColumn: "5 / -1",
+              gridColumn: "1 / -1",
             }}
           >
             <button
@@ -1019,7 +1303,7 @@ export default function AddMoreBattery() {
               const originalIndex =
                 battery.stockEntries.length - 1 - reversedIndex;
               const qty = entry.quantity || 0;
-              // Use entry's batteriesPerSet if available, otherwise fall back to battery's
+              const isLithiumPack = battery.batteryType === "lithium";
               const perSet =
                 entry.batteriesPerSet !== undefined &&
                 entry.batteriesPerSet !== null
@@ -1045,97 +1329,198 @@ export default function AddMoreBattery() {
                     alignItems: "center",
                   }}
                 >
-                  <div>
-                    <div
+                  <div
+                    style={{
+                      gridColumn: "1 / -1",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      marginBottom: "0.1rem",
+                    }}
+                  >
+                    <span
                       style={{
                         fontSize: "0.75rem",
-                        color: "#6b7280",
-                        textTransform: "uppercase",
+                        fontWeight: 800,
+                        color: "#1e40af",
+                        background: "#dbeafe",
+                        border: "1px solid #93c5fd",
+                        borderRadius: "999px",
+                        padding: "0.2rem 0.6rem",
+                        letterSpacing: "0.03em",
                       }}
+                      title="Arrival order by purchase date — #1 is oldest (deducted first in FIFO)"
                     >
-                      Batteries Per Set
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "1.1rem",
-                        fontWeight: 700,
-                        color: "#111827",
-                      }}
-                    >
-                      {perSet}
-                    </div>
+                      #{arrivalRankByIndex[originalIndex]}
+                    </span>
                   </div>
+                  {isLithiumPack ? (
+                    <>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#6b7280",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Purchased (sets)
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.25rem",
+                            fontWeight: 700,
+                            color: "#111827",
+                          }}
+                        >
+                          {formatPurchasedPieces(entry)}
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#6b7280",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Left (sets)
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.25rem",
+                            fontWeight: 700,
+                            color: "#111827",
+                          }}
+                        >
+                          {batteryLayerLeftQty(entry)}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#6b7280",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Batteries Per Set
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.1rem",
+                            fontWeight: 700,
+                            color: "#111827",
+                          }}
+                        >
+                          {perSet}
+                        </div>
+                      </div>
 
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#6b7280",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Sets
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "1.25rem",
-                        fontWeight: 700,
-                        color: "#111827",
-                      }}
-                    >
-                      {sets}
-                    </div>
-                  </div>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#6b7280",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Sets
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.25rem",
+                            fontWeight: 700,
+                            color: "#111827",
+                          }}
+                        >
+                          {sets}
+                        </div>
+                      </div>
 
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#6b7280",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Open Batteries
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "1.25rem",
-                        fontWeight: 700,
-                        color: "#111827",
-                      }}
-                    >
-                      {open}
-                    </div>
-                  </div>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#6b7280",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Open Batteries
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.25rem",
+                            fontWeight: 700,
+                            color: "#111827",
+                          }}
+                        >
+                          {open}
+                        </div>
+                      </div>
 
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#6b7280",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Total Quantity
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "1.25rem",
-                        fontWeight: 700,
-                        color: "#111827",
-                      }}
-                    >
-                      {qty}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#6b7280",
-                      }}
-                    >
-                      pieces
-                    </div>
-                  </div>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#6b7280",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Purchased
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.25rem",
+                            fontWeight: 700,
+                            color: "#111827",
+                          }}
+                        >
+                          {formatPurchasedPieces(entry)}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#6b7280",
+                          }}
+                        >
+                          pieces
+                        </div>
+                      </div>
+
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#6b7280",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Left
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "1.25rem",
+                            fontWeight: 700,
+                            color: "#111827",
+                          }}
+                        >
+                          {batteryLayerLeftQty(entry)}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#6b7280",
+                          }}
+                        >
+                          pieces
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   <div>
                     <div
@@ -1166,7 +1551,7 @@ export default function AddMoreBattery() {
                           textTransform: "uppercase",
                         }}
                       >
-                        Purchase Price (Set)
+                        Purchase price (set)
                       </div>
                       <div
                         style={{
@@ -1187,7 +1572,7 @@ export default function AddMoreBattery() {
                           textTransform: "uppercase",
                         }}
                       >
-                        Purchase Price (Set)
+                        Purchase price (set)
                       </div>
                       <button
                         type="button"
@@ -1277,7 +1662,7 @@ export default function AddMoreBattery() {
               letterSpacing: "0.05em",
             }}
           >
-            Total Stock
+            Total left
           </div>
           <div
             style={{
@@ -1288,7 +1673,9 @@ export default function AddMoreBattery() {
           >
             {totalQuantity}
           </div>
-          <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>pieces</div>
+          <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+            {battery.batteryType === "lithium" ? "sets" : "pieces"}
+          </div>
         </div>
         <div
           style={{
