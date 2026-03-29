@@ -401,6 +401,16 @@ function AddMoreStock() {
     return matchIndex !== -1 ? matchIndex : sortedIndex;
   };
 
+  const entryWithDateForEdit = (entry) => ({
+    ...entry,
+    purchaseDate: entry.purchaseDate || formatDate(new Date()),
+    originalQuantity: String(
+      entry.originalQuantity != null && entry.originalQuantity !== ""
+        ? entry.originalQuantity
+        : spareLayerPurchasedQty(entry)
+    ),
+  });
+
   // Handle edit functionality
   const handleEditEntry = (index, entry) => {
     // If already editing this entry and user scrolled, reset and re-scroll
@@ -415,10 +425,7 @@ function AddMoreStock() {
 
       // Re-trigger edit after a brief delay
       setTimeout(() => {
-        const entryWithDate = {
-          ...entry,
-          purchaseDate: entry.purchaseDate || formatDate(new Date()),
-        };
+        const entryWithDate = entryWithDateForEdit(entry);
         setEditingEntryIndex(index);
         setEditingEntry(entryWithDate);
         
@@ -494,10 +501,7 @@ function AddMoreStock() {
 
     // Normal edit flow
     setEditingEntryIndex(index);
-    const entryWithDate = {
-      ...entry,
-      purchaseDate: entry.purchaseDate || formatDate(new Date()),
-    };
+    const entryWithDate = entryWithDateForEdit(entry);
     setEditingEntry(entryWithDate);
     
     // Store original entry state for comparison
@@ -695,6 +699,28 @@ function AddMoreStock() {
         return;
       }
     }
+
+    if (!isColorTrackingEnabled) {
+      const left = parseInt(String(editingEntry.quantity ?? "").trim(), 10);
+      const baselinePurchased = spareLayerPurchasedQty(originalEditEntry);
+      const purchasedParsed = parseInt(
+        String(editingEntry.originalQuantity ?? "").trim(),
+        10
+      );
+      const purchased = Number.isNaN(purchasedParsed)
+        ? baselinePurchased
+        : Math.max(0, purchasedParsed);
+      if (Number.isNaN(left) || left < 0) {
+        setFormError("Quantity left must be a number 0 or greater.");
+        return;
+      }
+      if (purchased < left) {
+        setFormError(
+          "Purchased quantity cannot be less than quantity left for this entry."
+        );
+        return;
+      }
+    }
     
     await performSaveEdit();
   };
@@ -745,12 +771,22 @@ function AddMoreStock() {
         }
       }
     } else {
-      // For non-color tracking, check quantity
-      const quantityChanged = 
-        parseInt(originalEditEntry.quantity || 0) !== 
+      // For non-color tracking, check quantity left and purchased (originalQuantity)
+      const quantityChanged =
+        parseInt(originalEditEntry.quantity || 0) !==
         parseInt(editingEntry.quantity || 0);
-      
-      if (quantityChanged) {
+
+      const baselinePurchased = spareLayerPurchasedQty(originalEditEntry);
+      const editedPurchasedParsed = parseInt(
+        String(editingEntry.originalQuantity ?? "").trim(),
+        10
+      );
+      const newPurchased = Number.isNaN(editedPurchasedParsed)
+        ? baselinePurchased
+        : Math.max(0, editedPurchasedParsed);
+      const purchasedChanged = newPurchased !== baselinePurchased;
+
+      if (quantityChanged || purchasedChanged) {
         return true;
       }
     }
@@ -779,6 +815,14 @@ function AddMoreStock() {
           ? spareLayerPurchasedQty(existingStockRow)
           : newQtyNonColor;
 
+      const editedPurchasedParsed = parseInt(
+        String(editingEntry?.originalQuantity ?? "").trim(),
+        10
+      );
+      const editedOriginalQtyNonColor = Number.isNaN(editedPurchasedParsed)
+        ? preservedEntryOriginal
+        : Math.max(0, editedPurchasedParsed);
+
       // Update the entry with total quantity and purchase price
       const updatedEntry = {
         ...editingEntry,
@@ -786,7 +830,7 @@ function AddMoreStock() {
         purchasePrice: editingEntry?.purchasePrice || 0,
         ...(!isColorTrackingEnabled && {
           quantity: newQtyNonColor,
-          originalQuantity: preservedEntryOriginal,
+          originalQuantity: editedOriginalQtyNonColor,
         }),
         color:
           editEntryColors.length > 0
@@ -842,11 +886,11 @@ function AddMoreStock() {
         : null;
 
       if (!isColorTrackingEnabled) {
-        const filteredEntries = currentStockEntries.filter(
-          (e, idx) => !isQuantityZero(e.quantity) && idx !== editingEntryIndex
+        const otherEntries = currentStockEntries.filter(
+          (_e, idx) => idx !== editingEntryIndex
         );
         const newDate = displayDate(updatedEntry.purchaseDate);
-        const hasDuplicateDate = filteredEntries.some(
+        const hasDuplicateDate = otherEntries.some(
           (e) => displayDate(e.purchaseDate) === newDate
         );
         if (hasDuplicateDate) {
@@ -965,156 +1009,49 @@ function AddMoreStock() {
         });
       }
 
-      // Check if quantity is zero and handle removal
-      if (isQuantityZero(totalQuantity)) {
-        // Calculate total value of all other entries (excluding current one)
-        const otherEntriesValue = currentStockEntries.reduce(
-          (sum, entry, index) => {
-            if (index === editingEntryIndex) return sum; // Skip current entry
-            return (
-              sum +
-              parseFloat(entry.quantity || 0) *
-                parseFloat(entry.purchasePrice || 0)
-            );
-          },
-          0
-        );
+      // Keep all layers including quantity 0 (FIFO / edits); only explicit delete removes a row
+      const updatedStockEntries = currentStockEntries.map((entry, index) =>
+        index === editingEntryIndex ? updatedEntry : entry
+      );
 
-        // Remove entry only if there are other entries with value > 0
-        if (otherEntriesValue > 0) {
-          // Remove the entry
-          const updatedStockEntries = currentStockEntries.filter(
-            (_, index) => index !== editingEntryIndex
-          );
+      const requestBody = {
+        [stockField]: updatedStockEntries,
+        ...(isColorTrackingEnabled && {
+          colorQuantity: updatedColorQuantity,
+        }),
+        securityKey: securityKey || null, // Always include, backend will validate
+      };
 
-          const requestBody = {
-            [stockField]: updatedStockEntries,
-            ...(isColorTrackingEnabled && {
-              colorQuantity: updatedColorQuantity,
-            }),
-            securityKey: securityKey || null, // Always include, backend will validate
-          };
+      const response = await fetch(`http://localhost:5000/api/spares/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-          const response = await fetch(
-            `http://localhost:5000/api/spares/${id}`,
-            {
-              method: "PUT",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(requestBody),
-            }
-          );
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            if (errorData.requiresAuth) {
-              setFormError("Admin authentication required to update purchase price. Please log in as admin.");
-              return;
-            }
-            throw new Error(errorData.message || "Failed to remove stock entry");
-          }
-
-          if (response.ok) {
-            const updatedSpare = await response.json();
-            setSpare(updatedSpare);
-            await fetchSpareDetails();
-            setEditingEntryIndex(null);
-            setEditingEntry(null);
-            setEditEntryColors([]);
-            setNewEditColor("");
-            setNewEditColorQuantity("");
-          }
-        } else {
-          // Keep the entry with zero quantity if it's the only one or no other entries have value
-          const updatedStockEntries = currentStockEntries.map((entry, index) =>
-            index === editingEntryIndex ? updatedEntry : entry
-          );
-
-          const requestBody = {
-            [stockField]: updatedStockEntries,
-            ...(isColorTrackingEnabled && {
-              colorQuantity: updatedColorQuantity,
-            }),
-            securityKey: securityKey || null, // Always include, backend will validate
-          };
-
-          const response = await fetch(
-            `http://localhost:5000/api/spares/${id}`,
-            {
-              method: "PUT",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(requestBody),
-            }
-          );
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            if (errorData.requiresAuth) {
-              setFormError("Admin authentication required to update purchase price. Please log in as admin.");
-              return;
-            }
-            throw new Error(errorData.message || "Failed to update stock entry");
-          }
-
-          if (response.ok) {
-            const updatedSpare = await response.json();
-            setSpare(updatedSpare);
-            await fetchSpareDetails();
-            setEditingEntryIndex(null);
-            setEditingEntry(null);
-            setEditEntryColors([]);
-            setNewEditColor("");
-            setNewEditColorQuantity("");
-          }
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (errorData.requiresAuth) {
+          setFormError("Admin authentication required to update purchase price. Please log in as admin.");
+          return;
         }
+        throw new Error(errorData.message || "Failed to update stock entry");
+      }
+
+      if (response.ok) {
+        const updatedSpare = await response.json();
+        setSpare(updatedSpare);
+        await fetchSpareDetails();
+        setEditingEntryIndex(null);
+        setEditingEntry(null);
+        setEditEntryColors([]);
+        setNewEditColor("");
+        setNewEditColorCustom("");
+        setNewEditColorQuantity("");
+        setNewEditColorPurchasePrice("");
       } else {
-        // Normal update
-        const updatedStockEntries = currentStockEntries.map((entry, index) =>
-          index === editingEntryIndex ? updatedEntry : entry
-        );
-
-        const requestBody = {
-          [stockField]: updatedStockEntries,
-          ...(isColorTrackingEnabled && {
-            colorQuantity: updatedColorQuantity,
-          }),
-          securityKey: securityKey || null, // Always include, backend will validate
-        };
-
-        const response = await fetch(`http://localhost:5000/api/spares/${id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          if (errorData.requiresAuth) {
-            setFormError("Admin authentication required to update purchase price. Please log in as admin.");
-            return;
-          }
-          throw new Error(errorData.message || "Failed to update stock entry");
-        }
-
-        if (response.ok) {
-          const updatedSpare = await response.json();
-          setSpare(updatedSpare);
-          await fetchSpareDetails();
-          setEditingEntryIndex(null);
-          setEditingEntry(null);
-          setEditEntryColors([]);
-          setNewEditColor("");
-          setNewEditColorCustom("");
-          setNewEditColorQuantity("");
-          setNewEditColorPurchasePrice("");
-        } else {
-          throw new Error("Failed to update stock entry");
-        }
+        throw new Error("Failed to update stock entry");
       }
     } catch (error) {
       console.error("Error updating stock entry:", error);
@@ -1158,19 +1095,6 @@ function AddMoreStock() {
 
       return parseDate(dateA) - parseDate(dateB);
     });
-  };
-
-  // Helper function to check if quantity is zero
-  const isQuantityZero = (quantity) => {
-    // Handle different types: string, number, undefined
-    const numQuantity = parseInt(quantity);
-    return (
-      quantity === "0" ||
-      quantity === "" ||
-      quantity === 0 ||
-      numQuantity === 0 ||
-      isNaN(numQuantity)
-    );
   };
 
   const fetchSpareDetails = useCallback(async () => {
@@ -1574,8 +1498,13 @@ function AddMoreStock() {
     if (!colorEntry) return;
 
     setEditingColorIndex(colorIndex);
+    const purchased =
+      colorEntry.originalQuantity != null && colorEntry.originalQuantity !== ""
+        ? String(colorEntry.originalQuantity)
+        : String(spareLayerPurchasedQty(colorEntry));
     setEditingColorEntry({
       color: colorEntry.color || "",
+      originalQuantity: purchased,
       quantity: colorEntry.quantity?.toString() || "",
       purchasePrice: colorEntry.purchasePrice?.toString() || "",
       purchaseDate: colorEntry.purchaseDate
@@ -1679,56 +1608,138 @@ function AddMoreStock() {
     setFormError("");
     setFormWarning("");
 
-    if (
-      !editingColorEntry?.color ||
-      !editingColorEntry?.quantity
-    ) {
-      setFormError("Color and quantity are required fields");
+    if (!editingColorEntry?.color) {
+      setFormError("Color is required");
       return;
     }
 
     if (
-      parseFloat(editingColorEntry.quantity) <= 0
+      editingColorEntry?.quantity === "" ||
+      editingColorEntry?.quantity === undefined ||
+      editingColorEntry?.quantity === null
     ) {
-      setFormError("Quantity must be greater than 0");
+      setFormError("Quantity left is required");
+      return;
+    }
+
+    const leftQty = parseInt(String(editingColorEntry.quantity).trim(), 10);
+    if (Number.isNaN(leftQty) || leftQty < 0) {
+      setFormError("Quantity left must be a number 0 or greater.");
+      return;
+    }
+
+    const purchasedParsed = parseInt(
+      String(editingColorEntry.originalQuantity ?? "").trim(),
+      10
+    );
+    const baselinePurchased = spareLayerPurchasedQty(
+      spare?.colorQuantity?.[editingColorIndex]
+    );
+    const purchasedQty = Number.isNaN(purchasedParsed)
+      ? baselinePurchased
+      : Math.max(0, purchasedParsed);
+
+    if (purchasedQty < leftQty) {
+      setFormError(
+        "Purchased quantity cannot be less than quantity left for this color."
+      );
       return;
     }
 
     try {
       const currentColorQuantity = spare?.colorQuantity || [];
-      // Get the original purchase date from the entry being edited
       const originalEntry = currentColorQuantity[editingColorIndex];
-      const originalPurchaseDate = originalEntry?.purchaseDate || "";
+      if (!originalEntry) {
+        setFormError("Color entry not found.");
+        return;
+      }
+
+      const oldPriceRaw =
+        originalEntry.purchasePrice !== undefined &&
+        originalEntry.purchasePrice !== null
+          ? parseFloat(originalEntry.purchasePrice)
+          : null;
+
+      let newPurchasePrice;
+      if (!isPurchasePriceUnlocked) {
+        newPurchasePrice =
+          oldPriceRaw !== null && !Number.isNaN(oldPriceRaw) ? oldPriceRaw : 0;
+      } else {
+        const raw = editingColorEntry.purchasePrice;
+        if (raw === "" || raw === undefined || raw === null) {
+          newPurchasePrice = 0;
+        } else {
+          const p = parseFloat(raw);
+          newPurchasePrice = Number.isNaN(p) ? 0 : p;
+        }
+      }
+
+      const needsPurchasePriceAuth =
+        newPurchasePrice > 0 &&
+        (oldPriceRaw === null ||
+          Number.isNaN(oldPriceRaw) ||
+          newPurchasePrice !== oldPriceRaw);
+
+      if (needsPurchasePriceAuth) {
+        if (!isPurchasePriceUnlocked) {
+          setFormError(
+            "Please unlock the purchase price field with security key first."
+          );
+          return;
+        }
+        const sk = sessionStorage.getItem("adminSecurityKey");
+        if (!sk) {
+          setFormError(
+            "Admin authentication required to set or change purchase price."
+          );
+          return;
+        }
+      }
 
       const updatedColorQuantity = currentColorQuantity.map((cq, index) =>
         index === editingColorIndex
           ? {
+              ...cq,
               color: editingColorEntry.color.trim(),
-              quantity: parseInt(editingColorEntry.quantity),
+              quantity: leftQty,
+              originalQuantity: purchasedQty,
               minStockLevel: editingColorEntry.minStockLevel
-                ? parseInt(editingColorEntry.minStockLevel)
+                ? parseInt(editingColorEntry.minStockLevel, 10)
                 : 0,
-              purchasePrice: editingColorEntry.purchasePrice
-                ? parseFloat(editingColorEntry.purchasePrice)
-                : 0,
-              purchaseDate: originalPurchaseDate, // Keep the original purchase date
+              purchasePrice: newPurchasePrice,
+              purchaseDate: originalEntry.purchaseDate || cq.purchaseDate || "",
             }
           : cq
       );
+
+      const body = { colorQuantity: updatedColorQuantity };
+      if (needsPurchasePriceAuth) {
+        body.securityKey = sessionStorage.getItem("adminSecurityKey");
+      }
 
       const response = await fetch(`http://localhost:5000/api/spares/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          colorQuantity: updatedColorQuantity,
-          [stockField]: [],
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to update color entry");
+        let msg = "Failed to update color entry";
+        try {
+          const err = await response.json();
+          if (err.requiresAuth) {
+            msg =
+              err.message ||
+              "Admin authentication required to update purchase price.";
+          } else {
+            msg = err.message || err.error || msg;
+          }
+        } catch {
+          /* non-JSON body */
+        }
+        throw new Error(msg);
       }
 
       await fetchSpareDetails();
@@ -1875,57 +1886,31 @@ function AddMoreStock() {
 
       // Only compute stockEntries updates when color tracking is disabled
       if (!isColorTrackingEnabled) {
-        // Check if there's only one entry and it has zero quantity
-        if (
-          currentStockEntries.length === 1 &&
-          isQuantityZero(currentStockEntries[0].quantity)
-        ) {
-          // Replace the zero quantity entry with the new entry
-          const q0 = parseInt(newStockEntry.quantity, 10);
-          updatedStockEntries = [
-            {
-              quantity: q0,
-              originalQuantity: q0,
-              purchasePrice: parseFloat(newStockEntry.purchasePrice),
-              purchaseDate: newStockEntry.purchaseDate,
-            },
-          ];
-          console.log("Replaced single zero entry with new stock");
-        } else {
-          // Filter out zero quantity entries
-          const filteredEntries = currentStockEntries.filter(
-            (entry) => !isQuantityZero(entry.quantity)
+        const newDate = displayDate(newStockEntry.purchaseDate);
+        const hasDuplicateDate = currentStockEntries.some(
+          (entry) => displayDate(entry.purchaseDate) === newDate
+        );
+        if (hasDuplicateDate) {
+          setFormWarning(
+            "A stock entry with this purchase date already exists"
           );
-
-          // Duplicate check by purchase date when color tracking is disabled
-          const newDate = displayDate(newStockEntry.purchaseDate);
-          const hasDuplicateDate = filteredEntries.some(
-            (entry) => displayDate(entry.purchaseDate) === newDate
-          );
-          if (hasDuplicateDate) {
-            setFormWarning(
-              "A stock entry with this purchase date already exists"
-            );
-            setTimeout(() => setFormWarning(""), 3000);
-            setIsSubmitting(false);
-            return;
-          }
-
-          // Add the new entry when no duplicate date
-          const q1 = parseInt(newStockEntry.quantity, 10);
-          updatedStockEntries = [
-            ...filteredEntries,
-            {
-              quantity: q1,
-              originalQuantity: q1,
-              purchasePrice: hasPurchasePrice
-                ? parseFloat(newStockEntry.purchasePrice)
-                : 0,
-              purchaseDate: newStockEntry.purchaseDate,
-            },
-          ];
-          console.log("Filtered zero entries and added new stock");
+          setTimeout(() => setFormWarning(""), 3000);
+          setIsSubmitting(false);
+          return;
         }
+
+        const q1 = parseInt(newStockEntry.quantity, 10);
+        updatedStockEntries = [
+          ...currentStockEntries,
+          {
+            quantity: q1,
+            originalQuantity: q1,
+            purchasePrice: hasPurchasePrice
+              ? parseFloat(newStockEntry.purchasePrice)
+              : 0,
+            purchaseDate: newStockEntry.purchaseDate,
+          },
+        ];
       }
 
       // Update colorQuantity array when color tracking is enabled
@@ -3481,26 +3466,56 @@ function AddMoreStock() {
                 }}
               >
                 <div>
-                  {!isColorTrackingEnabled &&
-                    spare?.[stockField]?.[editingEntryIndex] && (
-                      <div
+                  {!isColorTrackingEnabled && (
+                    <>
+                      <label
                         style={{
-                          fontSize: "0.8rem",
-                          color: "#64748b",
+                          display: "block",
                           marginBottom: "0.5rem",
+                          fontSize: "0.875rem",
+                          fontWeight: "500",
+                          color: "#374151",
+                        }}
+                      >
+                        Purchased (this entry)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editingEntry?.originalQuantity ?? ""}
+                        onChange={(e) =>
+                          setEditingEntry({
+                            ...editingEntry,
+                            originalQuantity: e.target.value,
+                          })
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "0.75rem",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "0.375rem",
+                          fontSize: "0.875rem",
+                          backgroundColor: "#ffffff",
+                          marginBottom: "0.5rem",
+                        }}
+                        placeholder="Units bought for this batch"
+                        onWheel={(e) => e.target.blur()}
+                      />
+                      <small
+                        style={{
+                          color: "#6b7280",
+                          fontSize: "0.75rem",
+                          marginBottom: "0.75rem",
+                          display: "block",
                           lineHeight: 1.4,
                         }}
                       >
-                        Purchased (this entry):{" "}
-                        <strong>
-                          {spareLayerPurchasedQty(
-                            spare[stockField][editingEntryIndex]
-                          )}
-                        </strong>{" "}
-                        pcs — fixed record of what was bought; does not change
-                        when items are sold.
-                      </div>
-                    )}
+                        Record of what was bought. Quantity left still tracks
+                        stock after sales; you can correct purchased if the
+                        initial entry was wrong.
+                      </small>
+                    </>
+                  )}
                   <label
                     style={{
                       display: "block",
@@ -5126,7 +5141,56 @@ function AddMoreStock() {
                                           fontSize: "0.875rem",
                                         }}
                                       >
-                                        Quantity *
+                                        Purchased (this color) *
+                                      </label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={
+                                          editingColorEntry?.originalQuantity ??
+                                          ""
+                                        }
+                                        onChange={(e) =>
+                                          setEditingColorEntry((prev) => ({
+                                            ...prev,
+                                            originalQuantity: e.target.value,
+                                          }))
+                                        }
+                                        required
+                                        style={{
+                                          width: "100%",
+                                          padding: "0.5rem",
+                                          border: "1px solid #d1d5db",
+                                          borderRadius: "0.375rem",
+                                          fontSize: "0.875rem",
+                                        }}
+                                        onWheel={(e) => e.target.blur()}
+                                      />
+                                      <small
+                                        style={{
+                                          color: "#6b7280",
+                                          fontSize: "0.72rem",
+                                          marginTop: "0.2rem",
+                                          display: "block",
+                                          lineHeight: 1.35,
+                                        }}
+                                      >
+                                        Record of units bought for this color
+                                        batch; quantity left still tracks stock
+                                        after sales.
+                                      </small>
+                                    </div>
+                                    <div>
+                                      <label
+                                        style={{
+                                          display: "block",
+                                          marginBottom: "0.5rem",
+                                          color: "#374151",
+                                          fontWeight: "500",
+                                          fontSize: "0.875rem",
+                                        }}
+                                      >
+                                        Quantity left (this color) *
                                       </label>
                                       <input
                                         type="number"
@@ -5140,7 +5204,7 @@ function AddMoreStock() {
                                           }))
                                         }
                                         required
-                                        min="1"
+                                        min="0"
                                         style={{
                                           width: "100%",
                                           padding: "0.5rem",
@@ -5148,6 +5212,7 @@ function AddMoreStock() {
                                           borderRadius: "0.375rem",
                                           fontSize: "0.875rem",
                                         }}
+                                        onWheel={(e) => e.target.blur()}
                                       />
                                     </div>
                                     <div>

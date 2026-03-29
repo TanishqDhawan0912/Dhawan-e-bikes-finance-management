@@ -1,6 +1,53 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useEffect, useState, useMemo } from "react";
-import { formatDate } from "../utils/dateUtils";
+import { useEffect, useState, useMemo, useRef } from "react";
+import { formatDate, getTodayForInput } from "../utils/dateUtils";
+
+/** Parse yyyy-mm-dd to local Date (noon) for stable calendar math */
+function ymdToLocalDate(ymd) {
+  const parts = String(ymd || "").split("-");
+  if (parts.length !== 3) return new Date();
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return new Date();
+  return new Date(y, m - 1, d, 12, 0, 0);
+}
+
+function dateToYmd(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function ymdToDdMmYyyy(ymd) {
+  const parts = String(ymd || "").split("-");
+  if (parts.length !== 3) return "";
+  const [y, m, d] = parts;
+  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+}
+
+/** yyyy-mm -> display as mm/yyyy */
+function yyyyMmToSlashDisplay(yyyyMm) {
+  const [y, m] = String(yyyyMm || "").split("-");
+  if (!y || !m) return "";
+  return `${String(m).padStart(2, "0")}/${y}`;
+}
+
+const FINANCE_MONTH_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 import { useSessionTimeout } from "../hooks/useSessionTimeout";
 import {
   FaTools,
@@ -40,6 +87,14 @@ export default function Admin() {
   const [financeSelectedMonth, setFinanceSelectedMonth] = useState(
     new Date().toISOString().slice(0, 7)
   ); // yyyy-mm
+  const [showFinanceDayPicker, setShowFinanceDayPicker] = useState(false);
+  const [showFinanceMonthPicker, setShowFinanceMonthPicker] = useState(false);
+  const [financeCalMonth, setFinanceCalMonth] = useState(() => new Date());
+  const [financeMonthPickYear, setFinanceMonthPickYear] = useState(() =>
+    new Date().getFullYear()
+  );
+  const financeDayPickerRef = useRef(null);
+  const financeMonthPickerRef = useRef(null);
   const [models, setModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState("");
@@ -255,13 +310,30 @@ export default function Admin() {
     fetchModels();
     fetchBatteriesForAdmin();
     fetchChargersForAdmin();
-  }, [activeSection]);
+  }, [activeSection, financeSubView]);
 
   useEffect(() => {
     if (activeSection !== "finance") {
       setFinanceSubView(null);
     }
   }, [activeSection]);
+
+  useEffect(() => {
+    if (!showFinanceDayPicker && !showFinanceMonthPicker) return;
+    const close = (e) => {
+      const t = e.target;
+      if (
+        financeDayPickerRef.current?.contains(t) ||
+        financeMonthPickerRef.current?.contains(t)
+      ) {
+        return;
+      }
+      setShowFinanceDayPicker(false);
+      setShowFinanceMonthPicker(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [showFinanceDayPicker, showFinanceMonthPicker]);
 
   // Check if user is authenticated
   const isAdminAuth = sessionStorage.getItem("adminAuth");
@@ -1007,7 +1079,11 @@ export default function Admin() {
       ? financeSelectedMonth
       : financeSelectedDate.slice(0, 7);
 
-  /** Unit cost for profit math: purchase price from the latest dated stock row (not a weighted average). */
+  /**
+   * Estimated unit purchase cost from spare stock rows (each row’s purchasePrice × remaining qty).
+   * Prefers weighted average of layers with quantity > 0. Bills/jobcards with stored FIFO costs
+   * use those fields instead of this fallback.
+   */
   const getSpareUnitCost = (spareId) => {
     if (!spareId) return 0;
     const spare = Array.isArray(spares)
@@ -1025,39 +1101,72 @@ export default function Admin() {
       return Number.isNaN(x) ? -Infinity : x;
     };
 
-    const latestPurchasePrice = (rows, dateKey, priceKey) => {
+    const weightedAvgFromEntries = (rows) => {
+      if (!Array.isArray(rows) || rows.length === 0) return null;
+      let totalQty = 0;
+      let totalCost = 0;
+      for (const row of rows) {
+        if (!row) continue;
+        const q = Math.max(0, Number(row.quantity) || 0);
+        if (q <= 0) continue;
+        const p = Number(row.purchasePrice) || 0;
+        totalQty += q;
+        totalCost += q * p;
+      }
+      if (totalQty > 0) {
+        const wAvg = totalCost / totalQty;
+        if (wAvg > 0) return wAvg;
+        return null;
+      }
+      return null;
+    };
+
+    /** When no layer has qty left, use mean of any positive purchasePrice (incl. sold-out rows). */
+    const meanPositivePurchasePrices = (rows) => {
+      if (!Array.isArray(rows) || rows.length === 0) return null;
+      const prices = [];
+      for (const row of rows) {
+        if (!row) continue;
+        const p = Number(row.purchasePrice) || 0;
+        if (p > 0) prices.push(p);
+      }
+      if (prices.length === 0) return null;
+      return prices.reduce((a, b) => a + b, 0) / prices.length;
+    };
+
+    /** When no stock remains, use latest-dated row’s purchasePrice as a reference. */
+    const latestEntryPurchasePrice = (rows) => {
       if (!Array.isArray(rows) || rows.length === 0) return 0;
       let bestI = -1;
       let bestT = -Infinity;
       rows.forEach((row, i) => {
         if (!row) return;
-        const t = rowPurchaseTime(row[dateKey]);
+        const t = rowPurchaseTime(row.purchaseDate);
         if (t > bestT || (t === bestT && i > bestI)) {
           bestT = t;
           bestI = i;
         }
       });
       if (bestI >= 0 && bestT > -Infinity) {
-        return Number(rows[bestI][priceKey]) || 0;
+        return Number(rows[bestI].purchasePrice) || 0;
       }
-      const last = rows[rows.length - 1];
-      return Number(last?.[priceKey]) || 0;
+      return Number(rows[rows.length - 1]?.purchasePrice) || 0;
+    };
+
+    const resolveFromRows = (rows) => {
+      const w = weightedAvgFromEntries(rows);
+      if (w != null) return w;
+      const pos = meanPositivePurchasePrices(rows);
+      if (pos != null) return pos;
+      return latestEntryPurchasePrice(rows);
     };
 
     if (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0) {
-      return latestPurchasePrice(
-        spare.colorQuantity,
-        "purchaseDate",
-        "purchasePrice"
-      );
+      return resolveFromRows(spare.colorQuantity);
     }
 
     if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
-      return latestPurchasePrice(
-        spare.stockEntries,
-        "purchaseDate",
-        "purchasePrice"
-      );
+      return resolveFromRows(spare.stockEntries);
     }
 
     return 0;
@@ -1157,37 +1266,110 @@ export default function Admin() {
     return cost;
   };
 
-  // Jobcard profit rule (service only, for now):
-  // profit = paidAmount - sum(purchaseCost of service spares)
-  const buildJobcardServiceProfitDetail = (jc) => {
+  // Jobcard profit: paidAmount − COGS for service lines + sales (spare, new battery, new charger; old scooty uses stored line cost if any)
+  const buildJobcardServiceAndSalesProfitDetail = (jc) => {
     const paidAmount = Number(jc?.paidAmount) || 0;
     const parts = Array.isArray(jc?.parts) ? jc.parts : [];
-    const serviceParts = parts.filter(
-      (p) => p && String(p.partType || "").toLowerCase() === "service"
-    );
+    const lines = [];
 
-    const lines = serviceParts
-      .map((p) => {
-        const qty = Number(p.quantity) || 0;
-        const spareId = p.spareId?._id || p.spareId;
-        const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
-        let unitCost;
-        let lineCost;
-        if (storedFifo > 0) {
-          lineCost = storedFifo;
-          unitCost = qty > 0 ? storedFifo / qty : 0;
-        } else {
-          unitCost = getSpareUnitCost(spareId);
-          lineCost = qty * unitCost;
-        }
-        return {
-          name: p.spareName || "N/A",
+    const addSpareCostLine = (p, namePrefix) => {
+      const qty = Number(p.quantity) || 0;
+      if (qty <= 0) return;
+      const spareId = p.spareId?._id || p.spareId;
+      if (!spareId) return;
+      const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
+      let unitCost;
+      let lineCost;
+      if (storedFifo > 0) {
+        lineCost = storedFifo;
+        unitCost = qty > 0 ? storedFifo / qty : 0;
+      } else {
+        unitCost = getSpareUnitCost(spareId);
+        lineCost = qty * unitCost;
+      }
+      lines.push({
+        name: `${namePrefix}${p.spareName || "N/A"}`,
+        quantity: qty,
+        unitCost,
+        lineCost,
+      });
+    };
+
+    for (const p of parts) {
+      if (!p) continue;
+      const partType = String(p.partType || "").toLowerCase();
+
+      if (partType === "service") {
+        addSpareCostLine(p, "");
+        continue;
+      }
+
+      if (partType !== "sales") continue;
+
+      const salesType = String(p.salesType || "").toLowerCase();
+      const hasSpareRef = !!(p.spareId?._id || p.spareId);
+
+      if (salesType === "spare" || (salesType === "" && hasSpareRef)) {
+        addSpareCostLine(p, "Sales · ");
+        continue;
+      }
+
+      if (salesType === "battery") {
+        if (String(p.batteryOldNew || "").toLowerCase() === "old") continue;
+        const batteryId =
+          p.batteryInventoryId || p.batteryId || p.spareId || p.id || null;
+        const qtyUnits =
+          Number(
+            p.selectedQuantity !== undefined && p.selectedQuantity !== null
+              ? p.selectedQuantity
+              : p.quantity
+          ) || 0;
+        if (!batteryId || qtyUnits <= 0) continue;
+        const perUnit = getBatteryUnitCost(batteryId);
+        const lineCost = qtyUnits * perUnit;
+        lines.push({
+          name: `Sales · ${p.spareName || "Battery"}`,
+          quantity: qtyUnits,
+          unitCost: qtyUnits > 0 ? lineCost / qtyUnits : 0,
+          lineCost,
+        });
+        continue;
+      }
+
+      if (salesType === "charger") {
+        if (String(p.chargerOldNew || "").toLowerCase() === "old") continue;
+        const chargerId =
+          p.chargerInventoryId || p.chargerId || p.spareId || p.id || null;
+        const qty =
+          Number(
+            p.selectedQuantity !== undefined && p.selectedQuantity !== null
+              ? p.selectedQuantity
+              : p.quantity
+          ) || 0;
+        if (!chargerId || qty <= 0) continue;
+        const unitCost = getChargerUnitCost(chargerId);
+        const lineCost = qty * unitCost;
+        lines.push({
+          name: `Sales · ${p.spareName || "Charger"}`,
           quantity: qty,
           unitCost,
           lineCost,
-        };
-      })
-      .filter((l) => l.quantity > 0);
+        });
+        continue;
+      }
+
+      if (salesType === "oldscooty") {
+        const qty = Number(p.quantity) || 1;
+        const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
+        if (storedFifo <= 0) continue;
+        lines.push({
+          name: `Sales · ${p.spareName || "Old scooty"}`,
+          quantity: qty,
+          unitCost: qty > 0 ? storedFifo / qty : storedFifo,
+          lineCost: storedFifo,
+        });
+      }
+    }
 
     const totalCost = lines.reduce((sum, l) => sum + (l.lineCost || 0), 0);
     const profit = paidAmount - totalCost;
@@ -1283,8 +1465,12 @@ export default function Admin() {
 
     const billDetailsDay = billsForDay.map(buildBillProfitDetail);
     const billDetailsMonth = billsForMonth.map(buildBillProfitDetail);
-    const jobcardDetailsDay = jobcardsForDay.map(buildJobcardServiceProfitDetail);
-    const jobcardDetailsMonth = jobcardsForMonth.map(buildJobcardServiceProfitDetail);
+    const jobcardDetailsDay = jobcardsForDay.map(
+      buildJobcardServiceAndSalesProfitDetail
+    );
+    const jobcardDetailsMonth = jobcardsForMonth.map(
+      buildJobcardServiceAndSalesProfitDetail
+    );
 
     const sumProfit = (list) => list.reduce((sum, x) => sum + (Number(x.profit) || 0), 0);
     const sumRevenue = (list) => list.reduce((sum, x) => sum + (Number(x.revenue) || 0), 0);
@@ -2978,14 +3164,45 @@ export default function Admin() {
                 "en-IN",
                 { month: "long", year: "numeric" }
               );
-        const financeInputStyle = {
-          padding: "0.5rem 0.75rem",
-          borderRadius: "4px",
-          border: "1px solid #ced4da",
-          fontSize: "0.9rem",
-          minWidth: "160px",
+        const financeTriggerBtnStyle = {
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "0.5rem",
+          padding: "0.55rem 0.95rem",
+          borderRadius: "10px",
+          border: "1px solid #cbd5e1",
+          background: "#fff",
+          fontSize: "0.95rem",
+          fontWeight: 500,
+          color: "#0f172a",
+          cursor: "pointer",
+          minWidth: "156px",
+          boxShadow: "0 1px 2px rgba(15, 23, 42, 0.06)",
           fontFamily: "inherit",
+          transition: "border-color 0.15s, box-shadow 0.15s",
         };
+        const financePopoverStyle = {
+          position: "absolute",
+          top: "calc(100% + 8px)",
+          left: 0,
+          zIndex: 50,
+          background: "#fff",
+          borderRadius: "14px",
+          boxShadow:
+            "0 12px 40px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(15, 23, 42, 0.06)",
+          padding: "1rem",
+          minWidth: "292px",
+        };
+        const calY = financeCalMonth.getFullYear();
+        const calM = financeCalMonth.getMonth();
+        const daysInCalMonth = new Date(calY, calM + 1, 0).getDate();
+        const firstDowMon =
+          (new Date(calY, calM, 1).getDay() + 6) % 7;
+        const todayYmd = getTodayForInput();
+        const financeDayCells = [];
+        for (let i = 0; i < firstDowMon; i++) financeDayCells.push(null);
+        for (let d = 1; d <= daysInCalMonth; d++) financeDayCells.push(d);
 
         return (
           <div className="admin-content">
@@ -3024,7 +3241,11 @@ export default function Admin() {
                   className={
                     financeRangeMode === "day" ? "btn btn-primary" : "btn btn-secondary"
                   }
-                  onClick={() => setFinanceRangeMode("day")}
+                  onClick={() => {
+                    setShowFinanceDayPicker(false);
+                    setShowFinanceMonthPicker(false);
+                    setFinanceRangeMode("day");
+                  }}
                 >
                   Date
                 </button>
@@ -3033,26 +3254,343 @@ export default function Admin() {
                   className={
                     financeRangeMode === "month" ? "btn btn-primary" : "btn btn-secondary"
                   }
-                  onClick={() => setFinanceRangeMode("month")}
+                  onClick={() => {
+                    setShowFinanceDayPicker(false);
+                    setShowFinanceMonthPicker(false);
+                    setFinanceRangeMode("month");
+                  }}
                 >
                   Month
                 </button>
                 {financeRangeMode === "day" ? (
-                  <input
-                    type="date"
-                    value={financeSelectedDate}
-                    onChange={(e) => setFinanceSelectedDate(e.target.value)}
-                    aria-label="Select date"
-                    style={financeInputStyle}
-                  />
+                  <div
+                    ref={financeDayPickerRef}
+                    style={{ position: "relative", display: "inline-block" }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFinanceCalMonth(ymdToLocalDate(financeSelectedDate));
+                        setShowFinanceMonthPicker(false);
+                        setShowFinanceDayPicker((o) => !o);
+                      }}
+                      aria-expanded={showFinanceDayPicker}
+                      aria-haspopup="dialog"
+                      aria-label="Select date, dd/mm/yyyy"
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = "#3b82f6";
+                        e.currentTarget.style.boxShadow =
+                          "0 0 0 3px rgba(59, 130, 246, 0.15)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = "#cbd5e1";
+                        e.currentTarget.style.boxShadow =
+                          "0 1px 2px rgba(15, 23, 42, 0.06)";
+                      }}
+                      style={financeTriggerBtnStyle}
+                    >
+                      <span style={{ letterSpacing: "0.02em" }}>
+                        {ymdToDdMmYyyy(financeSelectedDate)}
+                      </span>
+                      <span style={{ color: "#64748b", fontSize: "0.75rem" }}>
+                        ▾
+                      </span>
+                    </button>
+                    {showFinanceDayPicker && (
+                      <div
+                        style={financePopoverStyle}
+                        role="dialog"
+                        aria-label="Calendar"
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginBottom: "0.65rem",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary"
+                            style={{
+                              borderRadius: "8px",
+                              padding: "0.25rem 0.55rem",
+                              lineHeight: 1,
+                            }}
+                            onClick={() =>
+                              setFinanceCalMonth(
+                                new Date(calY, calM - 1, 1, 12, 0, 0)
+                              )
+                            }
+                            aria-label="Previous month"
+                          >
+                            ‹
+                          </button>
+                          <span
+                            style={{
+                              fontWeight: 600,
+                              fontSize: "0.95rem",
+                              color: "#1e293b",
+                            }}
+                          >
+                            {financeCalMonth.toLocaleDateString("en-IN", {
+                              month: "long",
+                              year: "numeric",
+                            })}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary"
+                            style={{
+                              borderRadius: "8px",
+                              padding: "0.25rem 0.55rem",
+                              lineHeight: 1,
+                            }}
+                            onClick={() =>
+                              setFinanceCalMonth(
+                                new Date(calY, calM + 1, 1, 12, 0, 0)
+                              )
+                            }
+                            aria-label="Next month"
+                          >
+                            ›
+                          </button>
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(7, 1fr)",
+                            gap: "4px",
+                            textAlign: "center",
+                            fontSize: "0.7rem",
+                            fontWeight: 600,
+                            color: "#64748b",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map(
+                            (w) => (
+                              <div key={w}>{w}</div>
+                            )
+                          )}
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(7, 1fr)",
+                            gap: "4px",
+                          }}
+                        >
+                          {financeDayCells.map((dayNum, idx) => {
+                            if (dayNum == null) {
+                              return (
+                                <div key={`e-${idx}`} aria-hidden="true" />
+                              );
+                            }
+                            const ymd = dateToYmd(
+                              new Date(calY, calM, dayNum, 12, 0, 0)
+                            );
+                            const isSelected = ymd === financeSelectedDate;
+                            const isToday = ymd === todayYmd;
+                            return (
+                              <button
+                                key={ymd}
+                                type="button"
+                                onClick={() => {
+                                  setFinanceSelectedDate(ymd);
+                                  setShowFinanceDayPicker(false);
+                                }}
+                                style={{
+                                  height: "36px",
+                                  borderRadius: "9px",
+                                  border: isToday
+                                    ? "2px solid #3b82f6"
+                                    : "1px solid transparent",
+                                  background: isSelected ? "#3b82f6" : "#f8fafc",
+                                  color: isSelected ? "#fff" : "#334155",
+                                  fontWeight: isSelected ? 600 : 500,
+                                  fontSize: "0.875rem",
+                                  cursor: "pointer",
+                                  transition: "background 0.12s, color 0.12s",
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isSelected) {
+                                    e.currentTarget.style.background = "#e0f2fe";
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isSelected) {
+                                    e.currentTarget.style.background = "#f8fafc";
+                                  }
+                                }}
+                              >
+                                {dayNum}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div
+                          style={{
+                            marginTop: "0.75rem",
+                            paddingTop: "0.65rem",
+                            borderTop: "1px solid #e2e8f0",
+                            display: "flex",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary"
+                            style={{ borderRadius: "8px" }}
+                            onClick={() => {
+                              const t = getTodayForInput();
+                              setFinanceSelectedDate(t);
+                              setFinanceCalMonth(ymdToLocalDate(t));
+                              setShowFinanceDayPicker(false);
+                            }}
+                          >
+                            Today
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ) : (
-                  <input
-                    type="month"
-                    value={financeSelectedMonth}
-                    onChange={(e) => setFinanceSelectedMonth(e.target.value)}
-                    aria-label="Select month"
-                    style={financeInputStyle}
-                  />
+                  <div
+                    ref={financeMonthPickerRef}
+                    style={{ position: "relative", display: "inline-block" }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const [yy] = String(financeSelectedMonth).split("-");
+                        setFinanceMonthPickYear(
+                          parseInt(yy, 10) || new Date().getFullYear()
+                        );
+                        setShowFinanceDayPicker(false);
+                        setShowFinanceMonthPicker((o) => !o);
+                      }}
+                      aria-expanded={showFinanceMonthPicker}
+                      aria-haspopup="dialog"
+                      aria-label="Select month"
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = "#3b82f6";
+                        e.currentTarget.style.boxShadow =
+                          "0 0 0 3px rgba(59, 130, 246, 0.15)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = "#cbd5e1";
+                        e.currentTarget.style.boxShadow =
+                          "0 1px 2px rgba(15, 23, 42, 0.06)";
+                      }}
+                      style={financeTriggerBtnStyle}
+                    >
+                      <span style={{ letterSpacing: "0.02em" }}>
+                        {yyyyMmToSlashDisplay(financeSelectedMonth)}
+                      </span>
+                      <span style={{ color: "#64748b", fontSize: "0.75rem" }}>
+                        ▾
+                      </span>
+                    </button>
+                    {showFinanceMonthPicker && (
+                      <div
+                        style={{
+                          ...financePopoverStyle,
+                          minWidth: "260px",
+                        }}
+                        role="dialog"
+                        aria-label="Choose month"
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginBottom: "0.75rem",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary"
+                            style={{
+                              borderRadius: "8px",
+                              padding: "0.25rem 0.55rem",
+                              lineHeight: 1,
+                            }}
+                            onClick={() =>
+                              setFinanceMonthPickYear((y) => y - 1)
+                            }
+                            aria-label="Previous year"
+                          >
+                            ‹
+                          </button>
+                          <span
+                            style={{
+                              fontWeight: 600,
+                              fontSize: "0.95rem",
+                              color: "#1e293b",
+                            }}
+                          >
+                            {financeMonthPickYear}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary"
+                            style={{
+                              borderRadius: "8px",
+                              padding: "0.25rem 0.55rem",
+                              lineHeight: 1,
+                            }}
+                            onClick={() =>
+                              setFinanceMonthPickYear((y) => y + 1)
+                            }
+                            aria-label="Next year"
+                          >
+                            ›
+                          </button>
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(3, 1fr)",
+                            gap: "8px",
+                          }}
+                        >
+                          {FINANCE_MONTH_SHORT.map((label, mi) => {
+                            const m = String(mi + 1).padStart(2, "0");
+                            const val = `${financeMonthPickYear}-${m}`;
+                            const isSel = val === financeSelectedMonth;
+                            return (
+                              <button
+                                key={val}
+                                type="button"
+                                onClick={() => {
+                                  setFinanceSelectedMonth(val);
+                                  setShowFinanceMonthPicker(false);
+                                }}
+                                style={{
+                                  padding: "0.5rem 0.35rem",
+                                  borderRadius: "9px",
+                                  border: isSel
+                                    ? "2px solid #3b82f6"
+                                    : "1px solid #e2e8f0",
+                                  background: isSel ? "#eff6ff" : "#fff",
+                                  color: isSel ? "#1d4ed8" : "#475569",
+                                  fontWeight: isSel ? 600 : 500,
+                                  fontSize: "0.8rem",
+                                  cursor: "pointer",
+                                  fontFamily: "inherit",
+                                }}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -3299,11 +3837,12 @@ export default function Admin() {
                 >
                   <div>
                     <div style={{ fontWeight: 600, color: "#333", fontSize: "1.05rem" }}>
-                      Jobcards — service profit
+                      Jobcards — service and sales profit
                     </div>
                     <div style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.25rem" }}>
-                      {financePeriodLabel} · finalized jobcards, service lines only: paid amount
-                      minus spare purchase cost
+                      {financePeriodLabel} · finalized jobcards: paid amount minus estimated
+                      purchase cost for service spares and sales (spares, new batteries, new
+                      chargers; old scooty only if a line cost is stored)
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
@@ -3454,7 +3993,7 @@ export default function Admin() {
 
                                 {j.lines.length === 0 ? (
                                   <div style={{ gridColumn: "1 / -1", color: "#6b7280" }}>
-                                    No service spares in this jobcard.
+                                    No service or sales cost lines for this jobcard.
                                   </div>
                                 ) : (
                                   j.lines.map((l, idx) => (
@@ -3493,7 +4032,7 @@ export default function Admin() {
                                 </div>
 
                                 <div style={{ fontWeight: 800, color: "#111827" }}>
-                                  Service Cost
+                                  Purchase cost (est.)
                                 </div>
                                 <div />
                                 <div />

@@ -1,5 +1,8 @@
 const Spare = require("../models/Spare");
 const Model = require("../models/Model");
+const {
+  backfillZeroStoredCostsForSpare,
+} = require("../utils/backfillSpareStoredLineCosts");
 
 // @desc    Create a new spare
 // @route   POST /api/spares
@@ -323,6 +326,27 @@ const updateSpare = async (req, res) => {
     const updatedSpare = await spare.save();
 
     console.log("Updated spare result:", updatedSpare);
+
+    // Any stock layer save can fix missing prices; backfill only updates bill/job lines
+    // that still have stored cost 0. (Price-change detection alone can miss reordered rows.)
+    const layersPayloadTouched =
+      stockEntries !== undefined || colorQuantity !== undefined;
+    if (layersPayloadTouched) {
+      try {
+        const bf = await backfillZeroStoredCostsForSpare(
+          updatedSpare._id,
+          updatedSpare
+        );
+        if (bf.billLines > 0 || bf.jobcardLines > 0) {
+          console.log("[spare] Backfilled zero line costs after layer update:", bf);
+        }
+      } catch (bfErr) {
+        console.error(
+          "[spare] Backfill bill/jobcard line costs failed:",
+          bfErr.message
+        );
+      }
+    }
 
     res.json(updatedSpare);
   } catch (error) {
