@@ -1,4 +1,7 @@
 const Charger = require("../models/Charger");
+const {
+  ensureChargerLayersMatchTotal,
+} = require("../utils/chargerInventoryAdjust");
 
 // @desc    Create a new charger
 // @route   POST /api/chargers
@@ -35,13 +38,26 @@ const createCharger = async (req, res) => {
       minStockLevel: minStockLevel || 0,
       stockEntries:
         Array.isArray(stockEntries) && stockEntries.length > 0
-          ? stockEntries.map((entry) => ({
-              quantity: entry.quantity || 0,
-              purchasePrice: entry.purchasePrice || 0,
-              purchaseDate: entry.purchaseDate
-                ? new Date(entry.purchaseDate)
-                : new Date(),
-            }))
+          ? stockEntries.map((entry) => {
+              const qty = Math.max(0, Number(entry.quantity) || 0);
+              const origRaw = entry.originalQuantity;
+              const orig =
+                origRaw !== undefined && origRaw !== null && origRaw !== ""
+                  ? Math.max(0, Number(origRaw))
+                  : qty;
+              return {
+                quantity: qty,
+                originalQuantity: orig,
+                purchasePrice: entry.purchasePrice || 0,
+                purchaseDate: entry.purchaseDate
+                  ? new Date(entry.purchaseDate)
+                  : new Date(),
+                warrantyStatus:
+                  entry.warrantyStatus !== undefined
+                    ? Boolean(entry.warrantyStatus)
+                    : false,
+              };
+            })
           : [],
     });
 
@@ -114,6 +130,11 @@ const getChargerById = async (req, res) => {
       return res.status(404).json({ message: "Charger not found" });
     }
 
+    if (ensureChargerLayersMatchTotal(charger)) {
+      charger.markModified("stockEntries");
+      await charger.save();
+    }
+
     res.json(charger);
   } catch (error) {
     console.error("Error getting charger:", error);
@@ -163,14 +184,26 @@ const updateCharger = async (req, res) => {
     if (sellingPrice !== undefined) charger.sellingPrice = sellingPrice;
     if (minStockLevel !== undefined) charger.minStockLevel = minStockLevel;
     if (Array.isArray(stockEntries)) {
-      charger.stockEntries = stockEntries.map((entry) => ({
-        quantity: entry.quantity || 0,
-        purchasePrice: entry.purchasePrice || 0,
-        purchaseDate: entry.purchaseDate
-          ? new Date(entry.purchaseDate)
-          : new Date(),
-        warrantyStatus: entry.warrantyStatus !== undefined ? Boolean(entry.warrantyStatus) : false,
-      }));
+      charger.stockEntries = stockEntries.map((entry) => {
+        const qty = Math.max(0, Number(entry.quantity) || 0);
+        const origRaw = entry.originalQuantity;
+        const orig =
+          origRaw !== undefined && origRaw !== null && origRaw !== ""
+            ? Math.max(0, Number(origRaw))
+            : qty;
+        return {
+          quantity: qty,
+          originalQuantity: orig,
+          purchasePrice: entry.purchasePrice || 0,
+          purchaseDate: entry.purchaseDate
+            ? new Date(entry.purchaseDate)
+            : new Date(),
+          warrantyStatus:
+            entry.warrantyStatus !== undefined
+              ? Boolean(entry.warrantyStatus)
+              : false,
+        };
+      });
     }
 
     const updatedCharger = await charger.save();

@@ -7,6 +7,21 @@ import {
 } from "../../utils/dateUtils";
 import DatePicker from "../../components/DatePicker";
 
+/** Batch size when bought; unchanged when jobcards deduct stock (FIFO). */
+function chargerLayerPurchasedQty(entry) {
+  if (!entry) return 0;
+  const o = entry.originalQuantity;
+  if (o !== undefined && o !== null && o !== "" && !Number.isNaN(Number(o))) {
+    return Math.max(0, Math.floor(Number(o)));
+  }
+  return Math.max(0, Math.floor(Number(entry.quantity) || 0));
+}
+
+/** Remaining pieces in this batch after jobcard/bill sales. */
+function chargerLayerLeftQty(entry) {
+  return Math.max(0, Math.floor(Number(entry?.quantity) || 0));
+}
+
 export default function AddMoreCharger() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -17,6 +32,7 @@ export default function AddMoreCharger() {
 
   const [newEntry, setNewEntry] = useState({
     quantity: "",
+    originalQuantity: "", // edit mode: purchased batch size (separate from left)
     purchasePrice: "",
     purchaseDate: getTodayForInput(), // yyyy-mm-dd for the date picker
     warrantyStatus: false,
@@ -31,6 +47,7 @@ export default function AddMoreCharger() {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [pendingEditIndex, setPendingEditIndex] = useState(null);
   const [duplicateError, setDuplicateError] = useState("");
+  const stockEntryFormRef = useRef(null);
 
   const fetchcharger = useCallback(async () => {
     try {
@@ -75,6 +92,7 @@ export default function AddMoreCharger() {
             stockEntries: [
               {
                 quantity: totalQuantity,
+                originalQuantity: totalQuantity,
                 purchasePrice: 0,
                 purchaseDate:
                   charger.purchaseDate ||
@@ -112,7 +130,11 @@ export default function AddMoreCharger() {
       [name]: value,
     }));
     // Clear duplicate error when purchase date or warranty status changes
-    if (name === "purchaseDate" || name === "warrantyStatus") {
+    if (
+      name === "purchaseDate" ||
+      name === "warrantyStatus" ||
+      name === "originalQuantity"
+    ) {
       setDuplicateError("");
     }
   };
@@ -120,6 +142,7 @@ export default function AddMoreCharger() {
   const handleClear = () => {
     setNewEntry({
       quantity: "",
+      originalQuantity: "",
       purchasePrice: "",
       purchaseDate: getTodayForInput(),
       warrantyStatus: false,
@@ -219,10 +242,25 @@ export default function AddMoreCharger() {
   const handleAddEntry = async () => {
     if (!charger) return;
 
-    const quantityNum = parseFloat(newEntry.quantity) || 0;
+    const leftNum = Math.max(0, Math.floor(parseFloat(newEntry.quantity) || 0));
+    const purchasedNum =
+      editingIndex !== null
+        ? Math.max(0, Math.floor(parseFloat(newEntry.originalQuantity) || 0))
+        : leftNum;
     const priceNum = parseFloat(newEntry.purchasePrice) || 0;
 
-    if (quantityNum <= 0 || priceNum < 0 || !newEntry.purchaseDate) {
+    if (editingIndex !== null) {
+      if (purchasedNum <= 0 || leftNum > purchasedNum || !newEntry.purchaseDate) {
+        alert(
+          "Purchased must be at least 1, left cannot exceed purchased, and date is required."
+        );
+        return;
+      }
+      if (priceNum < 0) {
+        alert("Please enter a valid purchase price.");
+        return;
+      }
+    } else if (leftNum <= 0 || priceNum < 0 || !newEntry.purchaseDate) {
       alert("Please enter valid quantity, price and date.");
       return;
     }
@@ -284,20 +322,21 @@ export default function AddMoreCharger() {
 
     const updatedEntries =
       editingIndex !== null
-        ? existingEntries.map((entry, idx) =>
-            idx === editingIndex
-              ? {
-                  quantity: quantityNum,
-                  purchasePrice: priceNum,
-                  purchaseDate: newEntry.purchaseDate,
-                  warrantyStatus: Boolean(newEntry.warrantyStatus),
-                }
-              : entry
-          )
+        ? existingEntries.map((entry, idx) => {
+            if (idx !== editingIndex) return entry;
+            return {
+              quantity: leftNum,
+              originalQuantity: purchasedNum,
+              purchasePrice: priceNum,
+              purchaseDate: newEntry.purchaseDate,
+              warrantyStatus: Boolean(newEntry.warrantyStatus),
+            };
+          })
         : [
             ...existingEntries,
             {
-              quantity: quantityNum,
+              quantity: leftNum,
+              originalQuantity: leftNum,
               purchasePrice: priceNum,
               purchaseDate: newEntry.purchaseDate,
               warrantyStatus: Boolean(newEntry.warrantyStatus),
@@ -350,10 +389,12 @@ export default function AddMoreCharger() {
     const entry = charger.stockEntries[index];
     if (!entry) return;
 
-    const qty = entry.quantity || 0;
+    const left = chargerLayerLeftQty(entry);
+    const purchased = chargerLayerPurchasedQty(entry);
 
     setNewEntry({
-      quantity: qty ? String(qty) : "",
+      quantity: left ? String(left) : "",
+      originalQuantity: purchased ? String(purchased) : "",
       purchasePrice:
         entry.purchasePrice !== undefined && entry.purchasePrice !== null
           ? String(entry.purchasePrice)
@@ -364,6 +405,15 @@ export default function AddMoreCharger() {
       warrantyStatus: entry.warrantyStatus || false,
     });
     setEditingIndex(index);
+    // After paint, scroll the add/edit form at the top into view (long list of entries).
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        stockEntryFormRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 0);
+    });
   };
 
   const startEditEntry = (index) => {
@@ -551,14 +601,16 @@ export default function AddMoreCharger() {
         </div>
       </div>
 
-      {/* Add new stock entry */}
+      {/* Add new stock entry / edit (scroll target when editing from list below) */}
       <div
+        ref={stockEntryFormRef}
         style={{
           background: "white",
           borderRadius: "0.75rem",
           border: "1px solid #e5e7eb",
           padding: "1.5rem",
           marginBottom: "2rem",
+          scrollMarginTop: "1rem",
         }}
       >
         <h3
@@ -596,34 +648,131 @@ export default function AddMoreCharger() {
             alignItems: "flex-end",
           }}
         >
-          <div>
-            <label
-              style={{
-                fontSize: "0.8rem",
-                fontWeight: 500,
-                marginBottom: "0.25rem",
-                display: "block",
-              }}
-            >
-              Quantity *
-            </label>
-            <input
-              type="number"
-              name="quantity"
-              value={newEntry.quantity}
-              onChange={handleNewEntryChange}
-              placeholder="Enter quantity"
-              min="0"
-              onWheel={(e) => e.target.blur()}
-              style={{
-                padding: "0.5rem",
-                border: "1px solid #d1d5db",
-                borderRadius: "0.375rem",
-                fontSize: "0.875rem",
-                width: "100%",
-              }}
-            />
-          </div>
+          {editingIndex !== null ? (
+            <>
+              <div>
+                <label
+                  style={{
+                    fontSize: "0.8rem",
+                    fontWeight: 500,
+                    marginBottom: "0.25rem",
+                    display: "block",
+                  }}
+                >
+                  Purchased (this batch) *
+                </label>
+                <input
+                  type="number"
+                  name="originalQuantity"
+                  value={newEntry.originalQuantity}
+                  onChange={handleNewEntryChange}
+                  placeholder="Pieces bought in this entry"
+                  min="1"
+                  onWheel={(e) => e.target.blur()}
+                  style={{
+                    padding: "0.5rem",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "0.375rem",
+                    fontSize: "0.875rem",
+                    width: "100%",
+                  }}
+                />
+                <small
+                  style={{
+                    display: "block",
+                    marginTop: "0.35rem",
+                    fontSize: "0.72rem",
+                    color: "#64748b",
+                    lineHeight: 1.35,
+                  }}
+                >
+                  Book quantity when this batch was added. Increase only if the
+                  initial entry was wrong.
+                </small>
+              </div>
+              <div>
+                <label
+                  style={{
+                    fontSize: "0.8rem",
+                    fontWeight: 500,
+                    marginBottom: "0.25rem",
+                    display: "block",
+                  }}
+                >
+                  Left in stock (this entry) *
+                </label>
+                <input
+                  type="number"
+                  name="quantity"
+                  value={newEntry.quantity}
+                  onChange={handleNewEntryChange}
+                  placeholder="Pieces still in this batch"
+                  min="0"
+                  onWheel={(e) => e.target.blur()}
+                  style={{
+                    padding: "0.5rem",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "0.375rem",
+                    fontSize: "0.875rem",
+                    width: "100%",
+                  }}
+                />
+                <small
+                  style={{
+                    display: "block",
+                    marginTop: "0.35rem",
+                    fontSize: "0.72rem",
+                    color: "#64748b",
+                    lineHeight: 1.35,
+                  }}
+                >
+                  Remaining after jobcard sales (FIFO by purchase date), like
+                  batteries and spares.
+                </small>
+              </div>
+            </>
+          ) : (
+            <div>
+              <label
+                style={{
+                  fontSize: "0.8rem",
+                  fontWeight: 500,
+                  marginBottom: "0.25rem",
+                  display: "block",
+                }}
+              >
+                Quantity (this batch) *
+              </label>
+              <input
+                type="number"
+                name="quantity"
+                value={newEntry.quantity}
+                onChange={handleNewEntryChange}
+                placeholder="Pieces purchased"
+                min="0"
+                onWheel={(e) => e.target.blur()}
+                style={{
+                  padding: "0.5rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "0.375rem",
+                  fontSize: "0.875rem",
+                  width: "100%",
+                }}
+              />
+              <small
+                style={{
+                  display: "block",
+                  marginTop: "0.35rem",
+                  fontSize: "0.72rem",
+                  color: "#64748b",
+                  lineHeight: 1.35,
+                }}
+              >
+                Jobcard sales reduce &quot;left&quot; per batch (oldest purchase
+                date first), like batteries and spares.
+              </small>
+            </div>
+          )}
           {isPriceVerified ? (
             <div>
               <label
@@ -837,7 +986,8 @@ export default function AddMoreCharger() {
               // Calculate original index for edit/delete operations
               const originalIndex =
                 charger.stockEntries.length - 1 - reversedIndex;
-              const qty = entry.quantity || 0;
+              const purchased = chargerLayerPurchasedQty(entry);
+              const left = chargerLayerLeftQty(entry);
 
               return (
                 <div
@@ -856,32 +1006,69 @@ export default function AddMoreCharger() {
                     alignItems: "center",
                   }}
                 >
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#6b7280",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Total Quantity
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "1.25rem",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#6b7280",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        Purchased
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "1.25rem",
+                          fontWeight: 700,
+                          color: "#111827",
+                        }}
+                      >
+                        {purchased}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#6b7280",
+                        }}
+                      >
+                        pieces
+                      </div>
                     </div>
-                    <div
-                      style={{
-                        fontSize: "1.25rem",
-                        fontWeight: 700,
-                        color: "#111827",
-                      }}
-                    >
-                      {qty}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#6b7280",
-                      }}
-                    >
-                      pieces
+                    <div>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#6b7280",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        Left in stock
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "1.25rem",
+                          fontWeight: 700,
+                          color: "#0f766e",
+                        }}
+                      >
+                        {left}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#6b7280",
+                        }}
+                      >
+                        pieces
+                      </div>
                     </div>
                   </div>
 
@@ -1045,7 +1232,7 @@ export default function AddMoreCharger() {
               letterSpacing: "0.05em",
             }}
           >
-            Total Stock
+            Total left stock
           </div>
           <div
             style={{
@@ -1056,7 +1243,9 @@ export default function AddMoreCharger() {
           >
             {totalQuantity}
           </div>
-          <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>pieces</div>
+          <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+            pieces (sum of batch leftovers)
+          </div>
         </div>
         <div
           style={{

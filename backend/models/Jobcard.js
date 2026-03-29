@@ -16,6 +16,13 @@ const jobcardPartSchema = new mongoose.Schema({
     required: false,
     default: null,
   },
+  /** For new charger sales from All Chargers stock — do not use spareId (Spare ref + populate breaks Charger ObjectIds). */
+  chargerInventoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Charger",
+    required: false,
+    default: null,
+  },
   spareName: {
     type: String,
     required: true,

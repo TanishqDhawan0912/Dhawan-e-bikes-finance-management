@@ -1387,8 +1387,48 @@ export default function Admin() {
     return id ? String(id) : null;
   };
 
-  // Jobcard profit: service + spare sales + battery sales/replacements (FIFO when stored on part).
-  // profit = paidAmount - sum(purchaseCost of those lines)
+  const resolveChargerInventoryIdFromJobcardPart = (part) => {
+    if (!part) return null;
+    const raw =
+      part.chargerInventoryId ??
+      part.chargerId ??
+      part.spareId ??
+      part.id;
+    if (raw == null || raw === "") return null;
+    const id = typeof raw === "object" && raw._id != null ? raw._id : raw;
+    return id ? String(id) : null;
+  };
+
+  /** Resolve Charger doc for profit cost (id first; then name + voltage for legacy rows where spareId was lost to Spare populate). */
+  const findChargerDocForJobcardPart = (part) => {
+    if (!part || !Array.isArray(chargers)) return null;
+    const id = resolveChargerInventoryIdFromJobcardPart(part);
+    if (id) {
+      const byId = chargers.find((x) => String(x._id) === String(id));
+      if (byId) return byId;
+    }
+    const name = String(part.spareName || part.chargerName || part.name || "")
+      .trim()
+      .toLowerCase();
+    const volt = String(part.voltage || "").trim().toLowerCase();
+    if (!name) return null;
+    return (
+      chargers.find(
+        (x) =>
+          String(x.name || "").trim().toLowerCase() === name &&
+          String(x.voltage || "").trim().toLowerCase() === volt
+      ) || null
+    );
+  };
+
+  const getChargerUnitCostForJobcardPart = (part) => {
+    const c = findChargerDocForJobcardPart(part);
+    if (!c) return 0;
+    return getChargerUnitCost(c._id);
+  };
+
+  // Jobcard profit: service + spare sales + batteries + chargers (FIFO / rules per line).
+  // profit = paidAmount - sum(purchaseCost of those lines) + scrap credits
   /** Cash-equivalent credit from customer old batteries on new battery sales (scrap qty × price/unit). */
   const sumNewBatteryCustomerScrapCredit = (parts) => {
     if (!Array.isArray(parts)) return 0;
@@ -1468,11 +1508,31 @@ export default function Admin() {
       return false;
     };
 
+    /** New charger from stock: profit deducts purchase (latest stock entry / FIFO on part). */
+    const isProfitNewChargerSaleLine = (p) => {
+      if (!p) return false;
+      const pt = String(p.partType || "").toLowerCase();
+      const st = String(p.salesType || "").toLowerCase();
+      if (pt !== "sales" || st !== "charger") return false;
+      return String(p.chargerOldNew || "").toLowerCase() !== "old";
+    };
+
+    /** Old charger sale (custom / old stock): no purchase cost in profit — revenue counts fully. */
+    const isProfitOldChargerSaleLine = (p) => {
+      if (!p) return false;
+      const pt = String(p.partType || "").toLowerCase();
+      const st = String(p.salesType || "").toLowerCase();
+      if (pt !== "sales" || st !== "charger") return false;
+      return String(p.chargerOldNew || "").toLowerCase() === "old";
+    };
+
     const profitParts = parts.filter(
       (p) =>
         isProfitSpareLine(p) ||
         isProfitBatteryLine(p) ||
-        isProfitOldBatterySaleLine(p)
+        isProfitOldBatterySaleLine(p) ||
+        isProfitNewChargerSaleLine(p) ||
+        isProfitOldChargerSaleLine(p)
     );
 
     const lines = profitParts
@@ -1493,6 +1553,56 @@ export default function Admin() {
             name: baseName,
             kind: "battery-old-sale",
             kindDisplay: "old battery sale",
+            quantity: qty,
+            unitCost,
+            lineCost,
+          };
+        }
+        if (isProfitOldChargerSaleLine(p)) {
+          const qty =
+            Number(
+              p.selectedQuantity !== undefined && p.selectedQuantity !== null
+                ? p.selectedQuantity
+                : p.quantity
+            ) || 0;
+          const baseName =
+            String(
+              p.spareName || p.chargerName || p.name || "Charger"
+            ).trim() || "Charger";
+          return {
+            name: baseName,
+            kind: "charger-old-sale",
+            kindDisplay: "old charger sale",
+            quantity: qty,
+            unitCost: 0,
+            lineCost: 0,
+          };
+        }
+        if (isProfitNewChargerSaleLine(p)) {
+          const qty =
+            Number(
+              p.selectedQuantity !== undefined && p.selectedQuantity !== null
+                ? p.selectedQuantity
+                : p.quantity
+            ) || 0;
+          const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
+          let unitCost;
+          let lineCost;
+          if (storedFifo > 0) {
+            lineCost = storedFifo;
+            unitCost = qty > 0 ? storedFifo / qty : 0;
+          } else {
+            unitCost = getChargerUnitCostForJobcardPart(p);
+            lineCost = qty * unitCost;
+          }
+          const baseName =
+            String(
+              p.spareName || p.chargerName || p.name || "Charger"
+            ).trim() || "Charger";
+          return {
+            name: baseName,
+            kind: "charger-new-sale",
+            kindDisplay: "new charger sale",
             quantity: qty,
             unitCost,
             lineCost,
@@ -1599,7 +1709,9 @@ export default function Admin() {
         (l) =>
           l.kind === "sales" ||
           l.kind === "battery-sale" ||
-          l.kind === "battery-old-sale"
+          l.kind === "battery-old-sale" ||
+          l.kind === "charger-new-sale" ||
+          l.kind === "charger-old-sale"
       )
       .reduce((sum, l) => sum + (l.lineCost || 0), 0);
     const fifoCostReplacementSection = lines
@@ -1619,7 +1731,8 @@ export default function Admin() {
         (l) =>
           l.quantity > 0 &&
           (Number(l.lineCost) || 0) <= 0 &&
-          l.kind !== "battery-old-sale"
+          l.kind !== "battery-old-sale" &&
+          l.kind !== "charger-old-sale"
       )
       .map((l) =>
         l.quantity > 1

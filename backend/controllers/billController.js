@@ -8,6 +8,7 @@ const {
   fifoDeductFromSpare,
   fifoRestoreToSpare,
 } = require("../utils/spareFifo");
+const { adjustChargerStockByUnits } = require("../utils/chargerInventoryAdjust");
 
 const isObjectId = (v) => mongoose.Types.ObjectId.isValid(String(v || ""));
 
@@ -105,7 +106,14 @@ const adjustBillInventory = async (billLike, mode = "deduct") => {
   if (billLike.withCharger && isObjectId(billLike.chargerId)) {
     const charger = await Charger.findById(billLike.chargerId);
     if (charger) {
-      charger.quantity = Math.max(0, (Number(charger.quantity) || 0) + factor * 1);
+      const stockMode = mode === "deduct" ? "deduct" : "restore";
+      adjustChargerStockByUnits(charger, 1, stockMode);
+      if (
+        Array.isArray(charger.stockEntries) &&
+        charger.stockEntries.length > 0
+      ) {
+        charger.markModified("stockEntries");
+      }
       await charger.save();
     }
   }

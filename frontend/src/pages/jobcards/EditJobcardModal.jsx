@@ -602,6 +602,16 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
           if (part.oldChargerVoltage) basePart.oldChargerVoltage = part.oldChargerVoltage;
           if (part.oldChargerWorking) basePart.oldChargerWorking = part.oldChargerWorking;
           if (part.oldChargerAvailable !== undefined && part.oldChargerAvailable !== null) basePart.oldChargerAvailable = part.oldChargerAvailable;
+
+          if (
+            part.salesType === "charger" &&
+            String(part.chargerOldNew || "").toLowerCase() !== "old" &&
+            part.id &&
+            isValidObjectId(part.id)
+          ) {
+            basePart.chargerInventoryId = part.id;
+            basePart.spareId = null;
+          }
           
           return basePart;
         }),

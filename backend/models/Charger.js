@@ -58,6 +58,12 @@ const chargerSchema = new mongoose.Schema(
           required: true,
           min: 0,
         },
+        /** Units bought in this batch (fixed); quantity is remaining after jobcard/bill sales (FIFO). */
+        originalQuantity: {
+          type: Number,
+          required: false,
+          min: 0,
+        },
         purchasePrice: {
           type: Number,
           required: true,

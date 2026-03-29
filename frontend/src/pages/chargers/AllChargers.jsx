@@ -65,11 +65,11 @@ export default function AllChargers() {
       fetchchargers();
     };
 
-    window.addEventListener("ChargerDataUpdated", handleChargerDataUpdated);
+    window.addEventListener("chargerDataUpdated", handleChargerDataUpdated);
 
     return () => {
       window.removeEventListener(
-        "ChargerDataUpdated",
+        "chargerDataUpdated",
         handleChargerDataUpdated
       );
     };
@@ -412,8 +412,9 @@ export default function AllChargers() {
                     textAlign: "center",
                     fontWeight: "700",
                   }}
+                  title="Units currently available (after sales)"
                 >
-                  Quantity
+                  Left in stock
                 </th>
                 <th
                   style={{
@@ -572,10 +573,17 @@ export default function AllChargers() {
                       padding: "0.75rem",
                       verticalAlign: "middle",
                       textAlign: "center",
-                      fontWeight: "600",
+                      fontWeight: "700",
+                      fontSize: "1.05rem",
+                      color:
+                        (Number(Charger.quantity) || 0) <=
+                        (Number(Charger.minStockLevel) || 0)
+                          ? "#b45309"
+                          : "#059669",
                     }}
+                    title="Current quantity available to sell"
                   >
-                    {Charger.quantity || 0}
+                    {Number(Charger.quantity) || 0}
                   </td>
                   <td
                     style={{

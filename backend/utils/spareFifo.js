@@ -209,6 +209,8 @@ function fifoRestoreToSpare(spare, units, opts = {}) {
 
 module.exports = {
   parsePurchaseDateMs,
+  fifoDeductFromStockEntries,
+  fifoRestoreToStockEntries,
   fifoDeductFromSpare,
   fifoRestoreToSpare,
 };

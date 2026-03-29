@@ -7,6 +7,7 @@ const {
 const Battery = require("../models/Battery");
 const BatteryScrap = require("../models/BatteryScrap");
 const { adjustBatteryStockByUnits } = require("../utils/batteryInventoryAdjust");
+const { adjustChargerStockByUnits } = require("../utils/chargerInventoryAdjust");
 const Charger = require("../models/Charger");
 const OldCharger = require("../models/OldCharger");
 const OldChargerSummary = require("../models/OldChargerSummary");
@@ -533,7 +534,7 @@ const adjustBatteryInventoryForNewBatterySales = async (
 };
 
 // Helper: adjust charger inventory for replacement chargers.
-// Deduct/restore charger.quantity in All Chargers when a charger is used in replacement.
+// Deduct/restore charger stock (FIFO on stockEntries when present).
 const adjustChargerInventoryForReplacements = async (
   jobcard,
   mode = "deduct"
@@ -542,7 +543,7 @@ const adjustChargerInventoryForReplacements = async (
     return;
   }
 
-  const factor = mode === "restore" ? 1 : -1;
+  const stockMode = mode === "restore" ? "restore" : "deduct";
 
   for (const part of jobcard.parts) {
     if (
@@ -572,10 +573,23 @@ const adjustChargerInventoryForReplacements = async (
     const charger = await Charger.findById(chargerId);
     if (!charger) continue;
 
-    const currentQty = Number(charger.quantity) || 0;
-    const newQty = Math.max(0, currentQty + factor * qty);
-    charger.quantity = newQty;
+    if (mode === "deduct") {
+      const r = adjustChargerStockByUnits(charger, qty, stockMode);
+      part.fifoLinePurchaseCost = Math.max(0, Number(r.totalCost) || 0);
+    } else {
+      adjustChargerStockByUnits(charger, qty, stockMode);
+    }
+    if (
+      Array.isArray(charger.stockEntries) &&
+      charger.stockEntries.length > 0
+    ) {
+      charger.markModified("stockEntries");
+    }
     await charger.save();
+  }
+
+  if (mode === "deduct" && typeof jobcard.markModified === "function") {
+    jobcard.markModified("parts");
   }
 };
 
@@ -583,7 +597,7 @@ const adjustChargerInventoryForReplacements = async (
 // - part.partType === "sales"
 // - part.salesType === "charger"
 // - part.chargerOldNew === "new" (or missing/other non-"old" value)
-// Deduct/restore charger.quantity in All Chargers.
+// Deduct/restore charger stock (FIFO on stockEntries when present).
 const adjustChargerInventoryForNewChargerSales = async (
   jobcard,
   mode = "deduct"
@@ -592,7 +606,7 @@ const adjustChargerInventoryForNewChargerSales = async (
     return;
   }
 
-  const factor = mode === "restore" ? 1 : -1;
+  const stockMode = mode === "restore" ? "restore" : "deduct";
 
   for (const part of jobcard.parts) {
     if (!part || part.partType !== "sales" || part.salesType !== "charger") {
@@ -622,10 +636,23 @@ const adjustChargerInventoryForNewChargerSales = async (
     const charger = await Charger.findById(chargerId);
     if (!charger) continue;
 
-    const currentQty = Number(charger.quantity) || 0;
-    const newQty = Math.max(0, currentQty + factor * qty);
-    charger.quantity = newQty;
+    if (mode === "deduct") {
+      const r = adjustChargerStockByUnits(charger, qty, stockMode);
+      part.fifoLinePurchaseCost = Math.max(0, Number(r.totalCost) || 0);
+    } else {
+      adjustChargerStockByUnits(charger, qty, stockMode);
+    }
+    if (
+      Array.isArray(charger.stockEntries) &&
+      charger.stockEntries.length > 0
+    ) {
+      charger.markModified("stockEntries");
+    }
     await charger.save();
+  }
+
+  if (mode === "deduct" && typeof jobcard.markModified === "function") {
+    jobcard.markModified("parts");
   }
 };
 

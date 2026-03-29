@@ -2121,6 +2121,16 @@ export default function NewJobcard() {
           ) {
             basePart.batteryInventoryId = part.id;
           }
+          if (
+            part.salesType === "charger" &&
+            String(part.chargerOldNew || "").toLowerCase() !== "old" &&
+            part.id &&
+            isValidObjectId(part.id)
+          ) {
+            basePart.chargerInventoryId = part.id;
+            // spareId is ref Spare; storing Charger _id there makes populate() drop it on read.
+            basePart.spareId = null;
+          }
           if (part.chargerOldNew) basePart.chargerOldNew = part.chargerOldNew;
           if (part.ampereValue) basePart.ampereValue = part.ampereValue;
           if (part.warrantyStatus)
