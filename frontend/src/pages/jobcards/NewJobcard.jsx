@@ -440,6 +440,8 @@ export default function NewJobcard() {
         chargerChemistry: part?.chargerChemistry ?? null,
         chargerVoltage: part?.chargerVoltage ?? null,
         chargerWarrantyStatus: part?.chargerWarrantyStatus ?? null,
+        batteryInventoryId: part?.batteryInventoryId ?? null,
+        chargerInventoryId: part?.chargerInventoryId ?? null,
         sparesUsed: Array.isArray(part?.sparesUsed)
           ? part.sparesUsed.map((s) => ({
               spareId:
@@ -1754,6 +1756,20 @@ export default function NewJobcard() {
       chargerWarrantyStatus: part.chargerWarrantyStatus || "noWarranty",
       sparesUsed: Array.isArray(part.sparesUsed) ? part.sparesUsed : [],
     }));
+    if (part.batteryType === "newBattery" && part.batteryInventoryId) {
+      const bid = String(part.batteryInventoryId);
+      const b = oldScootyBatteries.find((x) => String(x._id) === bid);
+      setOldScootySelectedBattery(b || null);
+    } else {
+      setOldScootySelectedBattery(null);
+    }
+    if (part.chargerType === "newCharger" && part.chargerInventoryId) {
+      const cid = String(part.chargerInventoryId);
+      const c = oldScootyChargers.find((x) => String(x._id) === cid);
+      setOldScootySelectedCharger(c || null);
+    } else {
+      setOldScootySelectedCharger(null);
+    }
     setTimeout(() => {
       oldScootyFormRef.current?.scrollIntoView({
         behavior: "smooth",
@@ -1827,6 +1843,16 @@ export default function NewJobcard() {
         chargerWarrantyStatus:
           oldScootyData.chargerType === "newCharger"
             ? oldScootyData.chargerWarrantyStatus
+            : null,
+        batteryInventoryId:
+          oldScootyData.batteryType === "newBattery" &&
+          oldScootySelectedBattery?._id
+            ? String(oldScootySelectedBattery._id)
+            : null,
+        chargerInventoryId:
+          oldScootyData.chargerType === "newCharger" &&
+          oldScootySelectedCharger?._id
+            ? String(oldScootySelectedCharger._id)
             : null,
         sparesUsed: (oldScootyData.sparesUsed || []).map((s) => ({
           spareId: s.spareId || null,
@@ -2172,6 +2198,20 @@ export default function NewJobcard() {
             basePart.chargerInventoryId = invId;
             // spareId is ref Spare; storing Charger _id there makes populate() drop it on read.
             basePart.spareId = null;
+          }
+          if (
+            part.salesType === "oldScooty" &&
+            String(part.batteryType || "").toLowerCase() === "newbattery" &&
+            part.batteryInventoryId
+          ) {
+            basePart.batteryInventoryId = part.batteryInventoryId;
+          }
+          if (
+            part.salesType === "oldScooty" &&
+            String(part.chargerType || "").toLowerCase() === "newcharger" &&
+            part.chargerInventoryId
+          ) {
+            basePart.chargerInventoryId = part.chargerInventoryId;
           }
           if (part.chargerOldNew) basePart.chargerOldNew = part.chargerOldNew;
           if (part.ampereValue) basePart.ampereValue = part.ampereValue;

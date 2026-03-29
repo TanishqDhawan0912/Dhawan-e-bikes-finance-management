@@ -4,6 +4,22 @@ const {
   fifoDeductFromSpare,
   fifoRestoreToSpare,
 } = require("../utils/spareFifo");
+
+// Keep spare.quantity in sync with its layered stock (colorQuantity / stockEntries).
+function syncSpareQuantityFromLayers(spare) {
+  if (!spare) return;
+  if (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0) {
+    spare.quantity = spare.colorQuantity.reduce(
+      (sum, cq) => sum + (Number(cq?.quantity) || 0),
+      0
+    );
+  } else if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
+    spare.quantity = spare.stockEntries.reduce(
+      (sum, e) => sum + (Number(e?.quantity) || 0),
+      0
+    );
+  }
+}
 const Battery = require("../models/Battery");
 const BatteryScrap = require("../models/BatteryScrap");
 const { adjustBatteryStockByUnits } = require("../utils/batteryInventoryAdjust");
@@ -317,26 +333,23 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
       const qty = Math.max(1, Number(s.quantity) || 1);
       const spare = await Spare.findById(s.spareId);
       if (!spare) continue;
-      const colorKey = String(s.color || "")
-        .trim()
-        .toLowerCase();
-      if (spare.hasColors && Array.isArray(spare.colorQuantity) && colorKey) {
-        const colorEntry = spare.colorQuantity.find(
-          (cq) =>
-            cq &&
-            typeof cq.color === "string" &&
-            cq.color.trim().toLowerCase() === colorKey
-        );
-        if (colorEntry) {
-          colorEntry.quantity = Math.max(
-            0,
-            (Number(colorEntry.quantity) || 0) + qty
-          );
-        } else {
-          spare.quantity = Math.max(0, (Number(spare.quantity) || 0) + qty);
-        }
-      } else {
-        spare.quantity = Math.max(0, (Number(spare.quantity) || 0) + qty);
+
+      const colorKeyRaw = String(s.color || "").trim();
+      const useColorFifo =
+        spare.hasColors === true &&
+        Array.isArray(spare.colorQuantity) &&
+        spare.colorQuantity.length > 0 &&
+        colorKeyRaw;
+
+      fifoRestoreToSpare(spare, qty, {
+        colorKey: useColorFifo ? colorKeyRaw.toLowerCase() : null,
+      });
+      syncSpareQuantityFromLayers(spare);
+      if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
+        spare.markModified("stockEntries");
+      }
+      if (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0) {
+        spare.markModified("colorQuantity");
       }
       await spare.save();
     }
@@ -378,26 +391,39 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
       const spare = await Spare.findById(s.spareId);
       if (!spare) continue;
 
-      const colorKey = String(s.color || "")
-        .trim()
-        .toLowerCase();
-      if (spare.hasColors && Array.isArray(spare.colorQuantity) && colorKey) {
-        const colorEntry = spare.colorQuantity.find(
-          (cq) =>
-            cq &&
-            typeof cq.color === "string" &&
-            cq.color.trim().toLowerCase() === colorKey
-        );
-        if (colorEntry) {
-          colorEntry.quantity = Math.max(
-            0,
-            (Number(colorEntry.quantity) || 0) - qty
+      const colorKeyRaw = String(s.color || "").trim();
+      const useColorFifo =
+        spare.hasColors === true &&
+        Array.isArray(spare.colorQuantity) &&
+        spare.colorQuantity.length > 0 &&
+        colorKeyRaw;
+
+      if (useColorFifo) {
+        const first = fifoDeductFromSpare(spare, qty, {
+          colorKey: colorKeyRaw.toLowerCase(),
+        });
+        let deducted = first.deducted;
+        if (deducted < qty) {
+          const second = fifoDeductFromSpare(spare, qty - deducted, {
+            colorKey: null,
+          });
+          deducted += second.deducted;
+        }
+        if (deducted < qty) {
+          console.warn(
+            `[jobcard-oldScooty] FIFO short spare ${spare._id}: need ${qty}, deducted ${deducted}`
           );
-        } else {
-          spare.quantity = Math.max(0, (Number(spare.quantity) || 0) - qty);
         }
       } else {
-        spare.quantity = Math.max(0, (Number(spare.quantity) || 0) - qty);
+        fifoDeductFromSpare(spare, qty, { colorKey: null });
+      }
+
+      syncSpareQuantityFromLayers(spare);
+      if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
+        spare.markModified("stockEntries");
+      }
+      if (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0) {
+        spare.markModified("colorQuantity");
       }
 
       await spare.save();

@@ -1526,17 +1526,134 @@ export default function Admin() {
       return String(p.chargerOldNew || "").toLowerCase() === "old";
     };
 
+    /** Old scooty sale — COGS from master purchase, battery scrap rules, new battery/charger stock, nested spares. */
+    const isProfitOldScootySaleLine = (p) => {
+      if (!p) return false;
+      const pt = String(p.partType || "").toLowerCase();
+      const st = String(p.salesType || "").toLowerCase();
+      return pt === "sales" && st === "oldscooty";
+    };
+
+    const normalizePmcKeyForOldScooty = (v) =>
+      String(v || "")
+        .trim()
+        .toLowerCase()
+        .replace(/^pmc-?/i, "")
+        .replace(/\s+/g, "");
+
+    const findConsumedOldScootySnapshot = (jobcard, part) => {
+      const rows = Array.isArray(jobcard?.consumedOldScooties)
+        ? jobcard.consumedOldScooties
+        : [];
+      const key = normalizePmcKeyForOldScooty(part?.pmcNo);
+      if (!key) return null;
+      return (
+        rows.find((s) => normalizePmcKeyForOldScooty(s?.pmcNo) === key) || null
+      );
+    };
+
+    const oldScootySoldBatteryCellCount = (p) => {
+      const chem = String(p?.batteryChemistry || "").toLowerCase();
+      if (chem === "lithium") return 1;
+      const v = String(p?.batteryVoltage || "").trim();
+      if (v.includes("72")) return 6;
+      if (v.includes("60")) return 5;
+      if (v.includes("48")) return 4;
+      return 0;
+    };
+
+    const OLD_SCOOTY_IMPUTED_SCRAP_PER_BATTERY = 800;
+
+    const computeOldScootyPurchaseCostForProfit = (p, snap) => {
+      const masterPurchase = snap ? Number(snap.purchasePrice) || 0 : 0;
+      const cameWith = snap?.withBattery
+        ? Math.max(0, Number(snap.batteryCount) || 0)
+        : 0;
+      const soldCells = oldScootySoldBatteryCellCount(p);
+      const bt = String(p?.batteryType || "").toLowerCase();
+      const scrap = OLD_SCOOTY_IMPUTED_SCRAP_PER_BATTERY;
+
+      let batteryRelated = 0;
+      if (bt === "oldbattery") {
+        const added = Math.max(0, soldCells - cameWith);
+        batteryRelated = masterPurchase + scrap * added - scrap * cameWith;
+      } else if (bt === "newbattery") {
+        const battId = resolveBatteryInventoryIdFromJobcardPart(p);
+        let newBattPurchase = 0;
+        if (battId && soldCells > 0) {
+          const unit = getBatteryUnitCost(battId);
+          newBattPurchase = soldCells * unit;
+        }
+        batteryRelated = masterPurchase + newBattPurchase - scrap * cameWith;
+      } else {
+        batteryRelated = masterPurchase - scrap * cameWith;
+      }
+
+      let chargerPurchase = 0;
+      const ct = String(p?.chargerType || "").toLowerCase();
+      if (ct === "newcharger") {
+        const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
+        if (storedFifo > 0) {
+          chargerPurchase = storedFifo;
+        } else {
+          chargerPurchase = getChargerUnitCostForJobcardPart(p);
+        }
+      }
+
+      let nestedSparesPurchase = 0;
+      const su = Array.isArray(p?.sparesUsed) ? p.sparesUsed : [];
+      for (const s of su) {
+        if (!s || s.fromOldScooty) continue;
+        const sid = s.spareId?._id || s.spareId;
+        if (!sid) continue;
+        const q = Math.max(1, Number(s.quantity) || 1);
+        nestedSparesPurchase += q * getSpareUnitCost(sid);
+      }
+
+      return Math.max(
+        0,
+        batteryRelated + chargerPurchase + nestedSparesPurchase
+      );
+    };
+
     const profitParts = parts.filter(
       (p) =>
         isProfitSpareLine(p) ||
         isProfitBatteryLine(p) ||
         isProfitOldBatterySaleLine(p) ||
         isProfitNewChargerSaleLine(p) ||
-        isProfitOldChargerSaleLine(p)
+        isProfitOldChargerSaleLine(p) ||
+        isProfitOldScootySaleLine(p)
     );
 
     const lines = profitParts
       .map((p) => {
+        if (isProfitOldScootySaleLine(p)) {
+          const qty =
+            Number(
+              p.selectedQuantity !== undefined && p.selectedQuantity !== null
+                ? p.selectedQuantity
+                : p.quantity
+            ) || 1;
+          const snap = findConsumedOldScootySnapshot(jc, p);
+          const lineCost = computeOldScootyPurchaseCostForProfit(p, snap);
+          const baseName =
+            String(p.spareName || p.name || "Old scooty").trim() ||
+            "Old scooty";
+          const pmcRaw = String(p.pmcNo || "").trim();
+          const pmcDisplay = pmcRaw
+            ? `PMC-${pmcRaw.replace(/^PMC-?/i, "")}`
+            : "";
+          const name = pmcDisplay ? `${baseName} (${pmcDisplay})` : baseName;
+          return {
+            name,
+            kind: "old-scooty-sale",
+            kindDisplay: "old scooty sale",
+            quantity: qty,
+            unitCost: qty > 0 ? lineCost / qty : lineCost,
+            lineCost,
+          };
+        }
         if (isProfitOldBatterySaleLine(p)) {
           const qty =
             Number(
@@ -1711,7 +1828,8 @@ export default function Admin() {
           l.kind === "battery-sale" ||
           l.kind === "battery-old-sale" ||
           l.kind === "charger-new-sale" ||
-          l.kind === "charger-old-sale"
+          l.kind === "charger-old-sale" ||
+          l.kind === "old-scooty-sale"
       )
       .reduce((sum, l) => sum + (l.lineCost || 0), 0);
     const fifoCostReplacementSection = lines
