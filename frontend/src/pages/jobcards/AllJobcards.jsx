@@ -540,14 +540,9 @@ export default function AllJobcards() {
                       const scrapQty =
                         part.partType === "sales" &&
                         part.salesType === "battery" &&
-                        String(part.batteryOldNew || "").toLowerCase() === "new" &&
                         part.scrapAvailable &&
                         (Number(part.scrapQuantity) || 0) > 0
                           ? Math.max(0, Number(part.scrapQuantity) || 0)
-                          : 0;
-                      const scrapCredit =
-                        scrapQty > 0
-                          ? scrapQty * Math.max(0, Number(part.scrapPricePerUnit) || 0)
                           : 0;
                       return (
                       <span
@@ -618,12 +613,14 @@ export default function AllJobcards() {
                               border: "1px solid rgba(251, 191, 36, 0.6)",
                               alignSelf: "flex-start",
                             }}
-                            title="Old batteries received with this new battery sale"
+                            title={
+                              String(part.batteryOldNew || "").toLowerCase() ===
+                              "new"
+                                ? "Old batteries received with this new battery sale"
+                                : "Scrap received with this old battery sale"
+                            }
                           >
                             Customer scrap available: ×{scrapQty}
-                            {scrapCredit > 0
-                              ? ` · credit ₹${scrapCredit.toLocaleString("en-IN")}`
-                              : ""}
                           </span>
                         )}
                       </span>
@@ -1023,16 +1020,9 @@ export default function AllJobcards() {
                         const modalScrapQty =
                           part.partType === "sales" &&
                           part.salesType === "battery" &&
-                          String(part.batteryOldNew || "").toLowerCase() ===
-                            "new" &&
                           part.scrapAvailable &&
                           (Number(part.scrapQuantity) || 0) > 0
                             ? Math.max(0, Number(part.scrapQuantity) || 0)
-                            : 0;
-                        const modalScrapCredit =
-                          modalScrapQty > 0
-                            ? modalScrapQty *
-                              Math.max(0, Number(part.scrapPricePerUnit) || 0)
                             : 0;
 
                         return (
@@ -1096,9 +1086,6 @@ export default function AllJobcards() {
                                     }}
                                   >
                                     Customer scrap available: ×{modalScrapQty}
-                                    {modalScrapCredit > 0
-                                      ? ` · line credit ₹${modalScrapCredit.toLocaleString("en-IN")}`
-                                      : ""}
                                   </span>
                                 )}
                               </div>

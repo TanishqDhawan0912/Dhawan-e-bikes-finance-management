@@ -1350,11 +1350,7 @@ export default function Admin() {
         if (part?.voltage) pushThingExtra(extras, `${part.voltage}V`);
         if (part?.batteryOldNew)
           pushThingExtra(extras, part.batteryOldNew === "new" ? "New" : "Old");
-        if (
-          part?.scrapAvailable &&
-          (Number(part.scrapQuantity) || 0) > 0 &&
-          String(part.batteryOldNew || "").toLowerCase() === "new"
-        ) {
+        if (part?.scrapAvailable && (Number(part.scrapQuantity) || 0) > 0) {
           pushThingExtra(
             extras,
             `Customer scrap ×${Number(part.scrapQuantity) || 0}`
@@ -1408,10 +1404,42 @@ export default function Admin() {
     }, 0);
   };
 
+  /** Old battery sale: scrap brought in — credit in profit (qty × rate; rate defaults to ₹800). */
+  const sumOldBatteryScrapCredit = (parts, imputedPerUnit = 800) => {
+    if (!Array.isArray(parts)) return 0;
+    return parts.reduce((sum, p) => {
+      if (!p) return sum;
+      if (String(p.partType || "").toLowerCase() !== "sales") return sum;
+      if (String(p.salesType || "").toLowerCase() !== "battery") return sum;
+      if (String(p.batteryOldNew || "").toLowerCase() !== "old") return sum;
+      if (!p.scrapAvailable) return sum;
+      const sq = Math.max(0, Number(p.scrapQuantity) || 0);
+      if (sq <= 0) return sum;
+      const rate =
+        Math.max(0, Number(p.scrapPricePerUnit) || 0) || imputedPerUnit;
+      return sum + sq * rate;
+    }, 0);
+  };
+
   const buildJobcardServiceAndSalesProfitDetail = (jc) => {
+    /** When old battery is sold without customer scrap, treat ₹800/unit as imputed scrap / cost in profit. */
+    const OLD_BATTERY_IMPUTED_SCRAP_PER_UNIT = 800;
     const paidAmount = Number(jc?.paidAmount) || 0;
     const parts = Array.isArray(jc?.parts) ? jc.parts : [];
     const customerScrapCreditTotal = sumNewBatteryCustomerScrapCredit(parts);
+    const oldBatteryScrapCreditTotal = sumOldBatteryScrapCredit(
+      parts,
+      OLD_BATTERY_IMPUTED_SCRAP_PER_UNIT
+    );
+
+    const isProfitOldBatterySaleLine = (p) => {
+      if (!p) return false;
+      // Custom old-battery lines (no inventory id) still use imputed scrap cost — do not exclude isCustom.
+      const pt = String(p.partType || "").toLowerCase();
+      const st = String(p.salesType || "").toLowerCase();
+      if (pt !== "sales" || st !== "battery") return false;
+      return String(p.batteryOldNew || "").toLowerCase() === "old";
+    };
 
     const isProfitSpareLine = (p) => {
       if (!p || p.isCustom === true || !p.spareId) return false;
@@ -1441,11 +1469,35 @@ export default function Admin() {
     };
 
     const profitParts = parts.filter(
-      (p) => isProfitSpareLine(p) || isProfitBatteryLine(p)
+      (p) =>
+        isProfitSpareLine(p) ||
+        isProfitBatteryLine(p) ||
+        isProfitOldBatterySaleLine(p)
     );
 
     const lines = profitParts
       .map((p) => {
+        if (isProfitOldBatterySaleLine(p)) {
+          const qty =
+            Number(
+              p.selectedQuantity !== undefined && p.selectedQuantity !== null
+                ? p.selectedQuantity
+                : p.quantity
+            ) || 0;
+          const lineCost = qty * OLD_BATTERY_IMPUTED_SCRAP_PER_UNIT;
+          const unitCost = qty > 0 ? lineCost / qty : 0;
+          const baseName =
+            String(p.spareName || p.batteryName || "Battery").trim() ||
+            "Battery";
+          return {
+            name: baseName,
+            kind: "battery-old-sale",
+            kindDisplay: "old battery sale",
+            quantity: qty,
+            unitCost,
+            lineCost,
+          };
+        }
         if (isProfitBatteryLine(p)) {
           const qty =
             Number(
@@ -1543,17 +1595,32 @@ export default function Admin() {
     /** FIFO totals aligned with jobcard sections: Service / Sales / Replacement */
     const fifoCostServiceSection = serviceSpareCost;
     const fifoCostSalesSection = lines
-      .filter((l) => l.kind === "sales" || l.kind === "battery-sale")
+      .filter(
+        (l) =>
+          l.kind === "sales" ||
+          l.kind === "battery-sale" ||
+          l.kind === "battery-old-sale"
+      )
       .reduce((sum, l) => sum + (l.lineCost || 0), 0);
     const fifoCostReplacementSection = lines
       .filter((l) => l.kind === "battery-replacement")
       .reduce((sum, l) => sum + (l.lineCost || 0), 0);
-    // Paid is net after scrap discount; add scrap credit back so profit reflects full deal vs FIFO cost.
-    const profit = paidAmount - totalCost + customerScrapCreditTotal;
+    // New battery: paid net of scrap discount — add new-battery scrap credit back.
+    // Old battery: always include imputed ₹800/unit in totalCost; add old-battery scrap credit when customer supplies scrap.
+    const profit =
+      paidAmount -
+      totalCost +
+      customerScrapCreditTotal +
+      oldBatteryScrapCreditTotal;
 
     /** Lines included in profit math but with ₹0 cost (no FIFO on part + no unit cost from stock). */
     const missingPurchaseCostLabels = lines
-      .filter((l) => l.quantity > 0 && (Number(l.lineCost) || 0) <= 0)
+      .filter(
+        (l) =>
+          l.quantity > 0 &&
+          (Number(l.lineCost) || 0) <= 0 &&
+          l.kind !== "battery-old-sale"
+      )
       .map((l) =>
         l.quantity > 1
           ? `${l.name} (${l.kindDisplay}, ×${l.quantity})`
@@ -1572,6 +1639,7 @@ export default function Admin() {
       salesSpareCost,
       batteryInventoryCost,
       customerScrapCreditTotal,
+      oldBatteryScrapCreditTotal,
       profit,
       missingPurchaseCostLabels,
       serviceThingSummaries,
@@ -4197,6 +4265,24 @@ export default function Admin() {
                                           </span>
                                         </>
                                       )}
+                                      {(j.oldBatteryScrapCreditTotal || 0) > 0 && (
+                                        <>
+                                          <span style={{ color: "#94a3b8", fontWeight: 600 }}>
+                                            +
+                                          </span>
+                                          <span>
+                                            <span style={{ color: "#64748b" }}>
+                                              Old battery scrap credit
+                                            </span>{" "}
+                                            <strong style={{ color: "#0f172a" }}>
+                                              ₹
+                                              {(j.oldBatteryScrapCreditTotal || 0).toLocaleString(
+                                                "en-IN"
+                                              )}
+                                            </strong>
+                                          </span>
+                                        </>
+                                      )}
                                       <span style={{ color: "#94a3b8", fontWeight: 600 }}>=</span>
                                       <span>
                                         <span style={{ color: "#64748b" }}>Profit</span>{" "}
@@ -4837,7 +4923,7 @@ export default function Admin() {
                             <div />
                             <div />
                             <div style={{ textAlign: "right", fontWeight: 800 }}>
-                              ₹{(j.totalCost || 0).toLocaleString("en-IN")}
+                              −₹{(j.totalCost || 0).toLocaleString("en-IN")}
                             </div>
 
                             {(j.customerScrapCreditTotal || 0) > 0 && (
@@ -4862,6 +4948,32 @@ export default function Admin() {
                                 >
                                   +₹
                                   {(j.customerScrapCreditTotal || 0).toLocaleString("en-IN")}
+                                </div>
+                              </>
+                            )}
+
+                            {(j.oldBatteryScrapCreditTotal || 0) > 0 && (
+                              <>
+                                <div
+                                  style={{
+                                    fontWeight: 600,
+                                    color: "#475569",
+                                    fontSize: "0.88rem",
+                                  }}
+                                >
+                                  Old battery scrap credit
+                                </div>
+                                <div />
+                                <div />
+                                <div
+                                  style={{
+                                    textAlign: "right",
+                                    fontWeight: 600,
+                                    color: "#15803d",
+                                  }}
+                                >
+                                  +₹
+                                  {(j.oldBatteryScrapCreditTotal || 0).toLocaleString("en-IN")}
                                 </div>
                               </>
                             )}

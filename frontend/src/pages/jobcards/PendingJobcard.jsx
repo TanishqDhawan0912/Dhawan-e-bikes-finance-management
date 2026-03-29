@@ -652,7 +652,15 @@ export default function PendingJobcard() {
                             </p>
 
                             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                              {grouped[category.key].map((part, index) => (
+                              {grouped[category.key].map((part, index) => {
+                                const scrapQty =
+                                  part.partType === "sales" &&
+                                  part.salesType === "battery" &&
+                                  part.scrapAvailable &&
+                                  (Number(part.scrapQuantity) || 0) > 0
+                                    ? Math.max(0, Number(part.scrapQuantity) || 0)
+                                    : 0;
+                                return (
                                 <span
                                   key={`${category.key}-${index}`}
                                   style={{
@@ -663,10 +671,19 @@ export default function PendingJobcard() {
                                     color: "#ffffff",
                                     fontWeight: 500,
                                     display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "0.45rem",
+                                    flexDirection: scrapQty > 0 ? "column" : "row",
+                                    alignItems: scrapQty > 0 ? "stretch" : "center",
+                                    gap: scrapQty > 0 ? "0.35rem" : "0.45rem",
                                   }}
                                 >
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.45rem",
+                                      flexWrap: "wrap",
+                                    }}
+                                  >
                                   <span>
                                     {(() => {
                                       const tags = [];
@@ -750,7 +767,7 @@ export default function PendingJobcard() {
                                   })()}
                                   <span
                                     style={{
-                                      marginLeft: "auto",
+                                      marginLeft: scrapQty > 0 ? 0 : "auto",
                                       padding: "0.1rem 0.35rem",
                                       backgroundColor: "rgba(255, 255, 255, 0.2)",
                                       borderRadius: "0.25rem",
@@ -760,8 +777,32 @@ export default function PendingJobcard() {
                                   >
                                     Qty: {part.quantity}
                                   </span>
+                                  </span>
+                                  {scrapQty > 0 && (
+                                    <span
+                                      style={{
+                                        fontSize: "0.7rem",
+                                        fontWeight: 600,
+                                        padding: "0.2rem 0.45rem",
+                                        backgroundColor: "rgba(254, 243, 199, 0.95)",
+                                        color: "#92400e",
+                                        borderRadius: "0.25rem",
+                                        border: "1px solid rgba(251, 191, 36, 0.6)",
+                                        alignSelf: "flex-start",
+                                      }}
+                                      title={
+                                        String(part.batteryOldNew || "").toLowerCase() ===
+                                        "new"
+                                          ? "Old batteries received with this new battery sale"
+                                          : "Scrap received with this old battery sale"
+                                      }
+                                    >
+                                      Customer scrap available: ×{scrapQty}
+                                    </span>
+                                  )}
                                 </span>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         ) : null

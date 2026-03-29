@@ -118,12 +118,14 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
     const { mode, skipZeroWarning } = options || {};
     const totalAmount = calculateBillTotal();
     const paidAmount = parseFloat(formData.paidAmount) || 0;
+    const pendingFormAmount = parseFloat(formData.pendingAmount) || 0;
     const forceFinalize = mode === "finalize";
 
-    // If customer paid amount is zero but there is a bill amount,
-    // first show a custom warning box instead of browser confirm.
+    // Warn only when nothing is recorded against the bill: ₹0 paid and ₹0 pending,
+    // but the bill total is still > 0. If pending > 0, that already accounts for the balance.
     if (
       paidAmount === 0 &&
+      pendingFormAmount === 0 &&
       totalAmount > 0 &&
       !showZeroPaidWarning &&
       !skipZeroWarning
@@ -209,7 +211,11 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
   const grossTotal = partsTotal + labour; // Total before discount
   const priceAfterDiscount = Math.max(0, grossTotal - discount); // Final amount after discount
   const paidAmount = parseFloat(formData.paidAmount) || 0;
+  const pendingFormAmount = parseFloat(formData.pendingAmount) || 0;
   const balance = billTotal - paidAmount;
+  /** Hide discount explainer when user split is "₹0 paid + pending > 0" (pending already covers the plan). */
+  const hideDiscountFormulaHint =
+    paidAmount === 0 && pendingFormAmount > 0;
 
   return (
     <div
@@ -358,6 +364,14 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
                       ? { backgroundColor: "#fee2e2", color: "#991b1b", borderColor: "#fecaca" }
                       : null;
 
+                  const scrapQty =
+                    part.partType === "sales" &&
+                    part.salesType === "battery" &&
+                    part.scrapAvailable &&
+                    (Number(part.scrapQuantity) || 0) > 0
+                      ? Math.max(0, Number(part.scrapQuantity) || 0)
+                      : 0;
+
                   return (
                     <div
                       key={index}
@@ -369,7 +383,7 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
                         border: "1px solid #e5e7eb",
                         display: "flex",
                         justifyContent: "space-between",
-                        alignItems: "center",
+                        alignItems: scrapQty > 0 ? "flex-start" : "center",
                       }}
                     >
                       <div style={{ flex: 1 }}>
@@ -411,12 +425,36 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
                         >
                           Qty: {qty} × ₹{price.toFixed(2)}
                         </p>
+                        {scrapQty > 0 && (
+                          <p
+                            style={{
+                              margin: "0.35rem 0 0",
+                              fontSize: "0.8125rem",
+                              fontWeight: 600,
+                              color: "#92400e",
+                              backgroundColor: "#fffbeb",
+                              padding: "0.25rem 0.5rem",
+                              borderRadius: "0.25rem",
+                              border: "1px solid #fcd34d",
+                              display: "inline-block",
+                            }}
+                            title={
+                              String(part.batteryOldNew || "").toLowerCase() ===
+                              "new"
+                                ? "Old batteries received with this new battery sale"
+                                : "Scrap received with this old battery sale"
+                            }
+                          >
+                            Customer scrap available: ×{scrapQty}
+                          </p>
+                        )}
                       </div>
                       <div
                         style={{
                           fontSize: "1rem",
                           fontWeight: 600,
                           color: "#059669",
+                          paddingTop: scrapQty > 0 ? "0.125rem" : 0,
                         }}
                       >
                         ₹{lineAmount.toFixed(2)}
@@ -660,7 +698,8 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
               </p>
             )}
           </div>
-          {formData.paidAmount && (
+          {!hideDiscountFormulaHint &&
+            (formData.paidAmount !== "" || formData.pendingAmount !== "") && (
             <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.75rem", color: "#6b7280" }}>
               Discount will be auto-calculated as: (Parts Total + Labour) - (Amount Paid + Pending Amount)
             </p>
