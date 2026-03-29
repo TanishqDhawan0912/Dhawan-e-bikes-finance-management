@@ -61,6 +61,47 @@ function fifoDeductBatteryUnits(batteryDoc, units) {
 }
 
 /**
+ * Undo FIFO deduct: add units back to the same layers that still have "headroom"
+ * below originalQuantity, oldest purchaseDate first (inverse of fifoDeductBatteryUnits).
+ * Remainder (e.g. missing originalQuantity) goes to fifoRestoreToStockEntries fallback.
+ */
+function fifoRestoreBatteryUnits(batteryDoc, units) {
+  const entries = Array.isArray(batteryDoc?.stockEntries)
+    ? batteryDoc.stockEntries
+    : [];
+  const n = Math.floor(Number(units) || 0);
+  if (n <= 0 || entries.length === 0) return;
+
+  const order = entries
+    .map((e, i) => ({
+      i,
+      t: parsePurchaseDateMs(e?.purchaseDate),
+    }))
+    .sort((a, b) => (a.t !== b.t ? a.t - b.t : a.i - b.i));
+
+  let remaining = n;
+  for (const row of order) {
+    if (remaining <= 0) break;
+    const e = entries[row.i];
+    if (!e) continue;
+    const q = Math.max(0, Number(e.quantity) || 0);
+    const origRaw = e.originalQuantity;
+    const orig =
+      origRaw !== undefined && origRaw !== null && origRaw !== ""
+        ? Math.max(0, Math.floor(Number(origRaw)))
+        : null;
+    const headroom = orig != null ? Math.max(0, orig - q) : remaining;
+    const add = Math.min(remaining, headroom);
+    if (add <= 0) continue;
+    e.quantity = q + add;
+    remaining -= add;
+  }
+  if (remaining > 0) {
+    fifoRestoreToStockEntries(entries, remaining);
+  }
+}
+
+/**
  * Apply battery stock change in individual units (jobcard / bill).
  * When stockEntries exist, uses FIFO on those layers; otherwise legacy totalSets/openBatteries only.
  */
@@ -79,7 +120,7 @@ function adjustBatteryStockByUnits(batteryDoc, qtyUnits, mode) {
       }
       return r;
     }
-    fifoRestoreToStockEntries(batteryDoc.stockEntries, u);
+    fifoRestoreBatteryUnits(batteryDoc, u);
     if (typeof batteryDoc.recalculateFromStockEntries === "function") {
       batteryDoc.recalculateFromStockEntries();
     }

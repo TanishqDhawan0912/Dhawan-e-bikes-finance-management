@@ -1513,6 +1513,15 @@ export default function Admin() {
       .reduce((sum, l) => sum + (l.lineCost || 0), 0);
     const profit = paidAmount - totalCost;
 
+    /** Lines included in profit math but with ₹0 cost (no FIFO on part + no unit cost from stock). */
+    const missingPurchaseCostLabels = lines
+      .filter((l) => l.quantity > 0 && (Number(l.lineCost) || 0) <= 0)
+      .map((l) =>
+        l.quantity > 1
+          ? `${l.name} (${l.kindDisplay}, ×${l.quantity})`
+          : `${l.name} (${l.kindDisplay})`
+      );
+
     return {
       id: jc?._id,
       jobcardNumber: jc?.jobcardNumber || "N/A",
@@ -1525,6 +1534,7 @@ export default function Admin() {
       salesSpareCost,
       batteryInventoryCost,
       profit,
+      missingPurchaseCostLabels,
       serviceThingSummaries,
       replacementThingSummaries,
       salesThingSummaries,
@@ -4146,6 +4156,57 @@ export default function Admin() {
                                         </strong>
                                       </span>
                                     </div>
+                                    {Array.isArray(j.missingPurchaseCostLabels) &&
+                                      j.missingPurchaseCostLabels.length > 0 && (
+                                        <div
+                                          style={{
+                                            marginTop: "0.45rem",
+                                            padding: "0.5rem 0.65rem",
+                                            background: "#fffbeb",
+                                            border: "1px solid #fcd34d",
+                                            borderRadius: "0.4rem",
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              fontSize: "0.65rem",
+                                              fontWeight: 600,
+                                              color: "#b45309",
+                                              marginBottom: "0.4rem",
+                                              letterSpacing: "0.02em",
+                                            }}
+                                          >
+                                            No purchase price in stock — cost taken as ₹0
+                                          </div>
+                                          <div
+                                            style={{
+                                              display: "flex",
+                                              flexWrap: "wrap",
+                                              gap: "0.35rem",
+                                              alignItems: "center",
+                                            }}
+                                          >
+                                            {j.missingPurchaseCostLabels.map((label, mi) => (
+                                              <span
+                                                key={`${j.id}-miss-${mi}`}
+                                                style={{
+                                                  fontSize: "0.8rem",
+                                                  fontWeight: 800,
+                                                  color: "#7c2d12",
+                                                  background: "#ffedd5",
+                                                  border: "1px solid #fb923c",
+                                                  borderRadius: "0.35rem",
+                                                  padding: "0.28rem 0.6rem",
+                                                  lineHeight: 1.25,
+                                                  boxShadow: "0 1px 0 rgba(124, 45, 18, 0.06)",
+                                                }}
+                                              >
+                                                {label}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
                                     {(j.serviceThingSummaries.length > 0 ||
                                       j.replacementThingSummaries.length > 0 ||
                                       j.salesThingSummaries.length > 0) && (
@@ -4419,6 +4480,56 @@ export default function Admin() {
                                     </div>
                                   ))
                                 )}
+
+                                {Array.isArray(j.missingPurchaseCostLabels) &&
+                                  j.missingPurchaseCostLabels.length > 0 && (
+                                    <div
+                                      style={{
+                                        gridColumn: "1 / -1",
+                                        marginTop: "0.25rem",
+                                        padding: "0.5rem 0.65rem",
+                                        background: "#fffbeb",
+                                        border: "1px solid #fcd34d",
+                                        borderRadius: "0.4rem",
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          fontSize: "0.68rem",
+                                          fontWeight: 600,
+                                          color: "#b45309",
+                                          marginBottom: "0.4rem",
+                                        }}
+                                      >
+                                        No purchase price in stock — cost taken as ₹0
+                                      </div>
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          flexWrap: "wrap",
+                                          gap: "0.35rem",
+                                        }}
+                                      >
+                                        {j.missingPurchaseCostLabels.map((label, mi) => (
+                                          <span
+                                            key={`${j.id}-miss-d-${mi}`}
+                                            style={{
+                                              fontSize: "0.82rem",
+                                              fontWeight: 800,
+                                              color: "#7c2d12",
+                                              background: "#ffedd5",
+                                              border: "1px solid #fb923c",
+                                              borderRadius: "0.35rem",
+                                              padding: "0.3rem 0.65rem",
+                                              lineHeight: 1.25,
+                                            }}
+                                          >
+                                            {label}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
 
                                 <div
                                   style={{
