@@ -537,6 +537,18 @@ export default function AllJobcards() {
                               color: "#991b1b",
                             }
                           : null;
+                      const scrapQty =
+                        part.partType === "sales" &&
+                        part.salesType === "battery" &&
+                        String(part.batteryOldNew || "").toLowerCase() === "new" &&
+                        part.scrapAvailable &&
+                        (Number(part.scrapQuantity) || 0) > 0
+                          ? Math.max(0, Number(part.scrapQuantity) || 0)
+                          : 0;
+                      const scrapCredit =
+                        scrapQty > 0
+                          ? scrapQty * Math.max(0, Number(part.scrapPricePerUnit) || 0)
+                          : 0;
                       return (
                       <span
                         key={index}
@@ -549,39 +561,71 @@ export default function AllJobcards() {
                           fontWeight: 500,
                           boxShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
                           display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.5rem",
+                          flexDirection: scrapQty > 0 ? "column" : "row",
+                          alignItems: scrapQty > 0 ? "stretch" : "center",
+                          gap: scrapQty > 0 ? "0.35rem" : "0.5rem",
                         }}
                       >
-                        <span>{nameWithTypes}</span>
-                        {warrantyTag && (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <span>{nameWithTypes}</span>
+                          {warrantyTag && (
+                            <span
+                              style={{
+                                padding: "0.125rem 0.375rem",
+                                backgroundColor: warrantyStyles?.backgroundColor,
+                                borderRadius: "0.25rem",
+                                fontSize: "0.75rem",
+                                fontWeight: 800,
+                                border: `1px solid ${warrantyStyles?.borderColor}`,
+                                color: warrantyStyles?.color,
+                              }}
+                              title={
+                                warrantyTag === "W" ? "Warranty" : "No Warranty"
+                              }
+                            >
+                              {warrantyTag}
+                            </span>
+                          )}
                           <span
                             style={{
+                              marginLeft: scrapQty > 0 ? 0 : "auto",
                               padding: "0.125rem 0.375rem",
-                              backgroundColor: warrantyStyles?.backgroundColor,
+                              backgroundColor: "rgba(255, 255, 255, 0.2)",
                               borderRadius: "0.25rem",
                               fontSize: "0.75rem",
-                              fontWeight: 800,
-                              border: `1px solid ${warrantyStyles?.borderColor}`,
-                              color: warrantyStyles?.color,
+                              fontWeight: 600,
                             }}
-                            title={
-                              warrantyTag === "W" ? "Warranty" : "No Warranty"
-                            }
                           >
-                            {warrantyTag}
+                            Qty: {part.quantity}
+                          </span>
+                        </span>
+                        {scrapQty > 0 && (
+                          <span
+                            style={{
+                              fontSize: "0.72rem",
+                              fontWeight: 600,
+                              padding: "0.2rem 0.45rem",
+                              backgroundColor: "rgba(254, 243, 199, 0.95)",
+                              color: "#92400e",
+                              borderRadius: "0.25rem",
+                              border: "1px solid rgba(251, 191, 36, 0.6)",
+                              alignSelf: "flex-start",
+                            }}
+                            title="Old batteries received with this new battery sale"
+                          >
+                            Customer scrap available: ×{scrapQty}
+                            {scrapCredit > 0
+                              ? ` · credit ₹${scrapCredit.toLocaleString("en-IN")}`
+                              : ""}
                           </span>
                         )}
-                        <span style={{ 
-                          marginLeft: "auto",
-                          padding: "0.125rem 0.375rem",
-                          backgroundColor: "rgba(255, 255, 255, 0.2)",
-                          borderRadius: "0.25rem",
-                          fontSize: "0.75rem",
-                          fontWeight: 600,
-                        }}>
-                          Qty: {part.quantity}
-                        </span>
                       </span>
                       );
                     })}
@@ -976,6 +1020,20 @@ export default function AllJobcards() {
                                 color: "#991b1b",
                               }
                             : null;
+                        const modalScrapQty =
+                          part.partType === "sales" &&
+                          part.salesType === "battery" &&
+                          String(part.batteryOldNew || "").toLowerCase() ===
+                            "new" &&
+                          part.scrapAvailable &&
+                          (Number(part.scrapQuantity) || 0) > 0
+                            ? Math.max(0, Number(part.scrapQuantity) || 0)
+                            : 0;
+                        const modalScrapCredit =
+                          modalScrapQty > 0
+                            ? modalScrapQty *
+                              Math.max(0, Number(part.scrapPricePerUnit) || 0)
+                            : 0;
 
                         return (
                           <tr
@@ -993,30 +1051,57 @@ export default function AllJobcards() {
                                 fontSize: "0.875rem",
                               }}
                             >
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-                                <span>{nameWithTypes}</span>
-                                {warrantyTag && (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "0.35rem",
+                                  alignItems: "flex-start",
+                                }}
+                              >
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                                  <span>{nameWithTypes}</span>
+                                  {warrantyTag && (
+                                    <span
+                                      style={{
+                                        padding: "0.1rem 0.35rem",
+                                        borderRadius: "0.25rem",
+                                        backgroundColor:
+                                          warrantyStyles?.backgroundColor,
+                                        color: warrantyStyles?.color,
+                                        fontSize: "0.75rem",
+                                        fontWeight: 800,
+                                        border: `1px solid ${warrantyStyles?.borderColor}`,
+                                      }}
+                                      title={
+                                        warrantyTag === "W"
+                                          ? "Warranty"
+                                          : "No Warranty"
+                                      }
+                                    >
+                                      {warrantyTag}
+                                    </span>
+                                  )}
+                                </span>
+                                {modalScrapQty > 0 && (
                                   <span
                                     style={{
-                                      padding: "0.1rem 0.35rem",
-                                      borderRadius: "0.25rem",
-                                      backgroundColor:
-                                        warrantyStyles?.backgroundColor,
-                                      color: warrantyStyles?.color,
                                       fontSize: "0.75rem",
-                                      fontWeight: 800,
-                                      border: `1px solid ${warrantyStyles?.borderColor}`,
+                                      fontWeight: 600,
+                                      color: "#92400e",
+                                      backgroundColor: "#fffbeb",
+                                      padding: "0.2rem 0.45rem",
+                                      borderRadius: "0.25rem",
+                                      border: "1px solid #fcd34d",
                                     }}
-                                    title={
-                                      warrantyTag === "W"
-                                        ? "Warranty"
-                                        : "No Warranty"
-                                    }
                                   >
-                                    {warrantyTag}
+                                    Customer scrap available: ×{modalScrapQty}
+                                    {modalScrapCredit > 0
+                                      ? ` · line credit ₹${modalScrapCredit.toLocaleString("en-IN")}`
+                                      : ""}
                                   </span>
                                 )}
-                              </span>
+                              </div>
                             </td>
                             <td
                               style={{
