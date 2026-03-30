@@ -21,6 +21,44 @@ const isValidObjectId = (id) => {
 /** Voltages used for old-charger inventory entries (matches Old chargers page). */
 const OLD_CHARGER_SALE_VOLTAGES = ["48V", "60V", "72V"];
 
+function chargerMatchesOldScootyChemistry(charger, chemistry) {
+  const want = String(chemistry || "").trim().toLowerCase();
+  if (!want) return false;
+  const got = String(charger?.batteryType || "").trim().toLowerCase();
+  return got === want;
+}
+
+/** Match inventory `voltage` text (e.g. 60V3A, 72V4A) to old-scooty nominal 48|60|72. */
+function chargerVoltageMatchesScootyNominal(chargerVoltageStr, scootyDigit) {
+  const target = parseInt(String(scootyDigit || ""), 10);
+  if (!Number.isFinite(target) || target <= 0) return true;
+  const raw = String(chargerVoltageStr || "").trim().toLowerCase();
+  if (!raw) return false;
+  const ok = (n) =>
+    Number.isFinite(n) && Math.round(Number(n)) === target;
+  const m1 = raw.match(/^(\d+(?:\.\d+)?)/);
+  if (m1 && ok(parseFloat(m1[1]))) return true;
+  const m2 = raw.match(/(\d+(?:\.\d+)?)\s*v\b/);
+  if (m2 && ok(parseFloat(m2[1]))) return true;
+  return false;
+}
+
+function batteryMatchesOldScootyChemistry(battery, chemistry) {
+  const want = String(chemistry || "").trim().toLowerCase();
+  if (!want) return false;
+  const got = String(battery?.batteryType || "").trim().toLowerCase();
+  return got === want;
+}
+
+/** When lithium has no voltage UI, persist nominal V from SKU pack size when present. */
+function batteriesPerSetToScootyVoltageDigit(perSet) {
+  const n = Number(perSet);
+  if (n === 4) return "48";
+  if (n === 5) return "60";
+  if (n === 6) return "72";
+  return "";
+}
+
 function buildOldChargerVoltageStatsFromEntries(entries) {
   const voltages = ["48V", "60V", "72V", "Other"];
   const stats = {};
@@ -899,6 +937,17 @@ export default function NewJobcard() {
     );
   }, [oldChargerStockStats]);
 
+  /** When old-scooty uses an old charger from stock, disable voltages with no working units (matches sales old-charger). */
+  const oldScootyOldChargerVoltageDisabled = useMemo(() => {
+    const noStock = (invKey) =>
+      !oldChargerStockStats || (oldChargerStockStats[invKey]?.working ?? 0) <= 0;
+    return {
+      "48": noStock("48V"),
+      "60": noStock("60V"),
+      "72": noStock("72V"),
+    };
+  }, [oldChargerStockStats]);
+
   /** Working units in Old chargers stock for the selected voltage (old charger sale). */
   const oldChargerWorkingInStock = useMemo(() => {
     if (!salesOldChargerVoltage || !oldChargerStockStats) return 0;
@@ -938,6 +987,39 @@ export default function NewJobcard() {
       setSalesOldChargerVoltage("");
     }
   }, [oldChargerStockStats, salesOldChargerVoltage]);
+
+  useEffect(() => {
+    if (
+      oldScootyData.chargerChemistry !== "lead" ||
+      oldScootyData.chargerType !== "oldCharger" ||
+      !oldChargerStockStats
+    ) {
+      return;
+    }
+    const map = { "48": "48V", "60": "60V", "72": "72V" };
+    const key = map[oldScootyData.chargerVoltage];
+    if (!key) return;
+    if ((oldChargerStockStats[key]?.working ?? 0) > 0) return;
+    const order = [
+      ["48", "48V"],
+      ["60", "60V"],
+      ["72", "72V"],
+    ];
+    const pick = order.find(
+      ([, k]) => (oldChargerStockStats[k]?.working ?? 0) > 0
+    );
+    const nextVolt = pick ? pick[0] : "";
+    setOldScootyData((prev) =>
+      prev.chargerType !== "oldCharger"
+        ? prev
+        : { ...prev, chargerVoltage: nextVolt }
+    );
+  }, [
+    oldScootyData.chargerChemistry,
+    oldScootyData.chargerType,
+    oldScootyData.chargerVoltage,
+    oldChargerStockStats,
+  ]);
 
   // Search batteries by name
   useEffect(() => {
@@ -1747,7 +1829,12 @@ export default function NewJobcard() {
         part.price !== undefined && part.price !== null ? String(part.price) : "",
       quantity: String(part.selectedQuantity || 1),
       batteryChemistry: part.batteryChemistry || "lead",
-      batteryVoltage: part.batteryVoltage || "48",
+      batteryVoltage:
+        part.batteryChemistry === "lithium"
+          ? part.batteryVoltage != null && String(part.batteryVoltage).trim() !== ""
+            ? String(part.batteryVoltage)
+            : ""
+          : part.batteryVoltage || "48",
       batteryType: part.batteryType || "oldBattery",
       chargerType: part.chargerType || "oldCharger",
       chargerChemistry: part.chargerChemistry || "lead",
@@ -1803,6 +1890,29 @@ export default function NewJobcard() {
       alert("Please select a charger from the list");
       return;
     }
+    if (
+      oldScootyData.chargerType === "oldCharger" &&
+      oldScootyData.chargerChemistry === "lead"
+    ) {
+      if (!oldChargerStockStats) {
+        alert("Old charger stock is still loading. Please wait a moment.");
+        return;
+      }
+      const voltKey = {
+        "48": "48V",
+        "60": "60V",
+        "72": "72V",
+      }[oldScootyData.chargerVoltage];
+      if (
+        !voltKey ||
+        (oldChargerStockStats[voltKey]?.working ?? 0) <= 0
+      ) {
+        alert(
+          "Choose a charger voltage that has at least one working unit in Old chargers inventory."
+        );
+        return;
+      }
+    }
     setSelectedParts((prev) => {
       const sales = prev.sales || [];
       const existing =
@@ -1823,7 +1933,15 @@ export default function NewJobcard() {
         partType: "sales",
         salesType: "oldScooty",
         batteryChemistry: oldScootyData.batteryChemistry,
-        batteryVoltage: oldScootyData.batteryVoltage,
+        batteryVoltage:
+          oldScootyData.batteryChemistry === "lithium"
+            ? oldScootyData.batteryType === "newBattery" &&
+              oldScootySelectedBattery
+              ? batteriesPerSetToScootyVoltageDigit(
+                  oldScootySelectedBattery.batteriesPerSet
+                ) || ""
+              : ""
+            : oldScootyData.batteryVoltage,
         batteryType: oldScootyData.batteryType,
         batteryName:
           oldScootyData.batteryType === "newBattery" && oldScootySelectedBattery
@@ -1839,7 +1957,13 @@ export default function NewJobcard() {
             ? oldScootySelectedCharger.name
             : null,
         chargerChemistry: oldScootyData.chargerChemistry,
-        chargerVoltage: oldScootyData.chargerVoltage,
+        chargerVoltage:
+          oldScootyData.chargerChemistry === "lithium"
+            ? oldScootyData.chargerType === "newCharger" &&
+              oldScootySelectedCharger?.voltage != null
+              ? String(oldScootySelectedCharger.voltage)
+              : ""
+            : oldScootyData.chargerVoltage,
         chargerWarrantyStatus:
           oldScootyData.chargerType === "newCharger"
             ? oldScootyData.chargerWarrantyStatus
@@ -1929,6 +2053,69 @@ export default function NewJobcard() {
     loadBatteries();
     loadChargers();
   }, [activeTab, selectedSalesType]);
+
+  const oldScootyFilteredNewChargers = useMemo(() => {
+    const chem = oldScootyData.chargerChemistry;
+    return oldScootyChargers.filter((c) => {
+      if (!chargerMatchesOldScootyChemistry(c, chem)) return false;
+      if (chem === "lithium") return true;
+      return chargerVoltageMatchesScootyNominal(
+        c.voltage,
+        oldScootyData.chargerVoltage
+      );
+    });
+  }, [
+    oldScootyChargers,
+    oldScootyData.chargerChemistry,
+    oldScootyData.chargerVoltage,
+  ]);
+
+  useEffect(() => {
+    if (oldScootyData.chargerType !== "newCharger") return;
+    if (!oldScootySelectedCharger) return;
+    const id = String(oldScootySelectedCharger._id);
+    if (!oldScootyFilteredNewChargers.some((c) => String(c._id) === id)) {
+      setOldScootySelectedCharger(null);
+    }
+  }, [
+    oldScootyData.chargerType,
+    oldScootyFilteredNewChargers,
+    oldScootySelectedCharger,
+  ]);
+
+  const oldScootyFilteredNewBatteries = useMemo(() => {
+    const chem = oldScootyData.batteryChemistry;
+    return oldScootyBatteries.filter((b) =>
+      batteryMatchesOldScootyChemistry(b, chem)
+    );
+  }, [oldScootyBatteries, oldScootyData.batteryChemistry]);
+
+  useEffect(() => {
+    if (oldScootyData.batteryType !== "newBattery") return;
+    if (!oldScootySelectedBattery) return;
+    const id = String(oldScootySelectedBattery._id);
+    if (!oldScootyFilteredNewBatteries.some((b) => String(b._id) === id)) {
+      setOldScootySelectedBattery(null);
+    }
+  }, [
+    oldScootyData.batteryType,
+    oldScootyFilteredNewBatteries,
+    oldScootySelectedBattery,
+  ]);
+
+  useEffect(() => {
+    const w = oldScootyData.chargerWarrantyStatus;
+    if (
+      w !== "noWarranty" &&
+      w !== "6months" &&
+      w !== "1year"
+    ) {
+      setOldScootyData((prev) => ({
+        ...prev,
+        chargerWarrantyStatus: "noWarranty",
+      }));
+    }
+  }, [oldScootyData.chargerWarrantyStatus]);
 
   // Filter spare suggestions when user types in spare name
   useEffect(() => {
@@ -6527,12 +6714,18 @@ export default function NewJobcard() {
                             name="oldScootyBatteryChemistry"
                             value="lead"
                             checked={oldScootyData.batteryChemistry === "lead"}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              const v = e.target.value;
                               setOldScootyData((prev) => ({
                                 ...prev,
-                                batteryChemistry: e.target.value,
-                              }))
-                            }
+                                batteryChemistry: v,
+                                batteryVoltage:
+                                  v === "lithium"
+                                    ? ""
+                                    : prev.batteryVoltage || "48",
+                              }));
+                              setOldScootySelectedBattery(null);
+                            }}
                             style={{
                               width: "1rem",
                               height: "1rem",
@@ -6569,12 +6762,18 @@ export default function NewJobcard() {
                             checked={
                               oldScootyData.batteryChemistry === "lithium"
                             }
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              const v = e.target.value;
                               setOldScootyData((prev) => ({
                                 ...prev,
-                                batteryChemistry: e.target.value,
-                              }))
-                            }
+                                batteryChemistry: v,
+                                batteryVoltage:
+                                  v === "lithium"
+                                    ? ""
+                                    : prev.batteryVoltage || "48",
+                              }));
+                              setOldScootySelectedBattery(null);
+                            }}
                             style={{
                               width: "1rem",
                               height: "1rem",
@@ -6584,35 +6783,37 @@ export default function NewJobcard() {
                           Lithium
                         </label>
                       </div>
-                      <span
-                        style={{
-                          display: "block",
-                          marginBottom: "0.25rem",
-                          fontSize: "0.875rem",
-                          fontWeight: 600,
-                          color: "#0c4a6e",
-                        }}
-                      >
-                        Battery voltage
-                      </span>
-                      <span
-                        style={{
-                          display: "block",
-                          marginBottom: "0.5rem",
-                          fontSize: "0.75rem",
-                          color: "#64748b",
-                        }}
-                      >
-                        48V = 4 battery, 60V = 5 battery, 72V = 6 battery
-                      </span>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "1rem",
-                          flexWrap: "wrap",
-                          marginBottom: "1rem",
-                        }}
-                      >
+                      {oldScootyData.batteryChemistry === "lead" && (
+                        <>
+                          <span
+                            style={{
+                              display: "block",
+                              marginBottom: "0.25rem",
+                              fontSize: "0.875rem",
+                              fontWeight: 600,
+                              color: "#0c4a6e",
+                            }}
+                          >
+                            Battery voltage
+                          </span>
+                          <span
+                            style={{
+                              display: "block",
+                              marginBottom: "0.5rem",
+                              fontSize: "0.75rem",
+                              color: "#64748b",
+                            }}
+                          >
+                            48V = 4 battery, 60V = 5 battery, 72V = 6 battery
+                          </span>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "1rem",
+                              flexWrap: "wrap",
+                              marginBottom: "1rem",
+                            }}
+                          >
                         <label
                           style={{
                             display: "flex",
@@ -6733,7 +6934,9 @@ export default function NewJobcard() {
                           />
                           72V (6 battery)
                         </label>
-                      </div>
+                          </div>
+                        </>
+                      )}
                       <span
                         style={{
                           display: "block",
@@ -6868,31 +7071,59 @@ export default function NewJobcard() {
                               Loading...
                             </span>
                           ) : (
-                            <select
-                              value={oldScootySelectedBattery?._id || ""}
-                              onChange={(e) => {
-                                const b = oldScootyBatteries.find(
-                                  (x) => x._id === e.target.value
-                                );
-                                setOldScootySelectedBattery(b || null);
-                              }}
-                              style={{
-                                width: "100%",
-                                maxWidth: "280px",
-                                padding: "0.5rem",
-                                borderRadius: "0.375rem",
-                                border: "1px solid #d1d5db",
-                                fontSize: "0.875rem",
-                              }}
-                            >
-                              <option value="">Select a battery</option>
-                              {oldScootyBatteries.map((b) => (
-                                <option key={b._id} value={b._id}>
-                                  {b.name}{" "}
-                                  {b.ampereValue ? `(${b.ampereValue} A)` : ""}
-                                </option>
-                              ))}
-                            </select>
+                            <>
+                              <select
+                                value={oldScootySelectedBattery?._id || ""}
+                                onChange={(e) => {
+                                  const b = oldScootyFilteredNewBatteries.find(
+                                    (x) => String(x._id) === e.target.value
+                                  );
+                                  setOldScootySelectedBattery(b || null);
+                                }}
+                                style={{
+                                  width: "100%",
+                                  maxWidth: "280px",
+                                  padding: "0.5rem",
+                                  borderRadius: "0.375rem",
+                                  border: "1px solid #d1d5db",
+                                  fontSize: "0.875rem",
+                                }}
+                              >
+                                <option value="">Select a battery</option>
+                                {oldScootyFilteredNewBatteries.map((b) => (
+                                  <option key={b._id} value={b._id}>
+                                    {b.name}{" "}
+                                    {b.ampereValue
+                                      ? `(${b.ampereValue} A)`
+                                      : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              {oldScootyFilteredNewBatteries.length === 0 && (
+                                <p
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    color: "#6b7280",
+                                    marginTop: "0.35rem",
+                                    marginBottom: 0,
+                                    lineHeight: 1.4,
+                                  }}
+                                >
+                                  {oldScootyData.batteryChemistry ===
+                                  "lithium" ? (
+                                    <>
+                                      No <strong>lithium</strong> batteries in
+                                      stock. Add inventory or switch to Lead.
+                                    </>
+                                  ) : (
+                                    <>
+                                      No <strong>lead</strong> batteries in
+                                      stock. Add inventory or switch to Lithium.
+                                    </>
+                                  )}
+                                </p>
+                              )}
+                            </>
                           )}
                           <span
                             style={{
@@ -7062,12 +7293,18 @@ export default function NewJobcard() {
                             name="oldScootyChargerChemistry"
                             value="lead"
                             checked={oldScootyData.chargerChemistry === "lead"}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              const v = e.target.value;
                               setOldScootyData((prev) => ({
                                 ...prev,
-                                chargerChemistry: e.target.value,
-                              }))
-                            }
+                                chargerChemistry: v,
+                                chargerVoltage:
+                                  v === "lithium"
+                                    ? ""
+                                    : prev.chargerVoltage || "48",
+                              }));
+                              setOldScootySelectedCharger(null);
+                            }}
                             style={{
                               width: "1rem",
                               height: "1rem",
@@ -7104,12 +7341,18 @@ export default function NewJobcard() {
                             checked={
                               oldScootyData.chargerChemistry === "lithium"
                             }
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              const v = e.target.value;
                               setOldScootyData((prev) => ({
                                 ...prev,
-                                chargerChemistry: e.target.value,
-                              }))
-                            }
+                                chargerChemistry: v,
+                                chargerVoltage:
+                                  v === "lithium"
+                                    ? ""
+                                    : prev.chargerVoltage || "48",
+                              }));
+                              setOldScootySelectedCharger(null);
+                            }}
                             style={{
                               width: "1rem",
                               height: "1rem",
@@ -7119,17 +7362,19 @@ export default function NewJobcard() {
                           Lithium
                         </label>
                       </div>
-                      <span
-                        style={{
-                          display: "block",
-                          marginBottom: "0.25rem",
-                          fontSize: "0.875rem",
-                          fontWeight: 600,
-                          color: "#334155",
-                        }}
-                      >
-                        Charger voltage
-                      </span>
+                      {oldScootyData.chargerChemistry === "lead" && (
+                        <>
+                          <span
+                            style={{
+                              display: "block",
+                              marginBottom: "0.25rem",
+                              fontSize: "0.875rem",
+                              fontWeight: 600,
+                              color: "#334155",
+                            }}
+                          >
+                            Charger voltage
+                          </span>
                       <span
                         style={{
                           display: "block",
@@ -7153,7 +7398,11 @@ export default function NewJobcard() {
                             display: "flex",
                             alignItems: "center",
                             gap: "0.5rem",
-                            cursor: "pointer",
+                            cursor:
+                              oldScootyData.chargerType === "oldCharger" &&
+                              oldScootyOldChargerVoltageDisabled["48"]
+                                ? "not-allowed"
+                                : "pointer",
                             padding: "0.5rem 0.75rem",
                             borderRadius: "0.375rem",
                             border: `2px solid ${
@@ -7167,6 +7416,11 @@ export default function NewJobcard() {
                                 : "#fff",
                             fontSize: "0.875rem",
                             fontWeight: 500,
+                            opacity:
+                              oldScootyData.chargerType === "oldCharger" &&
+                              oldScootyOldChargerVoltageDisabled["48"]
+                                ? 0.55
+                                : 1,
                           }}
                         >
                           <input
@@ -7174,6 +7428,10 @@ export default function NewJobcard() {
                             name="oldScootyChargerVoltage"
                             value="48"
                             checked={oldScootyData.chargerVoltage === "48"}
+                            disabled={
+                              oldScootyData.chargerType === "oldCharger" &&
+                              oldScootyOldChargerVoltageDisabled["48"]
+                            }
                             onChange={(e) =>
                               setOldScootyData((prev) => ({
                                 ...prev,
@@ -7193,7 +7451,11 @@ export default function NewJobcard() {
                             display: "flex",
                             alignItems: "center",
                             gap: "0.5rem",
-                            cursor: "pointer",
+                            cursor:
+                              oldScootyData.chargerType === "oldCharger" &&
+                              oldScootyOldChargerVoltageDisabled["60"]
+                                ? "not-allowed"
+                                : "pointer",
                             padding: "0.5rem 0.75rem",
                             borderRadius: "0.375rem",
                             border: `2px solid ${
@@ -7207,6 +7469,11 @@ export default function NewJobcard() {
                                 : "#fff",
                             fontSize: "0.875rem",
                             fontWeight: 500,
+                            opacity:
+                              oldScootyData.chargerType === "oldCharger" &&
+                              oldScootyOldChargerVoltageDisabled["60"]
+                                ? 0.55
+                                : 1,
                           }}
                         >
                           <input
@@ -7214,6 +7481,10 @@ export default function NewJobcard() {
                             name="oldScootyChargerVoltage"
                             value="60"
                             checked={oldScootyData.chargerVoltage === "60"}
+                            disabled={
+                              oldScootyData.chargerType === "oldCharger" &&
+                              oldScootyOldChargerVoltageDisabled["60"]
+                            }
                             onChange={(e) =>
                               setOldScootyData((prev) => ({
                                 ...prev,
@@ -7233,7 +7504,11 @@ export default function NewJobcard() {
                             display: "flex",
                             alignItems: "center",
                             gap: "0.5rem",
-                            cursor: "pointer",
+                            cursor:
+                              oldScootyData.chargerType === "oldCharger" &&
+                              oldScootyOldChargerVoltageDisabled["72"]
+                                ? "not-allowed"
+                                : "pointer",
                             padding: "0.5rem 0.75rem",
                             borderRadius: "0.375rem",
                             border: `2px solid ${
@@ -7247,6 +7522,11 @@ export default function NewJobcard() {
                                 : "#fff",
                             fontSize: "0.875rem",
                             fontWeight: 500,
+                            opacity:
+                              oldScootyData.chargerType === "oldCharger" &&
+                              oldScootyOldChargerVoltageDisabled["72"]
+                                ? 0.55
+                                : 1,
                           }}
                         >
                           <input
@@ -7254,6 +7534,10 @@ export default function NewJobcard() {
                             name="oldScootyChargerVoltage"
                             value="72"
                             checked={oldScootyData.chargerVoltage === "72"}
+                            disabled={
+                              oldScootyData.chargerType === "oldCharger" &&
+                              oldScootyOldChargerVoltageDisabled["72"]
+                            }
                             onChange={(e) =>
                               setOldScootyData((prev) => ({
                                 ...prev,
@@ -7269,6 +7553,56 @@ export default function NewJobcard() {
                           72V (6 battery)
                         </label>
                       </div>
+                      {oldScootyData.chargerType === "oldCharger" &&
+                        oldChargerStockStats === null && (
+                          <p
+                            style={{
+                              fontSize: "0.75rem",
+                              color: "#6b7280",
+                              marginTop: "-0.5rem",
+                              marginBottom: "0.75rem",
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            Loading old charger availability…
+                          </p>
+                        )}
+                      {oldScootyData.chargerType === "oldCharger" &&
+                        oldChargerStockStats &&
+                        OLD_CHARGER_SALE_VOLTAGES.every(
+                          (v) =>
+                            (oldChargerStockStats[v]?.working ?? 0) <= 0
+                        ) && (
+                          <>
+                            <p
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "#6b7280",
+                                marginTop: "-0.5rem",
+                                marginBottom: "0.25rem",
+                                lineHeight: 1.4,
+                              }}
+                            >
+                              No working old chargers in stock for 48V, 60V, or
+                              72V.
+                            </p>
+                            <p
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "#6b7280",
+                                marginBottom: "0.75rem",
+                                lineHeight: 1.4,
+                              }}
+                            >
+                              Only voltages with at least one{" "}
+                              <strong>working</strong> unit in{" "}
+                              <strong>Old chargers</strong> can be selected when
+                              attaching an old charger.
+                            </p>
+                          </>
+                        )}
+                        </>
+                      )}
                       <span
                         style={{
                           display: "block",
@@ -7404,30 +7738,60 @@ export default function NewJobcard() {
                               Loading...
                             </span>
                           ) : (
-                            <select
-                              value={oldScootySelectedCharger?._id || ""}
-                              onChange={(e) => {
-                                const c = oldScootyChargers.find(
-                                  (x) => x._id === e.target.value
-                                );
-                                setOldScootySelectedCharger(c || null);
-                              }}
-                              style={{
-                                width: "100%",
-                                maxWidth: "280px",
-                                padding: "0.5rem",
-                                borderRadius: "0.375rem",
-                                border: "1px solid #d1d5db",
-                                fontSize: "0.875rem",
-                              }}
-                            >
-                              <option value="">Select a charger</option>
-                              {oldScootyChargers.map((c) => (
-                                <option key={c._id} value={c._id}>
-                                  {c.name} {c.voltage ? `(${c.voltage})` : ""}
-                                </option>
-                              ))}
-                            </select>
+                            <>
+                              <select
+                                value={oldScootySelectedCharger?._id || ""}
+                                onChange={(e) => {
+                                  const c = oldScootyFilteredNewChargers.find(
+                                    (x) =>
+                                      String(x._id) === e.target.value
+                                  );
+                                  setOldScootySelectedCharger(c || null);
+                                }}
+                                style={{
+                                  width: "100%",
+                                  maxWidth: "280px",
+                                  padding: "0.5rem",
+                                  borderRadius: "0.375rem",
+                                  border: "1px solid #d1d5db",
+                                  fontSize: "0.875rem",
+                                }}
+                              >
+                                <option value="">Select a charger</option>
+                                {oldScootyFilteredNewChargers.map((c) => (
+                                  <option key={c._id} value={c._id}>
+                                    {c.name}{" "}
+                                    {c.voltage ? `(${c.voltage})` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              {oldScootyFilteredNewChargers.length === 0 && (
+                                <p
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    color: "#6b7280",
+                                    marginTop: "0.35rem",
+                                    marginBottom: 0,
+                                    lineHeight: 1.4,
+                                  }}
+                                >
+                                  {oldScootyData.chargerChemistry ===
+                                  "lithium" ? (
+                                    <>
+                                      No <strong>lithium</strong> chargers in
+                                      stock. Add inventory or switch to Lead.
+                                    </>
+                                  ) : (
+                                    <>
+                                      No chargers match this{" "}
+                                      <strong>Lead</strong> choice and{" "}
+                                      <strong>charger voltage</strong>. Add
+                                      stock or adjust filters.
+                                    </>
+                                  )}
+                                </p>
+                              )}
+                            </>
                           )}
                           <span
                             style={{
@@ -7448,141 +7812,141 @@ export default function NewJobcard() {
                               flexWrap: "wrap",
                             }}
                           >
-                            <label
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "0.5rem",
-                                cursor: "pointer",
-                                padding: "0.5rem 0.75rem",
-                                borderRadius: "0.375rem",
-                                border: `2px solid ${
-                                  oldScootyData.chargerWarrantyStatus ===
-                                  "noWarranty"
-                                    ? "#059669"
-                                    : "#e2e8f0"
-                                }`,
-                                backgroundColor:
-                                  oldScootyData.chargerWarrantyStatus ===
-                                  "noWarranty"
-                                    ? "#ecfdf5"
-                                    : "#fff",
-                                fontSize: "0.875rem",
-                                fontWeight: 500,
-                              }}
-                            >
-                              <input
-                                type="radio"
-                                name="oldScootyChargerWarranty"
-                                value="noWarranty"
-                                checked={
-                                  oldScootyData.chargerWarrantyStatus ===
-                                  "noWarranty"
-                                }
-                                onChange={(e) =>
-                                  setOldScootyData((prev) => ({
-                                    ...prev,
-                                    chargerWarrantyStatus: e.target.value,
-                                  }))
-                                }
-                                style={{
-                                  width: "1rem",
-                                  height: "1rem",
-                                  accentColor: "#059669",
-                                }}
-                              />
-                              No warranty
-                            </label>
-                            <label
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "0.5rem",
-                                cursor: "pointer",
-                                padding: "0.5rem 0.75rem",
-                                borderRadius: "0.375rem",
-                                border: `2px solid ${
-                                  oldScootyData.chargerWarrantyStatus ===
-                                  "6months"
-                                    ? "#059669"
-                                    : "#e2e8f0"
-                                }`,
-                                backgroundColor:
-                                  oldScootyData.chargerWarrantyStatus ===
-                                  "6months"
-                                    ? "#ecfdf5"
-                                    : "#fff",
-                                fontSize: "0.875rem",
-                                fontWeight: 500,
-                              }}
-                            >
-                              <input
-                                type="radio"
-                                name="oldScootyChargerWarranty"
-                                value="6months"
-                                checked={
-                                  oldScootyData.chargerWarrantyStatus ===
-                                  "6months"
-                                }
-                                onChange={(e) =>
-                                  setOldScootyData((prev) => ({
-                                    ...prev,
-                                    chargerWarrantyStatus: e.target.value,
-                                  }))
-                                }
-                                style={{
-                                  width: "1rem",
-                                  height: "1rem",
-                                  accentColor: "#059669",
-                                }}
-                              />
-                              6 months
-                            </label>
-                            <label
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "0.5rem",
-                                cursor: "pointer",
-                                padding: "0.5rem 0.75rem",
-                                borderRadius: "0.375rem",
-                                border: `2px solid ${
-                                  oldScootyData.chargerWarrantyStatus ===
-                                  "1year"
-                                    ? "#059669"
-                                    : "#e2e8f0"
-                                }`,
-                                backgroundColor:
-                                  oldScootyData.chargerWarrantyStatus ===
-                                  "1year"
-                                    ? "#ecfdf5"
-                                    : "#fff",
-                                fontSize: "0.875rem",
-                                fontWeight: 500,
-                              }}
-                            >
-                              <input
-                                type="radio"
-                                name="oldScootyChargerWarranty"
-                                value="1year"
-                                checked={
-                                  oldScootyData.chargerWarrantyStatus ===
-                                  "1year"
-                                }
-                                onChange={(e) =>
-                                  setOldScootyData((prev) => ({
-                                    ...prev,
-                                    chargerWarrantyStatus: e.target.value,
-                                  }))
-                                }
-                                style={{
-                                  width: "1rem",
-                                  height: "1rem",
-                                  accentColor: "#059669",
-                                }}
-                              />
+                                <label
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                    cursor: "pointer",
+                                    padding: "0.5rem 0.75rem",
+                                    borderRadius: "0.375rem",
+                                    border: `2px solid ${
+                                      oldScootyData.chargerWarrantyStatus ===
+                                      "noWarranty"
+                                        ? "#059669"
+                                        : "#e2e8f0"
+                                    }`,
+                                    backgroundColor:
+                                      oldScootyData.chargerWarrantyStatus ===
+                                      "noWarranty"
+                                        ? "#ecfdf5"
+                                        : "#fff",
+                                    fontSize: "0.875rem",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="oldScootyChargerWarranty"
+                                    value="noWarranty"
+                                    checked={
+                                      oldScootyData.chargerWarrantyStatus ===
+                                      "noWarranty"
+                                    }
+                                    onChange={(e) =>
+                                      setOldScootyData((prev) => ({
+                                        ...prev,
+                                        chargerWarrantyStatus: e.target.value,
+                                      }))
+                                    }
+                                    style={{
+                                      width: "1rem",
+                                      height: "1rem",
+                                      accentColor: "#059669",
+                                    }}
+                                  />
+                                  No warranty
+                                </label>
+                                <label
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                    cursor: "pointer",
+                                    padding: "0.5rem 0.75rem",
+                                    borderRadius: "0.375rem",
+                                    border: `2px solid ${
+                                      oldScootyData.chargerWarrantyStatus ===
+                                      "6months"
+                                        ? "#059669"
+                                        : "#e2e8f0"
+                                    }`,
+                                    backgroundColor:
+                                      oldScootyData.chargerWarrantyStatus ===
+                                      "6months"
+                                        ? "#ecfdf5"
+                                        : "#fff",
+                                    fontSize: "0.875rem",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="oldScootyChargerWarranty"
+                                    value="6months"
+                                    checked={
+                                      oldScootyData.chargerWarrantyStatus ===
+                                      "6months"
+                                    }
+                                    onChange={(e) =>
+                                      setOldScootyData((prev) => ({
+                                        ...prev,
+                                        chargerWarrantyStatus: e.target.value,
+                                      }))
+                                    }
+                                    style={{
+                                      width: "1rem",
+                                      height: "1rem",
+                                      accentColor: "#059669",
+                                    }}
+                                  />
+                                  6 months
+                                </label>
+                                <label
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                    cursor: "pointer",
+                                    padding: "0.5rem 0.75rem",
+                                    borderRadius: "0.375rem",
+                                    border: `2px solid ${
+                                      oldScootyData.chargerWarrantyStatus ===
+                                      "1year"
+                                        ? "#059669"
+                                        : "#e2e8f0"
+                                    }`,
+                                    backgroundColor:
+                                      oldScootyData.chargerWarrantyStatus ===
+                                      "1year"
+                                        ? "#ecfdf5"
+                                        : "#fff",
+                                    fontSize: "0.875rem",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="oldScootyChargerWarranty"
+                                    value="1year"
+                                    checked={
+                                      oldScootyData.chargerWarrantyStatus ===
+                                      "1year"
+                                    }
+                                    onChange={(e) =>
+                                      setOldScootyData((prev) => ({
+                                        ...prev,
+                                        chargerWarrantyStatus: e.target.value,
+                                      }))
+                                    }
+                                    style={{
+                                      width: "1rem",
+                                      height: "1rem",
+                                      accentColor: "#059669",
+                                    }}
+                                  />
                               1 year
-                            </label>
+                                </label>
                           </div>
                         </div>
                       )}

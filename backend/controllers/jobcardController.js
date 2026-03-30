@@ -307,6 +307,17 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
     return;
   }
 
+  const oldScootyNewBatteryUnits = (part) => {
+    // Lead scooty uses 4/5/6 individual batteries; lithium is treated as 1 pack.
+    const chem = String(part?.batteryChemistry || "").trim().toLowerCase();
+    if (chem !== "lead") return 1;
+    const v = String(part?.batteryVoltage || "").trim();
+    if (v === "48") return 4;
+    if (v === "60") return 5;
+    if (v === "72") return 6;
+    return 1;
+  };
+
   if (mode === "restore") {
     // 1) Reinsert removed old scooty rows
     const consumedRows = Array.isArray(jobcard.consumedOldScooties)
@@ -354,6 +365,41 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
       await spare.save();
     }
     jobcard.consumedOldScootySaleSpares = [];
+
+    // 3) Restore new-battery and new-charger stock consumed by old-scooty sale lines.
+    for (const part of jobcard.parts) {
+      if (!part || part.partType !== "sales" || part.salesType !== "oldScooty") {
+        continue;
+      }
+      if (part.batteryType === "newBattery" && part.batteryInventoryId) {
+        const batteryId = String(part.batteryInventoryId);
+        const battery = await Battery.findById(batteryId);
+        if (battery) {
+          adjustBatteryStockByUnits(battery, oldScootyNewBatteryUnits(part), "restore");
+          if (
+            Array.isArray(battery.stockEntries) &&
+            battery.stockEntries.length > 0
+          ) {
+            battery.markModified("stockEntries");
+          }
+          await battery.save();
+        }
+      }
+      if (part.chargerType === "newCharger" && part.chargerInventoryId) {
+        const chargerId = String(part.chargerInventoryId);
+        const charger = await Charger.findById(chargerId);
+        if (charger) {
+          adjustChargerStockByUnits(charger, 1, "restore");
+          if (
+            Array.isArray(charger.stockEntries) &&
+            charger.stockEntries.length > 0
+          ) {
+            charger.markModified("stockEntries");
+          }
+          await charger.save();
+        }
+      }
+    }
     return;
   }
 
@@ -361,6 +407,7 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
   if (!Array.isArray(jobcard.consumedOldScooties)) jobcard.consumedOldScooties = [];
   if (!Array.isArray(jobcard.consumedOldScootySaleSpares))
     jobcard.consumedOldScootySaleSpares = [];
+  if (!Array.isArray(jobcard.consumedOldChargers)) jobcard.consumedOldChargers = [];
 
   for (const part of jobcard.parts) {
     if (!part || part.partType !== "sales" || part.salesType !== "oldScooty") {
@@ -432,6 +479,121 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
         quantity: qty,
         color: s.color || "",
       });
+    }
+
+    // C) Adjust NEW battery and NEW charger inventory for this old-scooty sale line.
+    // We reuse the same FIFO helpers/logic as normal new battery / charger sales,
+    // but scoped only to this part.
+
+    // New battery from Battery stock
+    if (
+      part.batteryType === "newBattery" &&
+      part.batteryInventoryId &&
+      mode === "deduct"
+    ) {
+      const batteryId = String(part.batteryInventoryId);
+      const qtyUnits = oldScootyNewBatteryUnits(part);
+      const battery = await Battery.findById(batteryId);
+      if (battery) {
+        const r = adjustBatteryStockByUnits(battery, qtyUnits, "deduct");
+        part.fifoLinePurchaseCost =
+          (part.fifoLinePurchaseCost || 0) + (Number(r.totalCost) || 0);
+        if (
+          Array.isArray(battery.stockEntries) &&
+          battery.stockEntries.length > 0
+        ) {
+          battery.markModified("stockEntries");
+        }
+        await battery.save();
+      }
+    } else if (
+      part.batteryType === "newBattery" &&
+      part.batteryInventoryId &&
+      mode === "restore"
+    ) {
+      const batteryId = String(part.batteryInventoryId);
+      const battery = await Battery.findById(batteryId);
+      if (battery) {
+        adjustBatteryStockByUnits(battery, oldScootyNewBatteryUnits(part), "restore");
+        if (
+          Array.isArray(battery.stockEntries) &&
+          battery.stockEntries.length > 0
+        ) {
+          battery.markModified("stockEntries");
+        }
+        await battery.save();
+      }
+    }
+
+    // New charger from Charger stock
+    if (
+      part.chargerType === "newCharger" &&
+      part.chargerInventoryId &&
+      mode === "deduct"
+    ) {
+      const chargerId = String(part.chargerInventoryId);
+      const charger = await Charger.findById(chargerId);
+      if (charger) {
+        const r = adjustChargerStockByUnits(charger, 1, "deduct");
+        part.fifoLinePurchaseCost =
+          (part.fifoLinePurchaseCost || 0) + (Number(r.totalCost) || 0);
+        if (
+          Array.isArray(charger.stockEntries) &&
+          charger.stockEntries.length > 0
+        ) {
+          charger.markModified("stockEntries");
+        }
+        await charger.save();
+      }
+    } else if (
+      part.chargerType === "newCharger" &&
+      part.chargerInventoryId &&
+      mode === "restore"
+    ) {
+      const chargerId = String(part.chargerInventoryId);
+      const charger = await Charger.findById(chargerId);
+      if (charger) {
+        adjustChargerStockByUnits(charger, 1, "restore");
+        if (
+          Array.isArray(charger.stockEntries) &&
+          charger.stockEntries.length > 0
+        ) {
+          charger.markModified("stockEntries");
+        }
+        await charger.save();
+      }
+    }
+
+    // Old charger from OldCharger stock (working units only; FIFO by entryDate).
+    if (part.chargerType === "oldCharger" && mode === "deduct") {
+      const volRaw = String(part.chargerVoltage || "").trim();
+      const voltage = parseVoltageForOldChargerJobcard(volRaw || "");
+      const batteryType = normalizeBatteryTypeForOldCharger(part.chargerChemistry);
+      if (VALID_OLD_CHARGER_INVENTORY_VOLTAGES.includes(voltage)) {
+        const row = await OldCharger.findOne({
+          voltage,
+          batteryType,
+          status: "working",
+        })
+          .sort({ entryDate: 1, createdAt: 1 })
+          .lean();
+        if (row) {
+          await OldCharger.deleteOne({ _id: row._id });
+          jobcard.consumedOldChargers.push({
+            voltage: row.voltage,
+            batteryType: row.batteryType,
+            ampere: row.ampere || "4A",
+            status: row.status || "working",
+            entryDate: row.entryDate ? new Date(row.entryDate) : new Date(),
+            jobcardNumber: jobcard.jobcardNumber || null,
+          });
+          await adjustOldChargerSummaryByStatusDelta(voltage, "working", -1);
+        } else {
+          console.warn(
+            `[jobcard-oldScooty] No working old charger row for ${voltage} (${batteryType})`
+          );
+        }
+      }
     }
   }
 };
@@ -733,8 +895,21 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
           : part.selectedQuantity
       ) || 1
     );
+  const getOldScootyBatteryUnitCount = (part) => {
+    const baseQty = getPartQty(part);
+    const v = String(part?.batteryVoltage || "").trim();
+    if (v === "48") return baseQty * 4;
+    if (v === "60") return baseQty * 5;
+    if (v === "72") return baseQty * 6;
+    return baseQty;
+  };
   const isBatterySalesPart = (part) =>
     part && part.partType === "sales" && part.salesType === "battery";
+  const isOldScootyOldBatteryPart = (part) =>
+    part &&
+    part.partType === "sales" &&
+    part.salesType === "oldScooty" &&
+    String(part.batteryType || "").toLowerCase() === "oldbattery";
   const isBatteryReplacementPart = (part) =>
     part && part.partType === "replacement" && part.replacementType === "battery";
   const isOldBatteryLine = (part) =>
@@ -757,10 +932,18 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
     }
 
     // 1) Old battery sale consumes scrap stock.
-    if (!isBatterySalesPart(part) || !isOldBatteryLine(part)) {
+    //    Includes both normal battery sales (batteryOldNew === "old")
+    //    and old-scooty sales where the scooter is sold with an old battery.
+    const isOldBatterySaleLine =
+      (isBatterySalesPart(part) && isOldBatteryLine(part)) ||
+      isOldScootyOldBatteryPart(part);
+
+    if (!isOldBatterySaleLine) {
       // Still allow scrapAvailable on non-old-battery battery lines below.
     } else {
-      const soldQty = getPartQty(part);
+      const soldQty = isOldScootyOldBatteryPart(part)
+        ? getOldScootyBatteryUnitCount(part)
+        : getPartQty(part);
       let remaining = soldQty;
       const docs = await BatteryScrap.find({})
         .sort({ entryDate: 1, createdAt: 1 })
