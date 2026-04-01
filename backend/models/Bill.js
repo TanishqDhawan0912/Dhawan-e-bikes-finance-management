@@ -75,6 +75,21 @@ const billSchema = new mongoose.Schema(
     oldScootyExchange: { type: String, default: "", trim: true },
     oldScootyExchangePrice: { type: Number, default: 0, min: 0 },
 
+    // Structured old-scooty exchange details (optional; used to persist trade-in).
+    oldScootyId: { type: String, default: "", trim: true },
+    oldScootyPmcNo: { type: String, default: "", trim: true },
+    oldScootyWithBattery: { type: Boolean, default: false },
+    oldScootyBatteryType: { type: String, default: "", trim: true }, // "lead" | "lithium"
+    oldScootyBatteryCount: { type: Number, default: 0, min: 0 },
+    oldScootyWithCharger: { type: Boolean, default: false },
+    oldScootyChargerType: { type: String, default: "", trim: true }, // "lead" | "lithium"
+    oldScootyChargerVoltageAmpere: { type: String, default: "", trim: true },
+    oldScootyChargerWorking: {
+      type: String,
+      enum: ["working", "notWorking"],
+      default: "working",
+    },
+
     // Service management (up to 3 free services for a sold scooty)
     services: { type: [serviceEntrySchema], default: [] },
   },

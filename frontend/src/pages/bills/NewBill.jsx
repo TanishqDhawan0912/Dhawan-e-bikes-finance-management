@@ -907,6 +907,20 @@ export default function NewBill({
         chargerVoltageForBill: withCharger ? chargerVoltageForBillValue || "" : "",
         oldScootyExchange: oldScootyExchange.trim(),
         oldScootyExchangePrice: Number(oldScootyExchangePrice) || 0,
+        oldScootyAvailable,
+        oldScootyPmcNo: oldScootyPmcNo.trim(),
+        oldScootyWithBattery,
+        oldScootyBatteryType,
+        oldScootyBatteryCount: Number(oldScootyBatteryCount) || 0,
+        oldScootyWithCharger,
+        oldScootyChargerType,
+        oldScootyChargerVoltageAmpere:
+          oldScootyChargerType === "lead"
+            ? oldScootyChargerLeadVoltage
+              ? `${oldScootyChargerLeadVoltage}V`
+              : ""
+            : oldScootyChargerLithiumVoltage.trim(),
+        oldScootyChargerWorking,
         accessoryIncluded:
           selectedAccessories.length > 0
             ? selectedAccessories.map((a) => a.name).join(", ")

@@ -3,12 +3,19 @@ const Model = require("../models/Model");
 const Battery = require("../models/Battery");
 const Charger = require("../models/Charger");
 const Spare = require("../models/Spare");
+const OldScooty = require("../models/OldScooty");
+const BatteryScrap = require("../models/BatteryScrap");
+const OldCharger = require("../models/OldCharger");
 const mongoose = require("mongoose");
 const {
   fifoDeductFromSpare,
   fifoRestoreToSpare,
 } = require("../utils/spareFifo");
 const { adjustChargerStockByUnits } = require("../utils/chargerInventoryAdjust");
+const { adjustBatteryStockByUnits } = require("../utils/batteryInventoryAdjust");
+const {
+  adjustOldChargerSummaryByStatusDelta,
+} = require("../utils/oldChargerSummaryAdjust");
 
 const isObjectId = (v) => mongoose.Types.ObjectId.isValid(String(v || ""));
 
@@ -19,6 +26,150 @@ const getLeadBatteryUnitsFromVoltage = (voltageRaw) => {
   if (s.includes("48")) return 4;
   return 0;
 };
+
+const parseOldChargerVoltage = (raw) => {
+  const s = String(raw || "").trim().toUpperCase();
+  if (s.includes("72")) return "72V";
+  if (s.includes("60")) return "60V";
+  if (s.includes("48")) return "48V";
+  return null;
+};
+
+const parseOldChargerAmpere = (raw) => {
+  const s = String(raw || "").trim().toUpperCase().replace(/\s/g, "");
+  if (s.includes("5A") || s.endsWith("5A") || s.includes("5AMP")) return "5A";
+  if (s.includes("3A") || s.endsWith("3A") || s.includes("3AMP")) return "3A";
+  return "4A";
+};
+
+const normalizeBatteryType = (raw) => {
+  const s = String(raw || "").trim().toLowerCase();
+  return s === "lithium" ? "lithium" : "lead";
+};
+
+const normalizeWorkingStatus = (raw) => {
+  const s = String(raw || "").trim().toLowerCase();
+  if (s === "notworking" || s.includes("not")) return "notWorking";
+  return "working";
+};
+
+async function removeOldScootyLinkedToBill(bill) {
+  const oldScootyId = String(bill?.oldScootyId || "").trim();
+  if (!oldScootyId || !isObjectId(oldScootyId)) return;
+
+  await BatteryScrap.deleteMany({ oldScootyId });
+
+  const prevChargers = await OldCharger.find({ oldScootyId }).lean();
+  if (prevChargers.length) {
+    for (const row of prevChargers) {
+      await adjustOldChargerSummaryByStatusDelta(row.voltage, row.status, -1);
+    }
+    await OldCharger.deleteMany({ oldScootyId });
+  }
+
+  await OldScooty.deleteOne({ _id: oldScootyId });
+}
+
+async function upsertOldScootyFromBill(bill, body) {
+  if (!bill) return;
+  const hasOldScooty =
+    body?.oldScootyAvailable === "yes" ||
+    Boolean(body?.oldScootyExchange?.trim()) ||
+    (Number(body?.oldScootyExchangePrice) || 0) > 0 ||
+    Boolean(body?.oldScootyPmcNo?.trim());
+  if (!hasOldScooty) {
+    await removeOldScootyLinkedToBill(bill);
+    bill.oldScootyId = "";
+    return;
+  }
+
+  const pmcNo = String(body.oldScootyPmcNo || "").trim();
+  const withBattery = String(body.oldScootyWithBattery || "no") === "yes";
+  const batteryType = normalizeBatteryType(body.oldScootyBatteryType);
+  const batteryCount = withBattery
+    ? Math.max(0, Number(body.oldScootyBatteryCount) || 0)
+    : 0;
+  const withCharger = String(body.oldScootyWithCharger || "no") === "yes";
+  const chargerType = normalizeBatteryType(body.oldScootyChargerType);
+  const chargerWorking = normalizeWorkingStatus(body.oldScootyChargerWorking);
+  const chargerVoltageAmpereRaw = withCharger
+    ? String(body.oldScootyChargerVoltageAmpere || "").trim()
+    : "";
+
+  const entryDate = bill.billDate ? new Date(`${bill.billDate}T12:00:00.000Z`) : new Date();
+
+  let doc = null;
+  const existingId = String(bill.oldScootyId || "").trim();
+  if (existingId && isObjectId(existingId)) {
+    doc = await OldScooty.findById(existingId);
+  }
+  if (!doc) {
+    doc = new OldScooty({
+      name: "Old scooty exchange",
+      pmcNo,
+      purchasePrice: Math.max(0, Number(bill.oldScootyExchangePrice) || 0),
+      withBattery,
+      batteryType: withBattery ? batteryType : "",
+      batteryCount,
+      withCharger,
+      chargerVoltageAmpere: chargerVoltageAmpereRaw,
+      chargerType: withCharger ? chargerType : "",
+      chargerWorking,
+      entryDate,
+      status: "not-ready",
+      sparesUsed: [],
+    });
+  } else {
+    doc.pmcNo = pmcNo;
+    doc.purchasePrice = Math.max(0, Number(bill.oldScootyExchangePrice) || 0);
+    doc.withBattery = withBattery;
+    doc.batteryType = withBattery ? batteryType : "";
+    doc.batteryCount = batteryCount;
+    doc.withCharger = withCharger;
+    doc.chargerVoltageAmpere = chargerVoltageAmpereRaw;
+    doc.chargerType = withCharger ? chargerType : "";
+    doc.chargerWorking = chargerWorking;
+    doc.entryDate = entryDate;
+  }
+
+  const saved = await doc.save();
+  bill.oldScootyId = String(saved._id);
+
+  // Idempotent: replace linked scrap + old-charger rows based on this old scooty.
+  await BatteryScrap.deleteMany({ oldScootyId: saved._id });
+  const prevChargers = await OldCharger.find({ oldScootyId: saved._id }).lean();
+  if (prevChargers.length) {
+    for (const row of prevChargers) {
+      await adjustOldChargerSummaryByStatusDelta(row.voltage, row.status, -1);
+    }
+    await OldCharger.deleteMany({ oldScootyId: saved._id });
+  }
+
+  if (withBattery && batteryCount > 0) {
+    await BatteryScrap.create({
+      quantity: Math.max(1, Number(batteryCount) || 1),
+      entryDate,
+      oldScootyId: saved._id,
+      source: "oldScooty",
+    });
+  }
+  if (withCharger) {
+    const voltage = parseOldChargerVoltage(chargerVoltageAmpereRaw);
+    if (voltage) {
+      const row = new OldCharger({
+        voltage,
+        batteryType: chargerType,
+        ampere: parseOldChargerAmpere(chargerVoltageAmpereRaw),
+        status: chargerWorking,
+        entryDate,
+        oldScootyId: saved._id,
+        source: "oldScooty",
+      });
+      await row.save();
+      await adjustOldChargerSummaryByStatusDelta(voltage, chargerWorking, 1);
+    }
+  }
+}
 
 const adjustBillInventory = async (billLike, mode = "deduct") => {
   if (!billLike) return;
@@ -74,9 +225,16 @@ const adjustBillInventory = async (billLike, mode = "deduct") => {
     await modelDoc.save();
   }
 
+  const resolveId = (v) => {
+    if (!v) return "";
+    if (typeof v === "object" && v._id != null) return String(v._id);
+    return String(v);
+  };
+
   // 2) Battery stock
-  if (billLike.withBattery && isObjectId(billLike.batteryId)) {
-    const battery = await Battery.findById(billLike.batteryId);
+  const batteryId = resolveId(billLike.batteryId).trim();
+  if (billLike.withBattery && isObjectId(batteryId)) {
+    const battery = await Battery.findById(batteryId);
     if (battery) {
       const type = String(billLike.batteryTypeForBill || "").toLowerCase();
       const units =
@@ -84,38 +242,59 @@ const adjustBillInventory = async (billLike, mode = "deduct") => {
           ? getLeadBatteryUnitsFromVoltage(billLike.batteryVoltageForBill)
           : 1;
       if (units > 0) {
-        const perSet = Number(battery.batteriesPerSet) || 0;
-        const totalUnitsBefore =
-          (Number(battery.totalSets) || 0) * (perSet || 0) +
-          (Number(battery.openBatteries) || 0);
-        let totalUnitsAfter = totalUnitsBefore + factor * units;
-        if (totalUnitsAfter < 0) totalUnitsAfter = 0;
-        if (perSet > 0) {
-          battery.totalSets = Math.floor(totalUnitsAfter / perSet);
-          battery.openBatteries = totalUnitsAfter % perSet;
-        } else {
-          battery.totalSets = 0;
-          battery.openBatteries = totalUnitsAfter;
+        const stockMode = mode === "deduct" ? "deduct" : "restore";
+        adjustBatteryStockByUnits(battery, units, stockMode);
+        if (
+          Array.isArray(battery.stockEntries) &&
+          battery.stockEntries.length > 0
+        ) {
+          battery.markModified("stockEntries");
         }
         await battery.save();
       }
+    } else {
+      console.warn(`[bill] batteryId not found: ${batteryId}`);
     }
+  } else if (billLike.withBattery && batteryId) {
+    console.warn(`[bill] skipping battery adjust: invalid batteryId "${batteryId}"`);
   }
 
   // 3) Charger stock (one charger per bill)
-  if (billLike.withCharger && isObjectId(billLike.chargerId)) {
-    const charger = await Charger.findById(billLike.chargerId);
-    if (charger) {
-      const stockMode = mode === "deduct" ? "deduct" : "restore";
-      adjustChargerStockByUnits(charger, 1, stockMode);
-      if (
-        Array.isArray(charger.stockEntries) &&
-        charger.stockEntries.length > 0
-      ) {
-        charger.markModified("stockEntries");
-      }
-      await charger.save();
+  const chargerId = resolveId(billLike.chargerId).trim();
+  let chargerDoc = null;
+  if (billLike.withCharger && isObjectId(chargerId)) {
+    chargerDoc = await Charger.findById(chargerId);
+  }
+  if (
+    billLike.withCharger &&
+    !chargerDoc &&
+    billLike.chargerName &&
+    String(billLike.chargerName).trim() &&
+    String(billLike.chargerName).trim().toLowerCase() !== "custom"
+  ) {
+    const name = String(billLike.chargerName).trim();
+    const volt = String(billLike.chargerVoltageForBill || "").trim();
+    chargerDoc = await Charger.findOne({
+      name,
+      ...(volt ? { voltage: volt } : {}),
+    });
+  }
+  if (billLike.withCharger && chargerDoc) {
+    const stockMode = mode === "deduct" ? "deduct" : "restore";
+    adjustChargerStockByUnits(chargerDoc, 1, stockMode);
+    if (
+      Array.isArray(chargerDoc.stockEntries) &&
+      chargerDoc.stockEntries.length > 0
+    ) {
+      chargerDoc.markModified("stockEntries");
     }
+    await chargerDoc.save();
+  } else if (billLike.withCharger) {
+    console.warn(
+      `[bill] skipping charger adjust: charger not resolved (chargerId="${chargerId}", name="${String(
+        billLike.chargerName || ""
+      )}")`
+    );
   }
 
   // 4) Accessory spare stock — one unit per accessory line, FIFO by purchase date.
@@ -232,8 +411,17 @@ const createBill = async (req, res) => {
       oldScootyExchange: body.oldScootyExchange || "",
       oldScootyExchangePrice: Number(body.oldScootyExchangePrice) || 0,
       services: sanitizedServices,
+      oldScootyPmcNo: body.oldScootyPmcNo || "",
+      oldScootyWithBattery: String(body.oldScootyWithBattery || "no") === "yes",
+      oldScootyBatteryType: body.oldScootyBatteryType || "",
+      oldScootyBatteryCount: Number(body.oldScootyBatteryCount) || 0,
+      oldScootyWithCharger: String(body.oldScootyWithCharger || "no") === "yes",
+      oldScootyChargerType: body.oldScootyChargerType || "",
+      oldScootyChargerVoltageAmpere: body.oldScootyChargerVoltageAmpere || "",
+      oldScootyChargerWorking: body.oldScootyChargerWorking || "working",
     });
     await adjustBillInventory(bill, "deduct");
+    await upsertOldScootyFromBill(bill, body);
     const created = await bill.save();
     res.status(201).json(created);
   } catch (error) {
@@ -352,6 +540,8 @@ const updateBill = async (req, res) => {
       runValidators: true,
     });
     await adjustBillInventory(updated, "deduct");
+    await upsertOldScootyFromBill(updated, body);
+    await updated.save();
     res.json(updated);
   } catch (error) {
     console.error("Error updating bill:", error);
@@ -364,6 +554,7 @@ const deleteBill = async (req, res) => {
     const bill = await Bill.findById(req.params.id);
     if (!bill) return res.status(404).json({ message: "Bill not found" });
     await adjustBillInventory(bill, "restore");
+    await removeOldScootyLinkedToBill(bill);
     await Bill.findByIdAndDelete(req.params.id);
     res.json({ message: "Bill deleted" });
   } catch (error) {
