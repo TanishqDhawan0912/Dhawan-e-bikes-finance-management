@@ -339,9 +339,11 @@ export default function NewJobcard() {
     batteryChemistry: "lead", // "lead" | "lithium"
     batteryVoltage: "48", // "48" | "60" | "72"
     batteryType: "oldBattery", // "oldBattery" | "newBattery"
+    batteryInventoryId: null,
     chargerType: "oldCharger",
     chargerChemistry: "lead", // "lead" | "lithium"
     chargerVoltage: "48", // "48" | "60" | "72" — 48V = 4 battery, 60V = 5, 72V = 6
+    chargerInventoryId: null,
     warrantyStatus: "withoutWarranty", // battery warranty when newBattery
     chargerWarrantyStatus: "noWarranty",
     sparesUsed: [], // [{ spareId, name, quantity, color? }] - spares put in to get it ready
@@ -1800,9 +1802,11 @@ export default function NewJobcard() {
       batteryChemistry: "lead",
       batteryVoltage: "48",
       batteryType: "oldBattery",
+      batteryInventoryId: null,
       chargerType: "oldCharger",
       chargerChemistry: "lead",
       chargerVoltage: "48",
+      chargerInventoryId: null,
       warrantyStatus: "withoutWarranty",
       chargerWarrantyStatus: "noWarranty",
       sparesUsed: [],
@@ -1836,9 +1840,13 @@ export default function NewJobcard() {
             : ""
           : part.batteryVoltage || "48",
       batteryType: part.batteryType || "oldBattery",
+      batteryInventoryId:
+        part.batteryInventoryId != null ? String(part.batteryInventoryId) : null,
       chargerType: part.chargerType || "oldCharger",
       chargerChemistry: part.chargerChemistry || "lead",
       chargerVoltage: part.chargerVoltage || "48",
+      chargerInventoryId:
+        part.chargerInventoryId != null ? String(part.chargerInventoryId) : null,
       warrantyStatus: part.warrantyStatus || "withoutWarranty",
       chargerWarrantyStatus: part.chargerWarrantyStatus || "noWarranty",
       sparesUsed: Array.isArray(part.sparesUsed) ? part.sparesUsed : [],
@@ -2072,6 +2080,20 @@ export default function NewJobcard() {
 
   useEffect(() => {
     if (oldScootyData.chargerType !== "newCharger") return;
+    if (oldScootySelectedCharger) return;
+    const cid = oldScootyData.chargerInventoryId;
+    if (!cid) return;
+    const c = oldScootyChargers.find((x) => String(x._id) === String(cid));
+    if (c) setOldScootySelectedCharger(c);
+  }, [
+    oldScootyData.chargerType,
+    oldScootyData.chargerInventoryId,
+    oldScootyChargers,
+    oldScootySelectedCharger,
+  ]);
+
+  useEffect(() => {
+    if (oldScootyData.chargerType !== "newCharger") return;
     if (!oldScootySelectedCharger) return;
     const id = String(oldScootySelectedCharger._id);
     if (!oldScootyFilteredNewChargers.some((c) => String(c._id) === id)) {
@@ -2089,6 +2111,20 @@ export default function NewJobcard() {
       batteryMatchesOldScootyChemistry(b, chem)
     );
   }, [oldScootyBatteries, oldScootyData.batteryChemistry]);
+
+  useEffect(() => {
+    if (oldScootyData.batteryType !== "newBattery") return;
+    if (oldScootySelectedBattery) return;
+    const bid = oldScootyData.batteryInventoryId;
+    if (!bid) return;
+    const b = oldScootyBatteries.find((x) => String(x._id) === String(bid));
+    if (b) setOldScootySelectedBattery(b);
+  }, [
+    oldScootyData.batteryType,
+    oldScootyData.batteryInventoryId,
+    oldScootyBatteries,
+    oldScootySelectedBattery,
+  ]);
 
   useEffect(() => {
     if (oldScootyData.batteryType !== "newBattery") return;

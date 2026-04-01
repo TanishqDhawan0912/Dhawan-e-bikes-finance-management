@@ -496,8 +496,9 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
       const battery = await Battery.findById(batteryId);
       if (battery) {
         const r = adjustBatteryStockByUnits(battery, qtyUnits, "deduct");
-        part.fifoLinePurchaseCost =
-          (part.fifoLinePurchaseCost || 0) + (Number(r.totalCost) || 0);
+        const cost = Math.max(0, Number(r.totalCost) || 0);
+        part.oldScootyBatteryFifoCost = cost;
+        part.fifoLinePurchaseCost = (part.fifoLinePurchaseCost || 0) + cost;
         if (
           Array.isArray(battery.stockEntries) &&
           battery.stockEntries.length > 0
@@ -535,8 +536,9 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
       const charger = await Charger.findById(chargerId);
       if (charger) {
         const r = adjustChargerStockByUnits(charger, 1, "deduct");
-        part.fifoLinePurchaseCost =
-          (part.fifoLinePurchaseCost || 0) + (Number(r.totalCost) || 0);
+        const cost = Math.max(0, Number(r.totalCost) || 0);
+        part.oldScootyChargerFifoCost = cost;
+        part.fifoLinePurchaseCost = (part.fifoLinePurchaseCost || 0) + cost;
         if (
           Array.isArray(charger.stockEntries) &&
           charger.stockEntries.length > 0
@@ -587,6 +589,9 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
             entryDate: row.entryDate ? new Date(row.entryDate) : new Date(),
             jobcardNumber: jobcard.jobcardNumber || null,
           });
+          if (typeof jobcard.markModified === "function") {
+            jobcard.markModified("consumedOldChargers");
+          }
           await adjustOldChargerSummaryByStatusDelta(voltage, "working", -1);
         } else {
           console.warn(
@@ -595,6 +600,11 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
         }
       }
     }
+  }
+
+  // Persist any per-line fields we updated (FIFO costs, etc.)
+  if (mode === "deduct" && typeof jobcard.markModified === "function") {
+    jobcard.markModified("parts");
   }
 };
 

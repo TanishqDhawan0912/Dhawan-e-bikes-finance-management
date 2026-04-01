@@ -1575,16 +1575,20 @@ export default function Admin() {
 
       let batteryRelated = 0;
       if (bt === "oldbattery") {
-        const added = Math.max(0, soldCells - cameWith);
-        batteryRelated = masterPurchase + scrap * added - scrap * cameWith;
+        // Rule: purchasePrice - ₹800*(batteries that came with scooty entry) + ₹800*(batteries used in this jobcard sale)
+        batteryRelated = masterPurchase - scrap * cameWith + scrap * soldCells;
       } else if (bt === "newbattery") {
-        const battId = resolveBatteryInventoryIdFromJobcardPart(p);
-        let newBattPurchase = 0;
-        if (battId && soldCells > 0) {
-          const unit = getBatteryUnitCost(battId);
-          newBattPurchase = soldCells * unit;
+        const storedBatteryFifo = Number(p.oldScootyBatteryFifoCost) || 0;
+        let newBattPurchase = storedBatteryFifo;
+        if (newBattPurchase <= 0) {
+          const battId = resolveBatteryInventoryIdFromJobcardPart(p);
+          if (battId && soldCells > 0) {
+            const unit = getBatteryUnitCost(battId);
+            newBattPurchase = soldCells * unit;
+          }
         }
-        batteryRelated = masterPurchase + newBattPurchase - scrap * cameWith;
+        // Still subtract the old batteries that originally came with the old-scooty entry (imputed ₹800 each).
+        batteryRelated = masterPurchase - scrap * cameWith + newBattPurchase;
       } else {
         batteryRelated = masterPurchase - scrap * cameWith;
       }
@@ -1592,12 +1596,11 @@ export default function Admin() {
       let chargerPurchase = 0;
       const ct = String(p?.chargerType || "").toLowerCase();
       if (ct === "newcharger") {
-        const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
-        if (storedFifo > 0) {
-          chargerPurchase = storedFifo;
-        } else {
-          chargerPurchase = getChargerUnitCostForJobcardPart(p);
-        }
+        const storedChargerFifo = Number(p.oldScootyChargerFifoCost) || 0;
+        chargerPurchase =
+          storedChargerFifo > 0
+            ? storedChargerFifo
+            : getChargerUnitCostForJobcardPart(p);
       }
 
       let nestedSparesPurchase = 0;
