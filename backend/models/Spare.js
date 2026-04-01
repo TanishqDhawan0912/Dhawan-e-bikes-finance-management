@@ -106,6 +106,7 @@ const spareSchema = new mongoose.Schema(
         },
       },
     ],
+    lastSyncedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
@@ -198,5 +199,9 @@ spareSchema.pre(
 // Ensure virtual fields are included in JSON output
 spareSchema.set("toJSON", { virtuals: true });
 spareSchema.set("toObject", { virtuals: true });
+
+// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+spareSchema.index({ createdAt: 1 });
+spareSchema.index({ updatedAt: 1 });
 
 module.exports = mongoose.model("Spare", spareSchema);

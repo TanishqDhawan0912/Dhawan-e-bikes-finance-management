@@ -123,11 +123,16 @@ const oldScootySchema = new mongoose.Schema(
         },
       },
     ],
+    lastSyncedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
     versionKey: false,
   }
 );
+
+// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+oldScootySchema.index({ createdAt: 1 });
+oldScootySchema.index({ updatedAt: 1 });
 
 module.exports = mongoose.model("OldScooty", oldScootySchema);

@@ -80,11 +80,16 @@ const chargerSchema = new mongoose.Schema(
         },
       },
     ],
+    lastSyncedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
     versionKey: false,
   }
 );
+
+// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+chargerSchema.index({ createdAt: 1 });
+chargerSchema.index({ updatedAt: 1 });
 
 module.exports = mongoose.model("Charger", chargerSchema);

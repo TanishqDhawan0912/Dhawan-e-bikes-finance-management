@@ -92,8 +92,13 @@ const billSchema = new mongoose.Schema(
 
     // Service management (up to 3 free services for a sold scooty)
     services: { type: [serviceEntrySchema], default: [] },
+    lastSyncedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
+
+// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+billSchema.index({ createdAt: 1 });
+billSchema.index({ updatedAt: 1 });
 
 module.exports = mongoose.model("Bill", billSchema);

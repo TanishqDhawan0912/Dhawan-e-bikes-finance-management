@@ -1,8 +1,10 @@
 require("dotenv").config();
 const express = require("express");
-const mongoose = require("mongoose");
 const cors = require("cors");
 const morgan = require("morgan");
+const cron = require("node-cron");
+const { connectMongoDatabases } = require("./config/database");
+const { syncAllLocalToAtlas } = require("./services/atlasSync");
 
 const app = express();
 
@@ -10,18 +12,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
-
-// Database connection
-const MONGODB_URI =
-  process.env.MONGODB_URI || "mongodb://localhost:27017/finance-management";
-
-mongoose
-  .connect(MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => console.log("Connected to MongoDB"))
-  .catch((err) => console.error("MongoDB connection error:", err));
 
 // Routes will be added here
 app.get("/", (req, res) => {
@@ -42,6 +32,8 @@ const oldChargerScrapRoutes = require("./routes/oldChargerScrapRoutes");
 const oldScootyRoutes = require("./routes/oldScootyRoutes");
 const jobcardRoutes = require("./routes/jobcardRoutes");
 const billRoutes = require("./routes/billRoutes");
+const syncRoutes = require("./routes/syncRoutes");
+require("./models/SyncLog");
 
 // Use routes
 app.use("/api/models", modelRoutes);
@@ -57,6 +49,7 @@ app.use("/api/old-charger-scraps", oldChargerScrapRoutes);
 app.use("/api/old-scooties", oldScootyRoutes);
 app.use("/api/jobcards", jobcardRoutes);
 app.use("/api/bills", billRoutes);
+app.use(syncRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -64,13 +57,70 @@ app.use((err, req, res, next) => {
   res.status(500).send("Something broke!");
 });
 
-const PORT = 5000;
-
-const server = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-
-server.on("error", (err) => {
-  console.error("Server error:", err);
+const portRaw = process.env.PORT?.trim();
+const PORT = portRaw !== undefined && portRaw !== "" ? Number(portRaw) : NaN;
+if (!Number.isInteger(PORT) || PORT <= 0 || PORT > 65535) {
+  console.error(
+    "[Server] Exiting: set PORT in environment to an integer 1–65535 (e.g. PORT=5000)."
+  );
   process.exit(1);
-});
+}
+
+(async function startServer() {
+  try {
+    await connectMongoDatabases();
+  } catch {
+    console.error(
+      "[Server] Exiting: local MongoDB (primary) is required and could not connect."
+    );
+    process.exit(1);
+  }
+
+  const server = app.listen(PORT, async () => {
+    console.log(`Server running on port ${PORT}`);
+
+    try {
+      console.log("[Sync] Initial Atlas sync (startup)…");
+      const initial = await syncAllLocalToAtlas();
+      console.log("[Sync] Initial sync result:", {
+        success: initial.success,
+        skipped: Boolean(initial.skipped),
+        totalCandidates: initial.totalCandidates,
+        synced: initial.synced,
+        failed: initial.failed,
+        deletedFromAtlas: initial.deletedFromAtlas,
+        durationMs: initial.durationMs,
+      });
+    } catch (err) {
+      console.error("[Sync] Initial sync error:", err.message);
+    }
+
+    const cronExpr = process.env.SYNC_CRON?.trim() || "0 */6 * * *";
+    if (!cron.validate(cronExpr)) {
+      console.error(
+        "[Sync] Invalid SYNC_CRON; expected 5-field cron (e.g. 0 */6 * * *). Scheduled sync disabled."
+      );
+    } else {
+      cron.schedule(cronExpr, () => {
+        syncAllLocalToAtlas()
+          .then((r) => {
+            console.log("[Sync] Scheduled run result:", {
+              success: r.success,
+              skipped: Boolean(r.skipped),
+              totalCandidates: r.totalCandidates,
+              synced: r.synced,
+              failed: r.failed,
+              durationMs: r.durationMs,
+            });
+          })
+          .catch((e) => console.error("[Sync] Scheduled run error:", e.message));
+      });
+      console.log(`[Sync] Recurring sync scheduled: SYNC_CRON="${cronExpr}"`);
+    }
+  });
+
+  server.on("error", (err) => {
+    console.error("Server error:", err);
+    process.exit(1);
+  });
+})();

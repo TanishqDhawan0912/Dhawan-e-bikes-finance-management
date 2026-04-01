@@ -1296,12 +1296,12 @@ const createJobcard = async (req, res) => {
   }
 };
 
-// @desc    Get all jobcards
+// @desc    List Jobcards (optional query: status, jobcardType, updatedSince for incremental sync)
 // @route   GET /api/jobcards
 // @access  Public
 const getJobcards = async (req, res) => {
   try {
-    const { status, jobcardType } = req.query;
+    const { status, jobcardType, updatedSince } = req.query;
     const filter = {};
 
     if (status) {
@@ -1315,6 +1315,16 @@ const getJobcards = async (req, res) => {
         "\\$&"
       );
       filter.jobcardType = new RegExp(`\\b${escaped}\\b`, "i");
+    }
+
+    if (updatedSince !== undefined && updatedSince !== "") {
+      const since = new Date(String(updatedSince));
+      if (Number.isNaN(since.getTime())) {
+        return res.status(400).json({
+          message: "Invalid updatedSince; use an ISO 8601 date string",
+        });
+      }
+      filter.updatedAt = { $gte: since };
     }
 
     const jobcards = await Jobcard.find(filter)
@@ -1720,6 +1730,37 @@ const deleteJobcard = async (req, res) => {
   }
 };
 
+// @desc    Update Jobcard.lastSyncedAt after successful cloud sync
+// @route   PATCH /api/jobcards/:id/synced
+// @access  Public (add auth later)
+const markJobcardSynced = async (req, res) => {
+  try {
+    const { lastSyncedAt } = req.body || {};
+    const ts =
+      lastSyncedAt != null && String(lastSyncedAt).trim() !== ""
+        ? new Date(lastSyncedAt)
+        : new Date();
+    if (Number.isNaN(ts.getTime())) {
+      return res.status(400).json({ message: "Invalid lastSyncedAt date" });
+    }
+
+    const jobcard = await Jobcard.findByIdAndUpdate(
+      req.params.id,
+      { lastSyncedAt: ts },
+      { new: true, runValidators: true }
+    ).populate("parts.spareId", "name sku");
+
+    if (!jobcard) {
+      return res.status(404).json({ message: "Jobcard not found" });
+    }
+
+    res.json(jobcard);
+  } catch (error) {
+    console.error("Error updating Jobcard lastSyncedAt:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 module.exports = {
   createJobcard,
   getJobcards,
@@ -1728,4 +1769,5 @@ module.exports = {
   finalizeJobcard,
   settleJobcard,
   deleteJobcard,
+  markJobcardSynced,
 };

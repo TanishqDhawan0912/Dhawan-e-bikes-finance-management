@@ -11,6 +11,7 @@
     "install:frontend": "cd ../frontend && npm install",
     "install:all": "npm install && npm run install:frontend",
     "migrate:purchase-dates": "node scripts/runMigration.js",
+    "migrate:created-at": "node scripts/backfillCreatedAt.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
@@ -20,10 +21,11 @@
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.0",
     "mongoose": "^7.0.3",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "node-cron": "^3.0.3"
   },
   "devDependencies": {
-    "nodemon": "^2.0.22",
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "nodemon": "^2.0.22"
   }
 }

@@ -1,18 +1,17 @@
+require("dotenv").config();
 const mongoose = require("mongoose");
 const Model = require("../models/Model");
-require("dotenv").config();
 
 // Update existing models to have today's date as purchaseDate
 const updateExistingPurchaseDates = async () => {
   try {
     // Connect to MongoDB
-    await mongoose.connect(
-      process.env.MONGODB_URI || "mongodb://localhost:27017/finance-management",
-      {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-      }
-    );
+    const localUri = process.env.MONGO_LOCAL_URI?.trim();
+    if (!localUri) {
+      console.error("MONGO_LOCAL_URI is not set");
+      process.exit(1);
+    }
+    await mongoose.connect(localUri);
 
     console.log("Connected to MongoDB");
 

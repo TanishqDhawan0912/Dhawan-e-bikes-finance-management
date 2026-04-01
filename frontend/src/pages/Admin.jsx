@@ -111,7 +111,7 @@ export default function Admin() {
   const financeDayPickerRef = useRef(null);
   const financeMonthPickerRef = useRef(null);
   /** Finance jobcards profit — full FIFO breakdown in overlay */
-  const [financeJobcardProfitModalJob, setFinanceJobcardProfitModalJob] =
+  const [financeJobcardProfitModalJobcard, setFinanceJobcardProfitModalJobcard] =
     useState(null);
   const [models, setModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -4735,7 +4735,7 @@ export default function Admin() {
                                   </div>
                                   <button
                                     type="button"
-                                    onClick={() => setFinanceJobcardProfitModalJob(j)}
+                                    onClick={() => setFinanceJobcardProfitModalJobcard(j)}
                                     style={{
                                       marginTop: "0.5rem",
                                       padding: "0.35rem 0.75rem",
@@ -4787,9 +4787,9 @@ export default function Admin() {
                   )}
                 </div>
               </div>
-              {financeJobcardProfitModalJob &&
+              {financeJobcardProfitModalJobcard &&
                 (() => {
-                  const j = financeJobcardProfitModalJob;
+                  const j = financeJobcardProfitModalJobcard;
                   /** Align modal rows with jobcard parts: Service / Sales / Replacement */
                   const profitModalSectionForLine = (l) => {
                     const k = l?.kind;
@@ -4832,7 +4832,7 @@ export default function Admin() {
                         zIndex: 100,
                         padding: "1rem",
                       }}
-                      onClick={() => setFinanceJobcardProfitModalJob(null)}
+                      onClick={() => setFinanceJobcardProfitModalJobcard(null)}
                     >
                       <div
                         role="dialog"
@@ -4897,7 +4897,7 @@ export default function Admin() {
                           </div>
                           <button
                             type="button"
-                            onClick={() => setFinanceJobcardProfitModalJob(null)}
+                            onClick={() => setFinanceJobcardProfitModalJobcard(null)}
                             style={{
                               background: "none",
                               border: "none",

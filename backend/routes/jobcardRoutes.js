@@ -7,6 +7,7 @@ const {
   finalizeJobcard,
   settleJobcard,
   deleteJobcard,
+  markJobcardSynced,
 } = require("../controllers/jobcardController");
 // const { protect } = require("../middleware/authMiddleware");
 
@@ -23,6 +24,9 @@ router.route("/:id").get(getJobcardById).put(updateJobcard).delete(deleteJobcard
 router.route("/:id/finalize").put(finalizeJobcard);
 
 router.route("/:id/settle").put(settleJobcard);
+
+// Jobcard sync: sets lastSyncedAt on the Jobcard document (collection jobcards)
+router.route("/:id/synced").patch(markJobcardSynced);
 
 module.exports = router;
 

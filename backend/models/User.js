@@ -39,6 +39,7 @@ const userSchema = new mongoose.Schema(
     },
     resetPasswordToken: String,
     resetPasswordExpire: Date,
+    lastSyncedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
@@ -96,5 +97,9 @@ userSchema.methods.updateLastLogin = async function () {
 userSchema.pre("find", function () {
   this.find({ isActive: { $ne: false } });
 });
+
+// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+userSchema.index({ createdAt: 1 });
+userSchema.index({ updatedAt: 1 });
 
 module.exports = mongoose.model("User", userSchema);

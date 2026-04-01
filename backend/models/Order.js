@@ -69,11 +69,16 @@ const orderSchema = new mongoose.Schema(
     notes: {
       type: String,
     },
+    lastSyncedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
   }
 );
+
+// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+orderSchema.index({ createdAt: 1 });
+orderSchema.index({ updatedAt: 1 });
 
 // Generate order number before saving
 orderSchema.pre("save", async function (next) {

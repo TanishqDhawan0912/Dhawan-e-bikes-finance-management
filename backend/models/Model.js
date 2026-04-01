@@ -129,6 +129,7 @@ const modelSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    lastSyncedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
@@ -212,5 +213,9 @@ modelSchema.pre("save", function (next) {
   }
   next();
 });
+
+// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+modelSchema.index({ createdAt: 1 });
+modelSchema.index({ updatedAt: 1 });
 
 module.exports = mongoose.model("Model", modelSchema);

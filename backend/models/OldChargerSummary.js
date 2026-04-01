@@ -13,8 +13,13 @@ const oldChargerSummarySchema = new mongoose.Schema(
         Other: { total: 0, working: 0, notWorking: 0 },
       }),
     },
+    lastSyncedAt: { type: Date, default: null },
   },
   { timestamps: true, versionKey: false }
 );
+
+// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+oldChargerSummarySchema.index({ createdAt: 1 });
+oldChargerSummarySchema.index({ updatedAt: 1 });
 
 module.exports = mongoose.model("OldChargerSummary", oldChargerSummarySchema);

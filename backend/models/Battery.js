@@ -92,12 +92,17 @@ const batterySchema = new mongoose.Schema(
         },
       },
     ],
+    lastSyncedAt: { type: Date, default: null },
   },
   {
     timestamps: true,
     versionKey: false,
   }
 );
+
+// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+batterySchema.index({ createdAt: 1 });
+batterySchema.index({ updatedAt: 1 });
 
 // Helper to recalculate total sets and open batteries from stock entries
 batterySchema.methods.recalculateFromStockEntries = function () {
