@@ -93,15 +93,16 @@ export default function Admin() {
   const [jobcards, setJobcards] = useState([]);
   const [jobcardsLoading, setJobcardsLoading] = useState(false);
   const [jobcardsError, setJobcardsError] = useState("");
+  const [oldScooties, setOldScooties] = useState([]);
   /** null = finance home (pick Bills vs Jobcards); otherwise full detail for that area */
   const [financeSubView, setFinanceSubView] = useState(null); // null | "bills" | "jobcards"
   const [financeRangeMode, setFinanceRangeMode] = useState("day"); // "day" | "month"
-  const [financeSelectedDate, setFinanceSelectedDate] = useState(
-    new Date().toISOString().split("T")[0]
-  ); // yyyy-mm-dd
-  const [financeSelectedMonth, setFinanceSelectedMonth] = useState(
-    new Date().toISOString().slice(0, 7)
-  ); // yyyy-mm
+  const [financeSelectedDate, setFinanceSelectedDate] = useState(() =>
+    dateToYmd(new Date())
+  ); // yyyy-mm-dd (local)
+  const [financeSelectedMonth, setFinanceSelectedMonth] = useState(() =>
+    dateToYmd(new Date()).slice(0, 7)
+  ); // yyyy-mm (local)
   const [showFinanceDayPicker, setShowFinanceDayPicker] = useState(false);
   const [showFinanceMonthPicker, setShowFinanceMonthPicker] = useState(false);
   const [financeCalMonth, setFinanceCalMonth] = useState(() => new Date());
@@ -110,12 +111,13 @@ export default function Admin() {
   );
   const financeDayPickerRef = useRef(null);
   const financeMonthPickerRef = useRef(null);
+  /** Last local calendar day we synced finance pickers to (rollover → jump to “today”). */
+  const financeWallClockDayRef = useRef(dateToYmd(new Date()));
   /** Finance jobcards profit — full FIFO breakdown in overlay */
   const [financeJobcardProfitModalJobcard, setFinanceJobcardProfitModalJobcard] =
     useState(null);
-  /** Finance bills profit — full breakdown in overlay */
-  const [financeBillProfitModalBill, setFinanceBillProfitModalBill] =
-    useState(null);
+  /** Finance bills — which row is expanded (inline details below header) */
+  const [financeExpandedBillId, setFinanceExpandedBillId] = useState(null);
   const [models, setModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState("");
@@ -155,7 +157,7 @@ export default function Admin() {
       // Add cache-busting timestamp so latest model changes always reflect
       const timestamp = Date.now();
       const response = await fetch(
-        `http://localhost:5000/api/models?limit=1000&t=${timestamp}`
+        `http://localhost:5000/api/models?limit=1000&admin=1&t=${timestamp}`
       );
       const data = await response.json();
 
@@ -321,6 +323,23 @@ export default function Admin() {
     }
   };
 
+  const fetchOldScootiesForAdmin = async () => {
+    try {
+      const timestamp = Date.now();
+      const response = await fetch(
+        `http://localhost:5000/api/old-scooties?t=${timestamp}`
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Error fetching old scooties");
+      }
+      setOldScooties(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Admin - Error fetching old scooties:", e);
+      setOldScooties([]);
+    }
+  };
+
   // When finance section is active, fetch the data needed for profit calculations
   useEffect(() => {
     if (activeSection !== "finance") return;
@@ -331,6 +350,7 @@ export default function Admin() {
     fetchModels();
     fetchBatteriesForAdmin();
     fetchChargersForAdmin();
+    fetchOldScootiesForAdmin();
   }, [activeSection, financeSubView]);
 
   useEffect(() => {
@@ -355,6 +375,34 @@ export default function Admin() {
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [showFinanceDayPicker, showFinanceMonthPicker]);
+
+  // Finance: when the real calendar day advances (midnight) or tab regains focus, move selection to today.
+  useEffect(() => {
+    if (activeSection !== "finance") return;
+    const syncFinanceDateToTodayIfNewDay = () => {
+      const today = dateToYmd(new Date());
+      if (today === financeWallClockDayRef.current) return;
+      financeWallClockDayRef.current = today;
+      setFinanceSelectedDate(today);
+      setFinanceSelectedMonth(today.slice(0, 7));
+      setFinanceCalMonth(ymdToLocalDate(today));
+      setFinanceMonthPickYear(Number(today.slice(0, 4), 10));
+    };
+    syncFinanceDateToTodayIfNewDay();
+    const intervalId = window.setInterval(syncFinanceDateToTodayIfNewDay, 60_000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        syncFinanceDateToTodayIfNewDay();
+      }
+    };
+    window.addEventListener("focus", syncFinanceDateToTodayIfNewDay);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", syncFinanceDateToTodayIfNewDay);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [activeSection]);
 
   // Check if user is authenticated
   const isAdminAuth = sessionStorage.getItem("adminAuth");
@@ -1227,35 +1275,103 @@ export default function Admin() {
     return Number(sorted[0]?.purchasePrice) || 0;
   };
 
+  const parseModelStockEntryTime = (entry) => {
+    const raw = entry?.purchaseDate;
+    if (raw == null || raw === "") return 0;
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+    const d = new Date(raw);
+    const t = d.getTime();
+    if (!Number.isNaN(t)) return t;
+    const s = String(raw).trim();
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) {
+      const dd = parseInt(m[1], 10);
+      const mm = parseInt(m[2], 10) - 1;
+      const yy = parseInt(m[3], 10);
+      return new Date(yy, mm, dd).getTime();
+    }
+    return 0;
+  };
+
+  const stockEntryUnitQuantity = (e) => {
+    if (Array.isArray(e?.colorQuantities) && e.colorQuantities.length > 0) {
+      return e.colorQuantities.reduce(
+        (sum, cq) => sum + (Number(cq.quantity) || 0),
+        0
+      );
+    }
+    return Number(e?.quantity) || 0;
+  };
+
+  /**
+   * Per-unit purchase rate for profit (same idea as Models “per pc” on the latest stock lot).
+   * Uses the newest stock entry’s purchasePrice — not a weighted average across old lots (that
+   * produced confusing values like ₹30,545.455 when lots mixed ₹31k with older prices).
+   */
+  const getModelPurchaseUnitCostFromDoc = (m) => {
+    if (!m) return 0;
+    const direct = Number(m.purchasePrice) || 0;
+    if (Array.isArray(m.stockEntries) && m.stockEntries.length > 0) {
+      const sorted = [...m.stockEntries].sort(
+        (a, b) => parseModelStockEntryTime(b) - parseModelStockEntryTime(a)
+      );
+      for (const e of sorted) {
+        const q = stockEntryUnitQuantity(e);
+        const price = Number(e.purchasePrice) || 0;
+        if (q > 0 && price > 0) return price;
+      }
+    }
+    if (direct > 0) return direct;
+    return 0;
+  };
+
   const getModelUnitCost = (modelId) => {
     if (!modelId) return 0;
     const m = Array.isArray(models)
       ? models.find((x) => String(x._id) === String(modelId))
       : null;
-    if (!m) return 0;
-    const direct = Number(m.purchasePrice) || 0;
-    if (direct > 0) return direct;
-    if (Array.isArray(m.stockEntries) && m.stockEntries.length > 0) {
-      const totalQty = m.stockEntries.reduce(
-        (sum, e) => sum + (Number(e.quantity) || 0),
-        0
-      );
-      const totalVal = m.stockEntries.reduce((sum, e) => {
-        const qty = Number(e.quantity) || 0;
-        const price = Number(e.purchasePrice) || 0;
-        return sum + qty * price;
-      }, 0);
-      return totalQty > 0 ? totalVal / totalQty : 0;
-    }
-    return 0;
+    return getModelPurchaseUnitCostFromDoc(m);
   };
 
-  const billRevenue = (bill) => Number(bill?.netAmount) || 0;
+  /** Net bill / deal total on the bill document (often cash paid + trade-in credit toward list price). */
+  const billNetAmount = (bill) => Number(bill?.netAmount) || 0;
+  /** Cash actually paid by the customer (use for “customer paid” and bill profit first term). */
+  const billCashPaid = (bill) => Number(bill?.paidAmount) || 0;
+
+  /**
+   * Match catalog model for a bill: by modelId, then modelName + bill colour (variants are separate docs).
+   */
+  const findInventoryModelForBill = (bill) => {
+    if (!bill || !Array.isArray(models) || models.length === 0) return null;
+    const id = bill.modelId != null ? String(bill.modelId).trim() : "";
+    if (id) {
+      const byId = models.find((x) => String(x._id) === id);
+      if (byId) return byId;
+    }
+    const want = String(bill.modelPurchased || "").trim().toLowerCase();
+    if (!want) return null;
+    const nameMatches = models.filter(
+      (x) => String(x.modelName || "").trim().toLowerCase() === want
+    );
+    if (nameMatches.length === 0) return null;
+    const colorWant = String(bill.modelColor || "").trim().toLowerCase();
+    if (colorWant) {
+      const byColor = nameMatches.find(
+        (x) => String(x.colour || "").trim().toLowerCase() === colorWant
+      );
+      if (byColor) return byColor;
+    }
+    const withCost = [...nameMatches].sort(
+      (a, b) =>
+        getModelPurchaseUnitCostFromDoc(b) - getModelPurchaseUnitCostFromDoc(a)
+    );
+    return withCost[0] || nameMatches[0];
+  };
 
   const billEstimatedCost = (bill) => {
     if (!bill) return 0;
     let cost = 0;
-    cost += getModelUnitCost(bill.modelId);
+    cost += getModelPurchaseUnitCostFromDoc(findInventoryModelForBill(bill));
 
     if (bill.withBattery && bill.batteryId && bill.batteryId !== "custom") {
       const type = String(bill.batteryTypeForBill || "").toLowerCase();
@@ -1889,21 +2005,19 @@ export default function Admin() {
   };
 
   const buildBillProfitDetail = (bill) => {
-    const revenue = billRevenue(bill);
-    const costBreakdown = [];
+    const netBillAmount = billNetAmount(bill);
+    const customerPaidAmount = billCashPaid(bill);
+    let totalCostTally = 0;
 
-    // Model profit rule:
-    // profit = customer paid - adjusted model purchase price - accessory purchase costs
-    // Adjustment: ₹2000 × (soldBatteryUnits - purchasedBatteryUnits) for lead battery setups.
-    const baseModelCost = getModelUnitCost(bill?.modelId);
-    const modelDoc = Array.isArray(models)
-      ? models.find((x) => String(x._id) === String(bill?.modelId))
-      : null;
+    // Bill profit: customer paid (net) − new-vehicle cost + old-scooty trade-in value (when present).
+    // New-vehicle cost = adjusted model purchase + accessories; adjustment ₹2000 × battery unit diff (lead).
+    const modelDoc = findInventoryModelForBill(bill);
+    const baseModelCost = getModelPurchaseUnitCostFromDoc(modelDoc);
     const purchasedBatteryUnits = modelDoc
       ? Number(modelDoc.batteriesPerSet) || 0
       : 0;
     const batteryType = String(bill?.batteryTypeForBill || "").toLowerCase();
-    const batteryV = String(bill?.batteryVoltageForBill || "");
+    const batteryV = String(bill?.batteryVoltageForBill || "").trim();
     const soldBatteryUnits =
       bill?.withBattery && batteryType === "lead"
         ? batteryV.includes("72")
@@ -1914,6 +2028,24 @@ export default function Admin() {
           ? 4
           : 0
         : null;
+
+    const parts = [];
+    if (!bill?.withBattery) {
+      parts.push("No battery on bill");
+    } else {
+      if (soldBatteryUnits != null && soldBatteryUnits > 0) {
+        parts.push(`${soldBatteryUnits} with sale`);
+      }
+      if (purchasedBatteryUnits > 0) {
+        parts.push(`${purchasedBatteryUnits} in model catalog set`);
+      }
+      if (batteryV) parts.push(batteryV);
+      if (batteryType === "lithium") parts.push("lithium");
+      else if (batteryType === "lead") parts.push("lead");
+      if (parts.length === 0) parts.push("Battery on bill");
+    }
+    const batteryQtyLine = parts.join(" · ");
+
     const modelBatteryAdjustment =
       soldBatteryUnits != null &&
       purchasedBatteryUnits > 0 &&
@@ -1921,41 +2053,84 @@ export default function Admin() {
         ? (soldBatteryUnits - purchasedBatteryUnits) * 2000
         : 0;
     const modelCost = (Number(baseModelCost) || 0) + modelBatteryAdjustment;
-    costBreakdown.push({
-      label: bill?.modelPurchased ? `Model: ${bill.modelPurchased}` : "Model",
-      cost: modelCost,
-    });
+    totalCostTally += modelCost;
 
+    const accessoryLines = [];
     if (Array.isArray(bill?.accessoryDetails) && bill.accessoryDetails.length > 0) {
       bill.accessoryDetails.forEach((a) => {
         const stored = Number(a?.unitPurchaseCost) || 0;
         const lineCost = stored > 0 ? stored : getSpareUnitCost(a?.id) * 1;
-        costBreakdown.push({
-          label: `Accessory: ${a?.name || "N/A"}`,
+        accessoryLines.push({
+          label: a?.name || "Accessory",
           cost: lineCost,
         });
+        totalCostTally += lineCost;
       });
     }
 
-    const totalCost = costBreakdown.reduce((sum, x) => sum + (Number(x.cost) || 0), 0);
-    const profit = revenue - totalCost;
+    const totalCost = totalCostTally;
+
+    const osId = String(bill?.oldScootyId || "").trim();
+    const osDoc =
+      osId && Array.isArray(oldScooties)
+        ? oldScooties.find((x) => String(x._id) === osId)
+        : null;
+    const exchangePrice = Number(bill?.oldScootyExchangePrice) || 0;
+    const exchangeText = String(bill?.oldScootyExchange || "").trim();
+    const pmcFromBill = String(bill?.oldScootyPmcNo || "").trim();
+    const hasOldScootyFinance =
+      exchangeText.length > 0 || exchangePrice > 0 || Boolean(osDoc);
+
+    const invName = osDoc ? String(osDoc.name || "").trim() : "";
+    const genericInvName = /^old scooty exchange$/i.test(invName);
+    const modelFromInventory = invName && !genericInvName ? invName : "";
+    const modelLabel =
+      modelFromInventory ||
+      (hasOldScootyFinance ? "Trade-in scooty" : "");
+    const purchaseRecorded =
+      osDoc != null
+        ? Number(osDoc.purchasePrice) || exchangePrice
+        : exchangePrice;
+    const pmcDisplay =
+      pmcFromBill || (osDoc ? String(osDoc.pmcNo || "").trim() : "");
+    const norm = (s) => String(s || "").replace(/\s+/g, " ").trim();
+    const specNotes =
+      exchangeText && norm(exchangeText) !== norm(modelFromInventory)
+        ? exchangeText
+        : "";
+
+    const oldScootyBlock = hasOldScootyFinance
+      ? {
+          modelLabel: modelLabel || "—",
+          purchasePrice: purchaseRecorded,
+          exchangePrice,
+          pmcNo: pmcDisplay,
+          specNotes,
+        }
+      : null;
+
+    // Profit: customer paid (net) − inventory cost of new sale + recorded old-scooty trade-in value
+    const tradeInCreditAmount = hasOldScootyFinance
+      ? Number(purchaseRecorded) || 0
+      : 0;
+    const profit = customerPaidAmount - totalCost + tradeInCreditAmount;
 
     return {
       id: bill?._id,
       billNo: bill?.billNo || "N/A",
       billDate: bill?.billDate || "",
       customerName: bill?.customerName || "N/A",
-      revenue,
-      costBreakdown,
-      modelMeta: {
-        modelName: bill?.modelPurchased || "",
-        baseModelCost: Number(baseModelCost) || 0,
-        purchasedBatteryUnits: Number(purchasedBatteryUnits) || 0,
-        soldBatteryUnits: soldBatteryUnits != null ? Number(soldBatteryUnits) || 0 : null,
-        batteryAdjustment: Number(modelBatteryAdjustment) || 0,
-        adjustedModelCost: Number(modelCost) || 0,
-      },
+      /** Cash paid — used for display, profit, and period totals */
+      revenue: customerPaidAmount,
+      netBillAmount,
+      modelName: bill?.modelPurchased || "—",
+      modelDescription: String(bill?.descriptionVariant || "").trim(),
+      modelColor: String(bill?.modelColor || "").trim(),
+      batteryQtyLine,
+      accessoryLines,
+      oldScooty: oldScootyBlock,
       totalCost,
+      tradeInCreditAmount,
       profit,
     };
   };
@@ -2020,6 +2195,7 @@ export default function Admin() {
     models,
     batteries,
     chargers,
+    oldScooties,
     financeRangeMode,
     financeSelectedDate,
     financeSelectedMonth,
@@ -4153,7 +4329,7 @@ export default function Admin() {
                       Bills — profit breakdown
                     </div>
                     <div style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.25rem" }}>
-                      {financePeriodLabel} · revenue minus model (battery adjustment) and accessories cost
+                      {financePeriodLabel} · paid − model & accessory cost (+ old scooty trade-in when applicable) = profit
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
@@ -4173,7 +4349,7 @@ export default function Admin() {
                         : (billBucket.profit || 0).toLocaleString("en-IN")}
                     </div>
                     <div style={{ fontSize: "0.8rem", color: "#999", marginTop: "0.15rem" }}>
-                      Net revenue ₹
+                      Customer paid (total) ₹
                       {billsLoading
                         ? "…"
                         : (billBucket.revenue || 0).toLocaleString("en-IN")}
@@ -4191,145 +4367,268 @@ export default function Admin() {
                     </div>
                   ) : (
                     <div style={{ display: "grid", gap: "0.75rem" }}>
-                      {billBucket.details.slice(0, 25).map((b) => (
-                        <details
-                          key={b.id}
-                          style={{
-                            border: "1px solid #e5e7eb",
-                            borderRadius: "0.5rem",
-                            padding: "0.75rem 0.9rem",
-                            background: "#fafafa",
-                          }}
-                        >
-                          <summary
+                      {billBucket.details.slice(0, 25).map((b) => {
+                        const expanded =
+                          financeExpandedBillId != null &&
+                          String(financeExpandedBillId) === String(b.id);
+                        return (
+                          <div
+                            key={b.id}
                             style={{
-                              cursor: "pointer",
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              gap: "1rem",
-                              listStyle: "none",
+                              border: "1px solid #e5e7eb",
+                              borderRadius: "0.5rem",
+                              overflow: "hidden",
+                              background: "#fafafa",
                             }}
                           >
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontWeight: 700, color: "#111827" }}>
-                                Bill {b.billNo} • {b.billDate}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: "0.85rem",
-                                  color: "#6b7280",
-                                  whiteSpace: "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                }}
-                              >
-                                {b.customerName}
-                              </div>
-                            </div>
-                            <div style={{ textAlign: "right" }}>
-                              <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                                Profit
-                              </div>
-                              <div
-                                style={{
-                                  fontWeight: 800,
-                                  color: b.profit >= 0 ? "#16a34a" : "#dc2626",
-                                }}
-                              >
-                                ₹{(b.profit || 0).toLocaleString("en-IN")}
-                              </div>
-                            </div>
-                          </summary>
-
-                          <div style={{ marginTop: "0.75rem" }}>
-                            <div
-                              style={{
-                                display: "grid",
-                                gridTemplateColumns: "1fr 140px",
-                                gap: "0.5rem 1rem",
-                                fontSize: "0.9rem",
-                              }}
-                            >
-                              <div style={{ color: "#374151", fontWeight: 700 }}>
-                                Revenue (Net Amount)
-                              </div>
-                              <div style={{ textAlign: "right", fontWeight: 700 }}>
-                                ₹{(b.revenue || 0).toLocaleString("en-IN")}
-                              </div>
-
-                              <div
-                                style={{
-                                  gridColumn: "1 / -1",
-                                  height: "1px",
-                                  background: "#e5e7eb",
-                                  margin: "0.25rem 0",
-                                }}
-                              />
-
-                              {b.costBreakdown.map((c, idx) => (
-                                <div
-                                  key={`${b.id}-c-${idx}`}
-                                  style={{
-                                    display: "contents",
-                                  }}
-                                >
-                                  <div style={{ color: "#374151" }}>{c.label}</div>
-                                  <div style={{ textAlign: "right", color: "#111827" }}>
-                                    ₹{(Number(c.cost) || 0).toLocaleString("en-IN")}
-                                  </div>
-                                </div>
-                              ))}
-
-                              <div
-                                style={{
-                                  gridColumn: "1 / -1",
-                                  height: "1px",
-                                  background: "#e5e7eb",
-                                  margin: "0.25rem 0",
-                                }}
-                              />
-
-                              <div style={{ fontWeight: 800, color: "#111827" }}>
-                                Total Cost
-                              </div>
-                              <div style={{ textAlign: "right", fontWeight: 800 }}>
-                                ₹{(b.totalCost || 0).toLocaleString("en-IN")}
-                              </div>
-
-                              <div style={{ fontWeight: 900, color: "#111827" }}>
-                                Profit
-                              </div>
-                              <div
-                                style={{
-                                  textAlign: "right",
-                                  fontWeight: 900,
-                                  color: b.profit >= 0 ? "#16a34a" : "#dc2626",
-                                }}
-                              >
-                                ₹{(b.profit || 0).toLocaleString("en-IN")}
-                              </div>
-                            </div>
                             <button
                               type="button"
-                              onClick={() => setFinanceBillProfitModalBill(b)}
+                              onClick={() =>
+                                setFinanceExpandedBillId((cur) =>
+                                  cur != null && String(cur) === String(b.id)
+                                    ? null
+                                    : b.id
+                                )
+                              }
                               style={{
-                                marginTop: "0.6rem",
-                                padding: "0.35rem 0.75rem",
-                                fontSize: "0.8125rem",
-                                fontWeight: 600,
-                                color: "#1d4ed8",
-                                background: "#fff",
-                                border: "1px solid #93c5fd",
-                                borderRadius: "0.375rem",
+                                border: "none",
+                                borderRadius: 0,
+                                padding: "0.65rem 0.9rem",
+                                background: expanded ? "#f1f5f9" : "#fafafa",
                                 cursor: "pointer",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                gap: "1rem",
+                                width: "100%",
+                                fontFamily: "inherit",
+                                textAlign: "left",
                               }}
+                              aria-expanded={expanded}
+                              aria-label={`Bill ${b.billNo}, profit ₹${(b.profit || 0).toLocaleString("en-IN")}, ${expanded ? "collapse" : "expand"} details`}
                             >
-                              View details
+                              <span
+                                style={{
+                                  fontWeight: 700,
+                                  color: "#111827",
+                                  fontSize: "0.95rem",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.35rem",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: "0.7rem",
+                                    color: "#94a3b8",
+                                    fontWeight: 800,
+                                    transform: expanded
+                                      ? "rotate(90deg)"
+                                      : "rotate(0deg)",
+                                    transition: "transform 0.15s ease",
+                                    display: "inline-block",
+                                  }}
+                                  aria-hidden
+                                >
+                                  ▸
+                                </span>
+                                Bill {b.billNo}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: "1.05rem",
+                                  fontWeight: 800,
+                                  color: b.profit >= 0 ? "#16a34a" : "#dc2626",
+                                  flexShrink: 0,
+                                  fontVariantNumeric: "tabular-nums",
+                                }}
+                              >
+                                ₹{(b.profit || 0).toLocaleString("en-IN")}
+                              </span>
                             </button>
+                            {expanded ? (
+                              <div
+                                style={{
+                                  padding: "0.65rem 0.9rem 0.85rem",
+                                  borderTop: "1px solid #e5e7eb",
+                                  background: "#fff",
+                                  fontSize: "0.84rem",
+                                  color: "#374151",
+                                  lineHeight: 1.45,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: "0.85rem",
+                                    color: "#64748b",
+                                    marginBottom: "0.35rem",
+                                  }}
+                                >
+                                  {b.customerName}{" "}
+                                  <span style={{ color: "#cbd5e1" }}>·</span> {b.billDate}
+                                </div>
+                                <div>
+                                  <span style={{ color: "#6b7280" }}>Customer paid</span>{" "}
+                                  <span style={{ fontWeight: 700 }}>
+                                    ₹{(b.revenue || 0).toLocaleString("en-IN")}
+                                  </span>
+                                  {(Number(b.netBillAmount) || 0) > 0 &&
+                                  (Number(b.netBillAmount) || 0) !==
+                                    (Number(b.revenue) || 0) ? (
+                                    <span
+                                      style={{
+                                        display: "block",
+                                        fontSize: "0.78rem",
+                                        fontWeight: 500,
+                                        color: "#94a3b8",
+                                        marginTop: "0.15rem",
+                                      }}
+                                    >
+                                      Net bill (incl. trade-in toward price) ₹
+                                      {(Number(b.netBillAmount) || 0).toLocaleString("en-IN")}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <div style={{ marginTop: "0.45rem" }}>
+                                  <div
+                                    style={{
+                                      fontWeight: 600,
+                                      color: "#111827",
+                                      fontSize: "0.8rem",
+                                    }}
+                                  >
+                                    Model
+                                  </div>
+                                  <div style={{ paddingLeft: "0.45rem", color: "#4b5563" }}>
+                                    <div>Name: {b.modelName || "—"}</div>
+                                    {b.modelDescription ? (
+                                      <div>Description: {b.modelDescription}</div>
+                                    ) : null}
+                                    {b.modelColor ? (
+                                      <div>Colour: {b.modelColor}</div>
+                                    ) : null}
+                                    <div>Battery: {b.batteryQtyLine || "—"}</div>
+                                  </div>
+                                </div>
+                                {b.oldScooty ? (
+                                  <div style={{ marginTop: "0.45rem" }}>
+                                    <div
+                                      style={{
+                                        fontWeight: 600,
+                                        color: "#111827",
+                                        fontSize: "0.8rem",
+                                      }}
+                                    >
+                                      Old scooty (trade-in)
+                                    </div>
+                                    <div
+                                      style={{
+                                        paddingLeft: "0.45rem",
+                                        color: "#4b5563",
+                                      }}
+                                    >
+                                      <div>
+                                        Model: {b.oldScooty.modelLabel || "—"}
+                                      </div>
+                                      {b.oldScooty.pmcNo ? (
+                                        <div>PMC: {b.oldScooty.pmcNo}</div>
+                                      ) : null}
+                                      <div>
+                                        Purchase / trade-in value:{" "}
+                                        <span style={{ fontWeight: 700 }}>
+                                          ₹
+                                          {(
+                                            Number(b.oldScooty.purchasePrice) || 0
+                                          ).toLocaleString("en-IN")}
+                                        </span>
+                                      </div>
+                                      {b.oldScooty.specNotes ? (
+                                        <div
+                                          style={{
+                                            marginTop: "0.2rem",
+                                            fontSize: "0.8rem",
+                                            color: "#64748b",
+                                            lineHeight: 1.4,
+                                          }}
+                                        >
+                                          {b.oldScooty.specNotes}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                ) : null}
+                                {Array.isArray(b.accessoryLines) &&
+                                b.accessoryLines.length > 0 ? (
+                                  <div style={{ marginTop: "0.45rem" }}>
+                                    <div
+                                      style={{
+                                        fontWeight: 600,
+                                        color: "#111827",
+                                        fontSize: "0.8rem",
+                                      }}
+                                    >
+                                      Accessories
+                                    </div>
+                                    <div style={{ paddingLeft: "0.45rem", color: "#4b5563" }}>
+                                      {b.accessoryLines.map((c, idx) => (
+                                        <div key={`${b.id}-inline-a-${idx}`}>
+                                          {c.label}{" "}
+                                          <span style={{ color: "#6b7280" }}>
+                                            (₹
+                                            {(Number(c.cost) || 0).toLocaleString("en-IN")})
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : null}
+                                <div
+                                  style={{
+                                    marginTop: "0.65rem",
+                                    paddingTop: "0.5rem",
+                                    borderTop: "1px solid #e5e7eb",
+                                    fontWeight: 600,
+                                    color: "#111827",
+                                    fontSize: "0.84rem",
+                                  }}
+                                >
+                                  ₹{(b.revenue || 0).toLocaleString("en-IN")} − ₹
+                                  {(b.totalCost || 0).toLocaleString("en-IN")}
+                                  {(Number(b.tradeInCreditAmount) || 0) > 0 ? (
+                                    <>
+                                      {" "}
+                                      + ₹
+                                      {(Number(b.tradeInCreditAmount) || 0).toLocaleString(
+                                        "en-IN"
+                                      )}
+                                    </>
+                                  ) : null}{" "}
+                                  ={" "}
+                                  <span
+                                    style={{
+                                      color: b.profit >= 0 ? "#16a34a" : "#dc2626",
+                                    }}
+                                  >
+                                    ₹{(b.profit || 0).toLocaleString("en-IN")}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontWeight: 400,
+                                      fontSize: "0.76rem",
+                                      color: "#9ca3af",
+                                      marginLeft: "0.35rem",
+                                    }}
+                                  >
+                                    {(Number(b.tradeInCreditAmount) || 0) > 0
+                                      ? "paid − actual cost + old scooty = profit"
+                                      : "paid − actual cost = profit"}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
-                        </details>
-                      ))}
+                        );
+                      })}
                       {billBucket.details.length > 25 && (
                         <div style={{ color: "#6b7280", fontSize: "0.85rem" }}>
                           Showing 25 of {billBucket.details.length} bills.
@@ -4340,228 +4639,6 @@ export default function Admin() {
                 </div>
               </div>
               )}
-
-              {financeBillProfitModalBill &&
-                (() => {
-                  const b = financeBillProfitModalBill;
-                  const m = b.modelMeta || {};
-                  return (
-                    <div
-                      style={{
-                        position: "fixed",
-                        inset: 0,
-                        backgroundColor: "rgba(15, 23, 42, 0.45)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        zIndex: 100,
-                        padding: "1rem",
-                      }}
-                      onClick={() => setFinanceBillProfitModalBill(null)}
-                    >
-                      <div
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="finance-bill-profit-modal-title"
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          backgroundColor: "#fff",
-                          borderRadius: "0.75rem",
-                          maxWidth: "720px",
-                          width: "100%",
-                          maxHeight: "min(90vh, 900px)",
-                          overflowY: "auto",
-                          boxShadow:
-                            "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
-                          padding: "1.25rem 1.5rem",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-start",
-                            gap: "1rem",
-                            marginBottom: "1rem",
-                          }}
-                        >
-                          <div>
-                            <div
-                              style={{
-                                fontSize: "0.72rem",
-                                color: "#64748b",
-                                fontWeight: 700,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.06em",
-                              }}
-                            >
-                              Profit breakdown
-                            </div>
-                            <h2
-                              id="finance-bill-profit-modal-title"
-                              style={{
-                                margin: "0.25rem 0 0",
-                                fontSize: "1.15rem",
-                                fontWeight: 700,
-                                color: "#111827",
-                              }}
-                            >
-                              Bill {b.billNo}
-                            </h2>
-                            <div
-                              style={{
-                                fontSize: "0.85rem",
-                                color: "#64748b",
-                                marginTop: "0.2rem",
-                              }}
-                            >
-                              {b.customerName}{" "}
-                              <span style={{ color: "#cbd5e1" }}>·</span>{" "}
-                              {b.billDate}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setFinanceBillProfitModalBill(null)}
-                            style={{
-                              background: "none",
-                              border: "none",
-                              fontSize: "1.5rem",
-                              lineHeight: 1,
-                              cursor: "pointer",
-                              color: "#6b7280",
-                              padding: "0.25rem",
-                            }}
-                            aria-label="Close"
-                          >
-                            ×
-                          </button>
-                        </div>
-
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "1fr 160px",
-                            gap: "0.5rem 1rem",
-                            fontSize: "0.95rem",
-                            alignItems: "center",
-                          }}
-                        >
-                          <div style={{ color: "#374151", fontWeight: 800 }}>
-                            Revenue (Net Amount)
-                          </div>
-                          <div style={{ textAlign: "right", fontWeight: 800 }}>
-                            ₹{(b.revenue || 0).toLocaleString("en-IN")}
-                          </div>
-
-                          <div
-                            style={{
-                              gridColumn: "1 / -1",
-                              height: "1px",
-                              background: "#e5e7eb",
-                              margin: "0.25rem 0",
-                            }}
-                          />
-
-                          <div style={{ color: "#111827", fontWeight: 800 }}>
-                            Model cost (adjusted)
-                          </div>
-                          <div style={{ textAlign: "right", fontWeight: 800 }}>
-                            ₹{(Number(m.adjustedModelCost) || 0).toLocaleString("en-IN")}
-                          </div>
-
-                          <div style={{ color: "#64748b", fontSize: "0.88rem" }}>
-                            Base purchase
-                          </div>
-                          <div style={{ textAlign: "right", color: "#64748b", fontSize: "0.88rem" }}>
-                            ₹{(Number(m.baseModelCost) || 0).toLocaleString("en-IN")}
-                          </div>
-
-                          {m.soldBatteryUnits != null && (Number(m.purchasedBatteryUnits) || 0) > 0 ? (
-                            <>
-                              <div style={{ color: "#64748b", fontSize: "0.88rem" }}>
-                                Battery adjustment
-                              </div>
-                              <div
-                                style={{
-                                  textAlign: "right",
-                                  color: (Number(m.batteryAdjustment) || 0) >= 0 ? "#16a34a" : "#dc2626",
-                                  fontSize: "0.88rem",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {`₹${(Number(m.batteryAdjustment) || 0).toLocaleString("en-IN")}`}
-                              </div>
-                              <div
-                                style={{
-                                  gridColumn: "1 / -1",
-                                  color: "#94a3b8",
-                                  fontSize: "0.82rem",
-                                  marginTop: "-0.2rem",
-                                }}
-                              >
-                                ₹2000 × (sold {Number(m.soldBatteryUnits)} − purchased {Number(m.purchasedBatteryUnits)})
-                              </div>
-                            </>
-                          ) : null}
-
-                          {Array.isArray(b.costBreakdown) && b.costBreakdown.length > 1 ? (
-                            <>
-                              <div
-                                style={{
-                                  gridColumn: "1 / -1",
-                                  height: "1px",
-                                  background: "#e5e7eb",
-                                  margin: "0.25rem 0",
-                                }}
-                              />
-                              <div style={{ gridColumn: "1 / -1", fontWeight: 800, color: "#111827" }}>
-                                Accessories
-                              </div>
-                              {b.costBreakdown
-                                .filter((x) => String(x.label || "").toLowerCase().includes("accessory"))
-                                .map((c, idx) => (
-                                  <React.Fragment key={`${b.id}-acc-${idx}`}>
-                                    <div style={{ color: "#374151" }}>{c.label}</div>
-                                    <div style={{ textAlign: "right", color: "#111827" }}>
-                                      ₹{(Number(c.cost) || 0).toLocaleString("en-IN")}
-                                    </div>
-                                  </React.Fragment>
-                                ))}
-                            </>
-                          ) : null}
-
-                          <div
-                            style={{
-                              gridColumn: "1 / -1",
-                              height: "1px",
-                              background: "#e5e7eb",
-                              margin: "0.25rem 0",
-                            }}
-                          />
-
-                          <div style={{ fontWeight: 900, color: "#111827" }}>
-                            Total Cost
-                          </div>
-                          <div style={{ textAlign: "right", fontWeight: 900 }}>
-                            ₹{(b.totalCost || 0).toLocaleString("en-IN")}
-                          </div>
-
-                          <div style={{ fontWeight: 900, color: "#111827" }}>Profit</div>
-                          <div
-                            style={{
-                              textAlign: "right",
-                              fontWeight: 900,
-                              color: b.profit >= 0 ? "#16a34a" : "#dc2626",
-                            }}
-                          >
-                            ₹{(b.profit || 0).toLocaleString("en-IN")}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
 
               {/* Jobcards Profit (full section) */}
               {financeSubView === "jobcards" && (
@@ -4632,401 +4709,47 @@ export default function Admin() {
                       {jobcardBucket.details
                         .slice(0, 25)
                         .map((j) => (
-                          <div
+                          <button
                             key={j.id}
+                            type="button"
+                            onClick={() => setFinanceJobcardProfitModalJobcard(j)}
                             style={{
                               border: "1px solid #e5e7eb",
                               borderRadius: "0.5rem",
-                              padding: "0.75rem 0.9rem",
+                              padding: "0.65rem 0.9rem",
                               background: "#fafafa",
+                              cursor: "pointer",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              gap: "1rem",
+                              width: "100%",
+                              fontFamily: "inherit",
+                              textAlign: "left",
                             }}
+                            aria-label={`${j.jobcardNumber}, profit ₹${(j.profit || 0).toLocaleString("en-IN")}, open breakdown`}
                           >
-                            <div
+                            <span
                               style={{
-                                display: "grid",
-                                gridTemplateColumns: "1fr auto",
-                                gap: "0.65rem 1rem",
-                                alignItems: "start",
+                                fontWeight: 700,
+                                color: "#111827",
+                                fontSize: "0.95rem",
                               }}
                             >
-                                <div style={{ minWidth: 0 }}>
-                                  <div
-                                    style={{
-                                      fontWeight: 700,
-                                      color: "#111827",
-                                      fontSize: "0.95rem",
-                                      lineHeight: 1.35,
-                                    }}
-                                  >
-                                    {j.jobcardNumber}
-                                    <span
-                                      style={{
-                                        color: "#cbd5e1",
-                                        fontWeight: 500,
-                                        margin: "0 0.4rem",
-                                      }}
-                                    >
-                                      ·
-                                    </span>
-                                    <span style={{ fontWeight: 600, color: "#475569" }}>
-                                      {formatFinanceJobcardDate(j.date)}
-                                    </span>
-                                  </div>
-                                  <div
-                                    style={{
-                                      fontSize: "0.85rem",
-                                      color: "#64748b",
-                                      marginTop: "0.2rem",
-                                      whiteSpace: "nowrap",
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                    }}
-                                  >
-                                    {j.customerName}
-                                  </div>
-                                  <div
-                                    style={{
-                                      marginTop: "0.55rem",
-                                      padding: "0.55rem 0.7rem",
-                                      background: "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
-                                      borderRadius: "0.5rem",
-                                      border: "1px solid #e2e8f0",
-                                    }}
-                                  >
-                                    <div
-                                      style={{
-                                        fontSize: "0.65rem",
-                                        fontWeight: 700,
-                                        color: "#64748b",
-                                        textTransform: "uppercase",
-                                        letterSpacing: "0.07em",
-                                        marginBottom: "0.4rem",
-                                      }}
-                                    >
-                                      Profit calculation
-                                    </div>
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        flexWrap: "wrap",
-                                        alignItems: "center",
-                                        gap: "0.25rem 0.5rem",
-                                        fontSize: "0.8125rem",
-                                        color: "#334155",
-                                        lineHeight: 1.5,
-                                      }}
-                                    >
-                                      <span>
-                                        <span style={{ color: "#64748b" }}>Paid</span>{" "}
-                                        <strong style={{ color: "#0f172a" }}>
-                                          ₹{(j.paidAmount || 0).toLocaleString("en-IN")}
-                                        </strong>
-                                      </span>
-                                      <span style={{ color: "#94a3b8", fontWeight: 600 }}>−</span>
-                                      <span>
-                                        <span style={{ color: "#64748b" }}>
-                                          Purchase cost (FIFO)
-                                        </span>{" "}
-                                        <strong style={{ color: "#0f172a" }}>
-                                          ₹{(j.totalCost || 0).toLocaleString("en-IN")}
-                                        </strong>
-                                      </span>
-                                      {(j.customerScrapCreditTotal || 0) > 0 && (
-                                        <>
-                                          <span style={{ color: "#94a3b8", fontWeight: 600 }}>
-                                            +
-                                          </span>
-                                          <span>
-                                            <span style={{ color: "#64748b" }}>
-                                              Customer scrap credit
-                                            </span>{" "}
-                                            <strong style={{ color: "#0f172a" }}>
-                                              ₹
-                                              {(j.customerScrapCreditTotal || 0).toLocaleString(
-                                                "en-IN"
-                                              )}
-                                            </strong>
-                                          </span>
-                                        </>
-                                      )}
-                                      {(j.oldBatteryScrapCreditTotal || 0) > 0 && (
-                                        <>
-                                          <span style={{ color: "#94a3b8", fontWeight: 600 }}>
-                                            +
-                                          </span>
-                                          <span>
-                                            <span style={{ color: "#64748b" }}>
-                                              Old battery scrap credit
-                                            </span>{" "}
-                                            <strong style={{ color: "#0f172a" }}>
-                                              ₹
-                                              {(j.oldBatteryScrapCreditTotal || 0).toLocaleString(
-                                                "en-IN"
-                                              )}
-                                            </strong>
-                                          </span>
-                                        </>
-                                      )}
-                                      <span style={{ color: "#94a3b8", fontWeight: 600 }}>=</span>
-                                      <span>
-                                        <span style={{ color: "#64748b" }}>Profit</span>{" "}
-                                        <strong
-                                          style={{
-                                            color:
-                                              j.profit >= 0 ? "#15803d" : "#b91c1c",
-                                          }}
-                                        >
-                                          ₹{(j.profit || 0).toLocaleString("en-IN")}
-                                        </strong>
-                                      </span>
-                                    </div>
-                                    {Array.isArray(j.missingPurchaseCostLabels) &&
-                                      j.missingPurchaseCostLabels.length > 0 && (
-                                        <div
-                                          style={{
-                                            marginTop: "0.45rem",
-                                            padding: "0.5rem 0.65rem",
-                                            background: "#fffbeb",
-                                            border: "1px solid #fcd34d",
-                                            borderRadius: "0.4rem",
-                                          }}
-                                        >
-                                          <div
-                                            style={{
-                                              fontSize: "0.65rem",
-                                              fontWeight: 600,
-                                              color: "#b45309",
-                                              marginBottom: "0.4rem",
-                                              letterSpacing: "0.02em",
-                                            }}
-                                          >
-                                            No purchase price in stock — cost taken as ₹0
-                                          </div>
-                                          <div
-                                            style={{
-                                              display: "flex",
-                                              flexWrap: "wrap",
-                                              gap: "0.35rem",
-                                              alignItems: "center",
-                                            }}
-                                          >
-                                            {j.missingPurchaseCostLabels.map((label, mi) => (
-                                              <span
-                                                key={`${j.id}-miss-${mi}`}
-                                                style={{
-                                                  fontSize: "0.8rem",
-                                                  fontWeight: 800,
-                                                  color: "#7c2d12",
-                                                  background: "#ffedd5",
-                                                  border: "1px solid #fb923c",
-                                                  borderRadius: "0.35rem",
-                                                  padding: "0.28rem 0.6rem",
-                                                  lineHeight: 1.25,
-                                                  boxShadow: "0 1px 0 rgba(124, 45, 18, 0.06)",
-                                                }}
-                                              >
-                                                {label}
-                                              </span>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
-                                    {(j.serviceThingSummaries.length > 0 ||
-                                      j.replacementThingSummaries.length > 0 ||
-                                      j.salesThingSummaries.length > 0) && (
-                                      <div
-                                        style={{
-                                          marginTop: "0.5rem",
-                                          paddingTop: "0.5rem",
-                                          borderTop: "1px solid #e2e8f0",
-                                          display: "flex",
-                                          flexDirection: "column",
-                                          gap: "0.35rem",
-                                        }}
-                                      >
-                                        <div
-                                          style={{
-                                            fontSize: "0.65rem",
-                                            fontWeight: 700,
-                                            color: "#64748b",
-                                            textTransform: "uppercase",
-                                            letterSpacing: "0.07em",
-                                          }}
-                                        >
-                                          Things on this jobcard
-                                        </div>
-                                        {[
-                                          {
-                                            key: "service",
-                                            label: "Service",
-                                            rows: j.serviceThingSummaries,
-                                          },
-                                          {
-                                            key: "replacement",
-                                            label: "Replacement",
-                                            rows: j.replacementThingSummaries,
-                                          },
-                                          {
-                                            key: "sales",
-                                            label: "Sales",
-                                            rows: j.salesThingSummaries,
-                                          },
-                                        ]
-                                          .filter((s) => s.rows.length > 0)
-                                          .map((section) => (
-                                            <div
-                                              key={section.key}
-                                              style={{
-                                                display: "flex",
-                                                flexWrap: "wrap",
-                                                alignItems: "baseline",
-                                                gap: "0.35rem 0.5rem",
-                                              }}
-                                            >
-                                              <span
-                                                style={{
-                                                  fontSize: "0.68rem",
-                                                  fontWeight: 700,
-                                                  color: "#94a3b8",
-                                                  textTransform: "uppercase",
-                                                  letterSpacing: "0.04em",
-                                                  flexShrink: 0,
-                                                }}
-                                              >
-                                                {section.label}
-                                              </span>
-                                              <div
-                                                style={{
-                                                  display: "flex",
-                                                  flexWrap: "wrap",
-                                                  gap: "0.3rem",
-                                                  minWidth: 0,
-                                                }}
-                                              >
-                                                {section.rows
-                                                  .slice(0, 5)
-                                                  .map((row, i) => (
-                                                    <span
-                                                      key={`${j.id}-${section.key}-${i}`}
-                                                      title={`${row.name} · Qty ${row.quantity}`}
-                                                      style={{
-                                                        display: "inline-flex",
-                                                        alignItems: "center",
-                                                        gap: "0.35rem",
-                                                        fontSize: "0.7rem",
-                                                        fontWeight: 600,
-                                                        color: "#334155",
-                                                        background: "#fff",
-                                                        border: "1px solid #e2e8f0",
-                                                        borderRadius: "999px",
-                                                        padding: "0.15rem 0.5rem",
-                                                        lineHeight: 1.35,
-                                                        maxWidth: "min(240px, 100%)",
-                                                        minWidth: 0,
-                                                      }}
-                                                    >
-                                                      <span
-                                                        style={{
-                                                          minWidth: 0,
-                                                          overflow: "hidden",
-                                                          textOverflow: "ellipsis",
-                                                          whiteSpace: "nowrap",
-                                                        }}
-                                                      >
-                                                        {row.name}
-                                                      </span>
-                                                      <span
-                                                        style={{
-                                                          fontSize: "0.65rem",
-                                                          fontWeight: 800,
-                                                          color: "#64748b",
-                                                          flexShrink: 0,
-                                                          fontVariantNumeric: "tabular-nums",
-                                                        }}
-                                                      >
-                                                        ×{row.quantity}
-                                                      </span>
-                                                    </span>
-                                                  ))}
-                                                {section.rows.length > 5 && (
-                                                  <span
-                                                    style={{
-                                                      fontSize: "0.68rem",
-                                                      fontWeight: 600,
-                                                      color: "#64748b",
-                                                      background: "#f1f5f9",
-                                                      border: "1px solid #e2e8f0",
-                                                      borderRadius: "999px",
-                                                      padding: "0.15rem 0.45rem",
-                                                    }}
-                                                  >
-                                                    +{section.rows.length - 5} more
-                                                  </span>
-                                                )}
-                                              </div>
-                                            </div>
-                                          ))}
-                                      </div>
-                                    )}
-                                    {j.totalCost === 0 && j.lines.length === 0 && (
-                                      <div
-                                        style={{
-                                          fontSize: "0.72rem",
-                                          color: "#94a3b8",
-                                          marginTop: "0.35rem",
-                                          lineHeight: 1.4,
-                                        }}
-                                      >
-                                        No service, spare-sales, or billable battery lines with
-                                        inventory cost on this jobcard — purchase cost is ₹0;
-                                        profit equals paid amount.
-                                      </div>
-                                    )}
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setFinanceJobcardProfitModalJobcard(j)}
-                                    style={{
-                                      marginTop: "0.5rem",
-                                      padding: "0.35rem 0.75rem",
-                                      fontSize: "0.8125rem",
-                                      fontWeight: 600,
-                                      color: "#1d4ed8",
-                                      background: "#fff",
-                                      border: "1px solid #93c5fd",
-                                      borderRadius: "0.375rem",
-                                      cursor: "pointer",
-                                    }}
-                                  >
-                                    View details
-                                  </button>
-                                </div>
-                                <div style={{ textAlign: "right", minWidth: "108px" }}>
-                                  <div
-                                    style={{
-                                      fontSize: "0.65rem",
-                                      fontWeight: 700,
-                                      color: "#94a3b8",
-                                      textTransform: "uppercase",
-                                      letterSpacing: "0.06em",
-                                    }}
-                                  >
-                                    Profit
-                                  </div>
-                                  <div
-                                    style={{
-                                      fontSize: "1.4rem",
-                                      fontWeight: 800,
-                                      color: j.profit >= 0 ? "#16a34a" : "#dc2626",
-                                      lineHeight: 1.15,
-                                      marginTop: "0.15rem",
-                                    }}
-                                  >
-                                    ₹{(j.profit || 0).toLocaleString("en-IN")}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
+                              {j.jobcardNumber}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "1.05rem",
+                                fontWeight: 800,
+                                color: j.profit >= 0 ? "#16a34a" : "#dc2626",
+                                flexShrink: 0,
+                                fontVariantNumeric: "tabular-nums",
+                              }}
+                            >
+                              ₹{(j.profit || 0).toLocaleString("en-IN")}
+                            </span>
+                          </button>
                         ))}
                       {jobcardBucket.details.length > 25 && (
                         <div style={{ color: "#6b7280", fontSize: "0.85rem" }}>
@@ -5161,6 +4884,245 @@ export default function Admin() {
                           >
                             ×
                           </button>
+                        </div>
+                        <div
+                          style={{
+                            marginTop: "0.35rem",
+                            marginBottom: "0.75rem",
+                            padding: "0.55rem 0.7rem",
+                            background:
+                              "linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)",
+                            borderRadius: "0.5rem",
+                            border: "1px solid #e2e8f0",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "0.65rem",
+                              fontWeight: 700,
+                              color: "#64748b",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.07em",
+                              marginBottom: "0.4rem",
+                            }}
+                          >
+                            Profit calculation
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              alignItems: "center",
+                              gap: "0.25rem 0.5rem",
+                              fontSize: "0.8125rem",
+                              color: "#334155",
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            <span>
+                              <span style={{ color: "#64748b" }}>Paid</span>{" "}
+                              <strong style={{ color: "#0f172a" }}>
+                                ₹{(j.paidAmount || 0).toLocaleString("en-IN")}
+                              </strong>
+                            </span>
+                            <span style={{ color: "#94a3b8", fontWeight: 600 }}>−</span>
+                            <span>
+                              <span style={{ color: "#64748b" }}>
+                                Purchase cost (FIFO)
+                              </span>{" "}
+                              <strong style={{ color: "#0f172a" }}>
+                                ₹{(j.totalCost || 0).toLocaleString("en-IN")}
+                              </strong>
+                            </span>
+                            {(j.customerScrapCreditTotal || 0) > 0 && (
+                              <>
+                                <span style={{ color: "#94a3b8", fontWeight: 600 }}>+</span>
+                                <span>
+                                  <span style={{ color: "#64748b" }}>
+                                    Customer scrap credit
+                                  </span>{" "}
+                                  <strong style={{ color: "#0f172a" }}>
+                                    ₹
+                                    {(j.customerScrapCreditTotal || 0).toLocaleString("en-IN")}
+                                  </strong>
+                                </span>
+                              </>
+                            )}
+                            {(j.oldBatteryScrapCreditTotal || 0) > 0 && (
+                              <>
+                                <span style={{ color: "#94a3b8", fontWeight: 600 }}>+</span>
+                                <span>
+                                  <span style={{ color: "#64748b" }}>
+                                    Old battery scrap credit
+                                  </span>{" "}
+                                  <strong style={{ color: "#0f172a" }}>
+                                    ₹
+                                    {(j.oldBatteryScrapCreditTotal || 0).toLocaleString("en-IN")}
+                                  </strong>
+                                </span>
+                              </>
+                            )}
+                            <span style={{ color: "#94a3b8", fontWeight: 600 }}>=</span>
+                            <span>
+                              <span style={{ color: "#64748b" }}>Profit</span>{" "}
+                              <strong
+                                style={{
+                                  color: j.profit >= 0 ? "#15803d" : "#b91c1c",
+                                }}
+                              >
+                                ₹{(j.profit || 0).toLocaleString("en-IN")}
+                              </strong>
+                            </span>
+                          </div>
+                          {(j.serviceThingSummaries.length > 0 ||
+                            j.replacementThingSummaries.length > 0 ||
+                            j.salesThingSummaries.length > 0) && (
+                            <div
+                              style={{
+                                marginTop: "0.5rem",
+                                paddingTop: "0.5rem",
+                                borderTop: "1px solid #e2e8f0",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "0.35rem",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: "0.65rem",
+                                  fontWeight: 700,
+                                  color: "#64748b",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.07em",
+                                }}
+                              >
+                                Things on this jobcard
+                              </div>
+                              {[
+                                {
+                                  key: "service",
+                                  label: "Service",
+                                  rows: j.serviceThingSummaries,
+                                },
+                                {
+                                  key: "replacement",
+                                  label: "Replacement",
+                                  rows: j.replacementThingSummaries,
+                                },
+                                {
+                                  key: "sales",
+                                  label: "Sales",
+                                  rows: j.salesThingSummaries,
+                                },
+                              ]
+                                .filter((s) => s.rows.length > 0)
+                                .map((section) => (
+                                  <div
+                                    key={section.key}
+                                    style={{
+                                      display: "flex",
+                                      flexWrap: "wrap",
+                                      alignItems: "baseline",
+                                      gap: "0.35rem 0.5rem",
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        fontSize: "0.68rem",
+                                        fontWeight: 700,
+                                        color: "#94a3b8",
+                                        textTransform: "uppercase",
+                                        letterSpacing: "0.04em",
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      {section.label}
+                                    </span>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        flexWrap: "wrap",
+                                        gap: "0.3rem",
+                                        minWidth: 0,
+                                      }}
+                                    >
+                                      {section.rows.slice(0, 8).map((row, i) => (
+                                        <span
+                                          key={`${j.id}-modal-${section.key}-${i}`}
+                                          title={`${row.name} · Qty ${row.quantity}`}
+                                          style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "0.35rem",
+                                            fontSize: "0.7rem",
+                                            fontWeight: 600,
+                                            color: "#334155",
+                                            background: "#fff",
+                                            border: "1px solid #e2e8f0",
+                                            borderRadius: "999px",
+                                            padding: "0.15rem 0.5rem",
+                                            lineHeight: 1.35,
+                                            maxWidth: "min(240px, 100%)",
+                                            minWidth: 0,
+                                          }}
+                                        >
+                                          <span
+                                            style={{
+                                              minWidth: 0,
+                                              overflow: "hidden",
+                                              textOverflow: "ellipsis",
+                                              whiteSpace: "nowrap",
+                                            }}
+                                          >
+                                            {row.name}
+                                          </span>
+                                          <span
+                                            style={{
+                                              fontSize: "0.65rem",
+                                              fontWeight: 800,
+                                              color: "#64748b",
+                                              flexShrink: 0,
+                                              fontVariantNumeric: "tabular-nums",
+                                            }}
+                                          >
+                                            ×{row.quantity}
+                                          </span>
+                                        </span>
+                                      ))}
+                                      {section.rows.length > 8 && (
+                                        <span
+                                          style={{
+                                            fontSize: "0.68rem",
+                                            fontWeight: 600,
+                                            color: "#64748b",
+                                            background: "#f1f5f9",
+                                            border: "1px solid #e2e8f0",
+                                            borderRadius: "999px",
+                                            padding: "0.15rem 0.45rem",
+                                          }}
+                                        >
+                                          +{section.rows.length - 8} more
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          )}
+                          {j.totalCost === 0 && j.lines.length === 0 && (
+                            <div
+                              style={{
+                                fontSize: "0.72rem",
+                                color: "#94a3b8",
+                                marginTop: "0.35rem",
+                                lineHeight: 1.4,
+                              }}
+                            >
+                              No service, spare-sales, or billable battery lines with inventory
+                              cost on this jobcard — purchase cost is ₹0; profit equals paid
+                              amount.
+                            </div>
+                          )}
                         </div>
                         <div style={{ marginTop: "0.25rem" }}>
                           <div

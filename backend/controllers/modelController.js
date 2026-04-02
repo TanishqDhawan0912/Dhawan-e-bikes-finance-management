@@ -345,8 +345,10 @@ exports.getModels = asyncHandler(async (req, res) => {
   console.log("Query:", query);
   console.log("Limit:", parseInt(limit));
 
-  // Check if this is an admin request (based on referer or user agent)
+  // Admin list: full sorted catalog (not $sample). Query param is reliable when Referer is stripped.
   const isAdminRequest =
+    req.query.admin === "1" ||
+    req.query.admin === "true" ||
     req.headers.referer?.includes("/admin") ||
     req.headers["user-agent"]?.includes("admin");
   console.log("Is admin request:", isAdminRequest);

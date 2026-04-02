@@ -116,7 +116,7 @@ export default function EditBill() {
         throw new Error(data.message || data.error || "Failed to update bill");
       }
       alert("Bill updated successfully.");
-      navigate("/bills/all");
+      navigate(`/bills/all?billId=${encodeURIComponent(id)}`);
     } catch (err) {
       setError(err.message || "Failed to save.");
     } finally {

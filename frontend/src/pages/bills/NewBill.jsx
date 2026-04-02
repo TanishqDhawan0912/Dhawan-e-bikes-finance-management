@@ -17,6 +17,49 @@ const MODEL_SUBTABS = [
   { id: "charger", label: "Charger" },
 ];
 
+/** Lead pack size by voltage — matches finance model purchase adjustment (per-battery ₹2k there). */
+const LEAD_VOLTAGE_TO_BATTERY_COUNT = { 48: 4, 60: 5, 72: 6 };
+const SELLING_PRICE_DELTA_PER_BATTERY_VS_CATALOG = 3000;
+
+function catalogBatteriesPerSetFromModel(model) {
+  if (!model) return 0;
+  return (
+    Number(
+      model.batteriesPerSet ?? model.stockEntries?.[0]?.batteriesPerSet
+    ) || 0
+  );
+}
+
+function leadSoldBatteryCount(voltageStr) {
+  const n = Number.parseInt(String(voltageStr || ""), 10);
+  return LEAD_VOLTAGE_TO_BATTERY_COUNT[n] || 0;
+}
+
+/** Same idea as Admin model cost: (sold − catalog) × delta for lead batteries on the bill. */
+function sellingBatteryAdjustment(
+  withBattery,
+  batteryTypeForBill,
+  batteryVoltage,
+  catalogBatteriesPerSet
+) {
+  if (
+    !withBattery ||
+    batteryTypeForBill !== "lead" ||
+    !batteryVoltage ||
+    catalogBatteriesPerSet <= 0
+  ) {
+    return { soldCount: 0, deltaBatteries: 0, adjustment: 0 };
+  }
+  const soldCount = leadSoldBatteryCount(batteryVoltage);
+  if (!soldCount) return { soldCount: 0, deltaBatteries: 0, adjustment: 0 };
+  const deltaBatteries = soldCount - catalogBatteriesPerSet;
+  return {
+    soldCount,
+    deltaBatteries,
+    adjustment: deltaBatteries * SELLING_PRICE_DELTA_PER_BATTERY_VS_CATALOG,
+  };
+}
+
 const COLOR_NAME_TO_HEX = {
   black: "#1a1a1a",
   white: "#f5f5f5",
@@ -291,6 +334,23 @@ export default function NewBill({
           ? lithiumVoltageMatch[1].replace(/\s+/g, "")
           : ""
       );
+    }
+
+    // Accessories: API stores `accessoryDetails` with `id`; UI uses spare-shaped `_id`.
+    if (Array.isArray(b.accessoryDetails) && b.accessoryDetails.length > 0) {
+      setSelectedAccessories(
+        b.accessoryDetails.map((row) => ({
+          _id: row.id || "",
+          name: row.name || "",
+          sellingPrice: Number(row.sellingPrice) || 0,
+          sku: row.sku || "",
+        }))
+      );
+      setAccessoryQuery("");
+    } else {
+      setSelectedAccessories([]);
+      const legacy = (b.accessoryIncluded || "").toString().trim();
+      setAccessoryQuery(legacy);
     }
 
     // Release guard on next tick so the "clear fields" effect
@@ -679,23 +739,59 @@ export default function NewBill({
   const selectedCharger =
     chargers.find((c) => c._id === selectedChargerId) || null;
 
-  // Sync selling price from selected model when model details are set
-  useEffect(() => {
-    if (
-      selectedModel &&
+  const modelSellingBatteryBreakdown = useMemo(() => {
+    const catalog = catalogBatteriesPerSetFromModel(selectedModel);
+    const base =
+      selectedModel != null &&
       selectedModel.sellingPrice != null &&
       selectedModel.sellingPrice !== ""
+        ? Number(selectedModel.sellingPrice) || 0
+        : 0;
+    const { soldCount, deltaBatteries, adjustment } = sellingBatteryAdjustment(
+      withBattery,
+      batteryTypeForBill,
+      batteryVoltage,
+      catalog
+    );
+    return {
+      base,
+      catalogBatteriesPerSet: catalog,
+      soldCount,
+      deltaBatteries,
+      adjustment,
+      suggested: base + adjustment,
+    };
+  }, [
+    selectedModel,
+    withBattery,
+    batteryTypeForBill,
+    batteryVoltage,
+  ]);
+
+  // New bill: selling price = model list price + ₹3,000 × (bill batteries − catalog set), like purchase ₹2,000 rule.
+  useEffect(() => {
+    if (mode === "edit") return;
+    if (
+      !selectedModel ||
+      selectedModel.sellingPrice == null ||
+      selectedModel.sellingPrice === ""
     ) {
-      setSellingPrice(String(selectedModel.sellingPrice));
+      return;
     }
-  }, [selectedModel?.modelName, selectedModel?.sellingPrice]);
+    setSellingPrice(String(modelSellingBatteryBreakdown.suggested));
+  }, [
+    mode,
+    selectedModel?.modelName,
+    selectedModel?.sellingPrice,
+    modelSellingBatteryBreakdown.suggested,
+  ]);
 
   const oldScootyPriceNumber = Number(oldScootyExchangePrice) || 0;
-  const netAmount =
-    (Number(paidAmount) || 0) +
-    (Number(pendingAmount) || 0) -
-    oldScootyPriceNumber;
-  const discount = Math.max(0, (Number(sellingPrice) || 0) - netAmount);
+  const paidNum = Number(paidAmount) || 0;
+  const sellNum = Number(sellingPrice) || 0;
+  // Discount = list price minus (cash paid + trade-in value). Pending is balance due, not part of this sum.
+  const discount = Math.max(0, sellNum - (paidNum + oldScootyPriceNumber));
+  const netAmount = sellNum - discount;
 
   const isCustomerDetailsComplete =
     billNo.trim() !== "" &&
@@ -736,9 +832,10 @@ export default function NewBill({
   const isModelTabComplete = Boolean(
     modelPurchased.trim() && descriptionVariant.trim() && modelColor.trim()
   );
-  const batteryVoltageToCount = { 48: 4, 60: 5, 72: 6 };
   const batteryRequiredCount = batteryVoltage
-    ? batteryVoltageToCount[batteryVoltage]
+    ? LEAD_VOLTAGE_TO_BATTERY_COUNT[
+        Number.parseInt(String(batteryVoltage), 10)
+      ] || LEAD_VOLTAGE_TO_BATTERY_COUNT[batteryVoltage]
     : 0;
   const isLead = batteryTypeForBill === "lead";
   const isBatteryTabComplete =
@@ -757,7 +854,7 @@ export default function NewBill({
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
     setError("");
     if (!customerName.trim()) {
       setError("Customer Name is required.");
@@ -869,6 +966,12 @@ export default function NewBill({
       const chargerNameForBill =
         selectedChargerId === "custom" ? "Custom" : selectedCharger?.name || "";
 
+      const sellP = Number(sellingPrice) || 0;
+      const paidP = Number(paidAmount) || 0;
+      const oldP = Number(oldScootyExchangePrice) || 0;
+      const billDiscount = Math.max(0, sellP - (paidP + oldP));
+      const billNet = sellP - billDiscount;
+
       const payload = {
         billNo: billNo.trim(),
         billDate: billDate.trim(),
@@ -879,19 +982,10 @@ export default function NewBill({
         modelPurchased: modelPurchased.trim(),
         descriptionVariant: descriptionVariant.trim(),
         modelColor: modelColor.trim(),
-        sellingPrice: Number(sellingPrice) || 0,
-        discount: Math.max(
-          0,
-          (Number(sellingPrice) || 0) -
-            ((Number(paidAmount) || 0) +
-              (Number(pendingAmount) || 0) -
-              (Number(oldScootyExchangePrice) || 0))
-        ),
-        netAmount:
-          (Number(paidAmount) || 0) +
-          (Number(pendingAmount) || 0) -
-          (Number(oldScootyExchangePrice) || 0),
-        paidAmount: Number(paidAmount) || 0,
+        sellingPrice: sellP,
+        discount: billDiscount,
+        netAmount: billNet,
+        paidAmount: paidP,
         pendingAmount: Number(pendingAmount) || 0,
         paymentMode: paymentMode || "cash",
         warranty: modelWarranty ? "With warranty" : "No warranty",
@@ -954,8 +1048,19 @@ export default function NewBill({
             (isEdit ? "Failed to update bill" : "Failed to create bill")
         );
       }
+      const savedBill = await res.json();
+      const savedId =
+        savedBill && savedBill._id != null
+          ? String(savedBill._id)
+          : isEdit && billId
+          ? String(billId)
+          : "";
       alert(isEdit ? "Bill updated successfully." : "Bill created successfully.");
-      navigate("/bills/all");
+      if (savedId) {
+        navigate(`/bills/all?billId=${encodeURIComponent(savedId)}`);
+      } else {
+        navigate("/bills/all");
+      }
     } catch (err) {
       setError(err.message || "Failed to save.");
     } finally {
@@ -966,11 +1071,16 @@ export default function NewBill({
   return (
     <div className="page-content">
       <form
+        noValidate
         onSubmit={handleSubmit}
         onWheelCapture={handleWheelCapture}
         className="bill-form-tabs-wrapper"
       >
-        {error && <p className="bill-form-error">{error}</p>}
+        {error && activeTab !== "payment" && (
+          <p className="bill-form-error" role="alert">
+            {error}
+          </p>
+        )}
 
         {/* Main tabs */}
         <div className="bill-tabs">
@@ -1382,20 +1492,24 @@ export default function NewBill({
                               {(() => {
                                 const availableBatteriesRaw = batteries.filter(
                                   (b) => {
+                                    const bt = String(
+                                      b.batteryType || ""
+                                    ).toLowerCase();
                                     if (
-                                      b.batteryType &&
-                                      b.batteryType !== batteryTypeForBill
-                                    )
+                                      bt &&
+                                      bt !== batteryTypeForBill
+                                    ) {
                                       return false;
-                                    if (batteryTypeForBill === "lithium") {
-                                      // Lithium: only show if in stock (total sets > 0)
-                                      return (b.totalSets || 0) > 0;
                                     }
-                                    const stock =
+                                    const unitStock =
                                       (b.totalSets || 0) *
                                         (b.batteriesPerSet || 0) +
                                       (b.openBatteries || 0);
-                                    return stock >= batteryRequiredCount;
+                                    if (batteryTypeForBill === "lithium") {
+                                      // Lithium: any units in stock (open-only stock uses openBatteries when batteriesPerSet is 0)
+                                      return unitStock > 0;
+                                    }
+                                    return unitStock >= batteryRequiredCount;
                                   }
                                 );
                                 const availableBatteries =
@@ -1795,20 +1909,10 @@ export default function NewBill({
                     Model selling price
                   </div>
                   <div style={{ fontSize: "0.95rem", color: "#075985" }}>
-                    ₹{(selectedModel.sellingPrice ?? 0).toLocaleString("en-IN")}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "0.9rem",
-                      color: "#0369a1",
-                      marginTop: "0.25rem",
-                    }}
-                  >
-                    Price set for{" "}
-                    {selectedModel.batteriesPerSet ??
-                      selectedModel.stockEntries?.[0]?.batteriesPerSet ??
-                      "—"}{" "}
-                    batteries
+                    ₹
+                    {modelSellingBatteryBreakdown.suggested.toLocaleString(
+                      "en-IN"
+                    )}
                   </div>
                 </div>
               )}
@@ -1822,8 +1926,10 @@ export default function NewBill({
                     value={sellingPrice}
                     onChange={(e) => setSellingPrice(e.target.value)}
                     placeholder={
-                      selectedModel
-                        ? (selectedModel.sellingPrice ?? 0).toString()
+                      selectedModel &&
+                      selectedModel.sellingPrice != null &&
+                      selectedModel.sellingPrice !== ""
+                        ? String(modelSellingBatteryBreakdown.suggested)
                         : "0"
                     }
                   />
@@ -1835,7 +1941,7 @@ export default function NewBill({
                     value={discount}
                     readOnly
                     className="readonly"
-                    title="Auto-calculated: Selling price − Net amount"
+                    title="Auto: Selling price − (Amount paid + Old scooty price)"
                   />
                 </div>
                 <div className="form-group net-amount-group">
@@ -2367,6 +2473,15 @@ export default function NewBill({
                     </div>
                   ))}
                 </div>
+              )}
+              {error && (
+                <p
+                  className="bill-form-error"
+                  role="alert"
+                  style={{ marginBottom: "0.75rem" }}
+                >
+                  {error}
+                </p>
               )}
               <div className="bill-form-actions">
                 <button

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaSearch } from "react-icons/fa";
 import DatePicker from "../../components/DatePicker";
 
@@ -91,6 +91,8 @@ function getAccessoryDisplay(bill) {
 
 export default function AllBills() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const focusBillId = (searchParams.get("billId") || "").trim();
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -132,6 +134,15 @@ export default function AllBills() {
   useEffect(() => {
     fetchBills();
   }, []);
+
+  useEffect(() => {
+    if (!focusBillId || loading) return;
+    const rafId = requestAnimationFrame(() => {
+      const el = document.getElementById(`bill-card-${focusBillId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [focusBillId, loading, bills]);
 
   const fetchBills = async () => {
     try {
@@ -573,7 +584,7 @@ export default function AllBills() {
             // Bill-owned services are edited in the Service modal.
 
             return (
-              <div key={bill._id} className="bills-card">
+              <div key={bill._id} id={`bill-card-${bill._id}`} className="bills-card">
                 <div className="bills-card-header">
                   <h3 className="bills-card-title">Bill No. – {bill.billNo && bill.billNo.trim() ? bill.billNo : "—"}</h3>
                   <div className="bills-card-header-meta">
