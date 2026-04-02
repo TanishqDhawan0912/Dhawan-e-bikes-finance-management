@@ -113,6 +113,9 @@ export default function Admin() {
   /** Finance jobcards profit — full FIFO breakdown in overlay */
   const [financeJobcardProfitModalJobcard, setFinanceJobcardProfitModalJobcard] =
     useState(null);
+  /** Finance bills profit — full breakdown in overlay */
+  const [financeBillProfitModalBill, setFinanceBillProfitModalBill] =
+    useState(null);
   const [models, setModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState("");
@@ -1889,38 +1892,39 @@ export default function Admin() {
     const revenue = billRevenue(bill);
     const costBreakdown = [];
 
-    const modelCost = getModelUnitCost(bill?.modelId);
+    // Model profit rule:
+    // profit = customer paid - adjusted model purchase price - accessory purchase costs
+    // Adjustment: ₹2000 × (soldBatteryUnits - purchasedBatteryUnits) for lead battery setups.
+    const baseModelCost = getModelUnitCost(bill?.modelId);
+    const modelDoc = Array.isArray(models)
+      ? models.find((x) => String(x._id) === String(bill?.modelId))
+      : null;
+    const purchasedBatteryUnits = modelDoc
+      ? Number(modelDoc.batteriesPerSet) || 0
+      : 0;
+    const batteryType = String(bill?.batteryTypeForBill || "").toLowerCase();
+    const batteryV = String(bill?.batteryVoltageForBill || "");
+    const soldBatteryUnits =
+      bill?.withBattery && batteryType === "lead"
+        ? batteryV.includes("72")
+          ? 6
+          : batteryV.includes("60")
+          ? 5
+          : batteryV.includes("48")
+          ? 4
+          : 0
+        : null;
+    const modelBatteryAdjustment =
+      soldBatteryUnits != null &&
+      purchasedBatteryUnits > 0 &&
+      soldBatteryUnits > 0
+        ? (soldBatteryUnits - purchasedBatteryUnits) * 2000
+        : 0;
+    const modelCost = (Number(baseModelCost) || 0) + modelBatteryAdjustment;
     costBreakdown.push({
       label: bill?.modelPurchased ? `Model: ${bill.modelPurchased}` : "Model",
       cost: modelCost,
     });
-
-    if (bill?.withBattery && bill?.batteryId && bill?.batteryId !== "custom") {
-      const type = String(bill?.batteryTypeForBill || "").toLowerCase();
-      const v = String(bill?.batteryVoltageForBill || "");
-      const units =
-        type === "lead"
-          ? v.includes("72")
-            ? 6
-            : v.includes("60")
-            ? 5
-            : v.includes("48")
-            ? 4
-            : 0
-          : 1;
-      const unitCost = getBatteryUnitCost(bill.batteryId);
-      costBreakdown.push({
-        label: `Battery (${bill?.batteryName || "N/A"})`,
-        cost: (Number(units) || 0) * unitCost,
-      });
-    }
-
-    if (bill?.withCharger && bill?.chargerId && bill?.chargerId !== "custom") {
-      costBreakdown.push({
-        label: `Charger (${bill?.chargerName || "N/A"})`,
-        cost: getChargerUnitCost(bill.chargerId),
-      });
-    }
 
     if (Array.isArray(bill?.accessoryDetails) && bill.accessoryDetails.length > 0) {
       bill.accessoryDetails.forEach((a) => {
@@ -1943,6 +1947,14 @@ export default function Admin() {
       customerName: bill?.customerName || "N/A",
       revenue,
       costBreakdown,
+      modelMeta: {
+        modelName: bill?.modelPurchased || "",
+        baseModelCost: Number(baseModelCost) || 0,
+        purchasedBatteryUnits: Number(purchasedBatteryUnits) || 0,
+        soldBatteryUnits: soldBatteryUnits != null ? Number(soldBatteryUnits) || 0 : null,
+        batteryAdjustment: Number(modelBatteryAdjustment) || 0,
+        adjustedModelCost: Number(modelCost) || 0,
+      },
       totalCost,
       profit,
     };
@@ -4141,8 +4153,7 @@ export default function Admin() {
                       Bills — profit breakdown
                     </div>
                     <div style={{ fontSize: "0.85rem", color: "#666", marginTop: "0.25rem" }}>
-                      {financePeriodLabel} · net revenue minus model, battery, charger, and
-                      accessories cost
+                      {financePeriodLabel} · revenue minus model (battery adjustment) and accessories cost
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
@@ -4299,6 +4310,23 @@ export default function Admin() {
                                 ₹{(b.profit || 0).toLocaleString("en-IN")}
                               </div>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => setFinanceBillProfitModalBill(b)}
+                              style={{
+                                marginTop: "0.6rem",
+                                padding: "0.35rem 0.75rem",
+                                fontSize: "0.8125rem",
+                                fontWeight: 600,
+                                color: "#1d4ed8",
+                                background: "#fff",
+                                border: "1px solid #93c5fd",
+                                borderRadius: "0.375rem",
+                                cursor: "pointer",
+                              }}
+                            >
+                              View details
+                            </button>
                           </div>
                         </details>
                       ))}
@@ -4312,6 +4340,228 @@ export default function Admin() {
                 </div>
               </div>
               )}
+
+              {financeBillProfitModalBill &&
+                (() => {
+                  const b = financeBillProfitModalBill;
+                  const m = b.modelMeta || {};
+                  return (
+                    <div
+                      style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(15, 23, 42, 0.45)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 100,
+                        padding: "1rem",
+                      }}
+                      onClick={() => setFinanceBillProfitModalBill(null)}
+                    >
+                      <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="finance-bill-profit-modal-title"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          backgroundColor: "#fff",
+                          borderRadius: "0.75rem",
+                          maxWidth: "720px",
+                          width: "100%",
+                          maxHeight: "min(90vh, 900px)",
+                          overflowY: "auto",
+                          boxShadow:
+                            "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
+                          padding: "1.25rem 1.5rem",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            gap: "1rem",
+                            marginBottom: "1rem",
+                          }}
+                        >
+                          <div>
+                            <div
+                              style={{
+                                fontSize: "0.72rem",
+                                color: "#64748b",
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.06em",
+                              }}
+                            >
+                              Profit breakdown
+                            </div>
+                            <h2
+                              id="finance-bill-profit-modal-title"
+                              style={{
+                                margin: "0.25rem 0 0",
+                                fontSize: "1.15rem",
+                                fontWeight: 700,
+                                color: "#111827",
+                              }}
+                            >
+                              Bill {b.billNo}
+                            </h2>
+                            <div
+                              style={{
+                                fontSize: "0.85rem",
+                                color: "#64748b",
+                                marginTop: "0.2rem",
+                              }}
+                            >
+                              {b.customerName}{" "}
+                              <span style={{ color: "#cbd5e1" }}>·</span>{" "}
+                              {b.billDate}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFinanceBillProfitModalBill(null)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              fontSize: "1.5rem",
+                              lineHeight: 1,
+                              cursor: "pointer",
+                              color: "#6b7280",
+                              padding: "0.25rem",
+                            }}
+                            aria-label="Close"
+                          >
+                            ×
+                          </button>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 160px",
+                            gap: "0.5rem 1rem",
+                            fontSize: "0.95rem",
+                            alignItems: "center",
+                          }}
+                        >
+                          <div style={{ color: "#374151", fontWeight: 800 }}>
+                            Revenue (Net Amount)
+                          </div>
+                          <div style={{ textAlign: "right", fontWeight: 800 }}>
+                            ₹{(b.revenue || 0).toLocaleString("en-IN")}
+                          </div>
+
+                          <div
+                            style={{
+                              gridColumn: "1 / -1",
+                              height: "1px",
+                              background: "#e5e7eb",
+                              margin: "0.25rem 0",
+                            }}
+                          />
+
+                          <div style={{ color: "#111827", fontWeight: 800 }}>
+                            Model cost (adjusted)
+                          </div>
+                          <div style={{ textAlign: "right", fontWeight: 800 }}>
+                            ₹{(Number(m.adjustedModelCost) || 0).toLocaleString("en-IN")}
+                          </div>
+
+                          <div style={{ color: "#64748b", fontSize: "0.88rem" }}>
+                            Base purchase
+                          </div>
+                          <div style={{ textAlign: "right", color: "#64748b", fontSize: "0.88rem" }}>
+                            ₹{(Number(m.baseModelCost) || 0).toLocaleString("en-IN")}
+                          </div>
+
+                          {m.soldBatteryUnits != null && (Number(m.purchasedBatteryUnits) || 0) > 0 ? (
+                            <>
+                              <div style={{ color: "#64748b", fontSize: "0.88rem" }}>
+                                Battery adjustment
+                              </div>
+                              <div
+                                style={{
+                                  textAlign: "right",
+                                  color: (Number(m.batteryAdjustment) || 0) >= 0 ? "#16a34a" : "#dc2626",
+                                  fontSize: "0.88rem",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {`₹${(Number(m.batteryAdjustment) || 0).toLocaleString("en-IN")}`}
+                              </div>
+                              <div
+                                style={{
+                                  gridColumn: "1 / -1",
+                                  color: "#94a3b8",
+                                  fontSize: "0.82rem",
+                                  marginTop: "-0.2rem",
+                                }}
+                              >
+                                ₹2000 × (sold {Number(m.soldBatteryUnits)} − purchased {Number(m.purchasedBatteryUnits)})
+                              </div>
+                            </>
+                          ) : null}
+
+                          {Array.isArray(b.costBreakdown) && b.costBreakdown.length > 1 ? (
+                            <>
+                              <div
+                                style={{
+                                  gridColumn: "1 / -1",
+                                  height: "1px",
+                                  background: "#e5e7eb",
+                                  margin: "0.25rem 0",
+                                }}
+                              />
+                              <div style={{ gridColumn: "1 / -1", fontWeight: 800, color: "#111827" }}>
+                                Accessories
+                              </div>
+                              {b.costBreakdown
+                                .filter((x) => String(x.label || "").toLowerCase().includes("accessory"))
+                                .map((c, idx) => (
+                                  <React.Fragment key={`${b.id}-acc-${idx}`}>
+                                    <div style={{ color: "#374151" }}>{c.label}</div>
+                                    <div style={{ textAlign: "right", color: "#111827" }}>
+                                      ₹{(Number(c.cost) || 0).toLocaleString("en-IN")}
+                                    </div>
+                                  </React.Fragment>
+                                ))}
+                            </>
+                          ) : null}
+
+                          <div
+                            style={{
+                              gridColumn: "1 / -1",
+                              height: "1px",
+                              background: "#e5e7eb",
+                              margin: "0.25rem 0",
+                            }}
+                          />
+
+                          <div style={{ fontWeight: 900, color: "#111827" }}>
+                            Total Cost
+                          </div>
+                          <div style={{ textAlign: "right", fontWeight: 900 }}>
+                            ₹{(b.totalCost || 0).toLocaleString("en-IN")}
+                          </div>
+
+                          <div style={{ fontWeight: 900, color: "#111827" }}>Profit</div>
+                          <div
+                            style={{
+                              textAlign: "right",
+                              fontWeight: 900,
+                              color: b.profit >= 0 ? "#16a34a" : "#dc2626",
+                            }}
+                          >
+                            ₹{(b.profit || 0).toLocaleString("en-IN")}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
               {/* Jobcards Profit (full section) */}
               {financeSubView === "jobcards" && (

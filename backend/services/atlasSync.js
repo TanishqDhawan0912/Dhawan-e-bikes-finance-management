@@ -33,8 +33,8 @@ function scheduleSyncLogPersist(result) {
           typeof result.deletedByCollection === "object"
             ? { ...result.deletedByCollection }
             : {},
-        errors: Array.isArray(result.errors)
-          ? result.errors.slice(0, MAX_ERRORS_IN_SYNC_LOG)
+        syncErrors: Array.isArray(result.syncErrors)
+          ? result.syncErrors.slice(0, MAX_ERRORS_IN_SYNC_LOG)
           : [],
       };
       SyncLog.create(payload).catch((err) => {
@@ -141,9 +141,9 @@ async function syncAllLocalToAtlas() {
       deletedFromAtlas: 0,
       deletedByCollection: {},
       durationMs: 0,
-      errors: [
+      syncErrors: [
         {
-          collection: "",
+          collectionName: "",
           id: "",
           message: "Sync already in progress",
         },
@@ -166,7 +166,7 @@ async function syncAllLocalToAtlas() {
     deletedFromAtlas: 0,
     deletedByCollection: {},
     durationMs: 0,
-    errors: [],
+    syncErrors: [],
   };
 
   try {
@@ -198,9 +198,9 @@ async function syncAllLocalToAtlas() {
         console.error(`[Sync] FAILURE querying local ${name}:`, err.message);
         result.success = false;
         result.failed += 1;
-        if (result.errors.length < MAX_ERRORS_IN_RESPONSE) {
-          result.errors.push({
-            collection: name,
+        if (result.syncErrors.length < MAX_ERRORS_IN_RESPONSE) {
+          result.syncErrors.push({
+            collectionName: name,
             id: "",
             message: `find failed: ${err.message}`,
           });
@@ -224,9 +224,9 @@ async function syncAllLocalToAtlas() {
           console.error(`[Sync] FAILURE prefetch Atlas ${name}:`, err.message);
           result.success = false;
           result.failed += 1;
-          if (result.errors.length < MAX_ERRORS_IN_RESPONSE) {
-            result.errors.push({
-              collection: name,
+          if (result.syncErrors.length < MAX_ERRORS_IN_RESPONSE) {
+            result.syncErrors.push({
+              collectionName: name,
               id: "",
               message: `Atlas prefetch: ${err.message}`,
             });
@@ -269,9 +269,9 @@ async function syncAllLocalToAtlas() {
           result.success = false;
           const idStr = String(doc._id);
           console.error(`[Sync] FAILURE ${name} ${idStr}:`, err.message);
-          if (result.errors.length < MAX_ERRORS_IN_RESPONSE) {
-            result.errors.push({
-              collection: name,
+          if (result.syncErrors.length < MAX_ERRORS_IN_RESPONSE) {
+            result.syncErrors.push({
+              collectionName: name,
               id: idStr,
               message: err.message,
             });
@@ -303,9 +303,9 @@ async function syncAllLocalToAtlas() {
       } catch (err) {
         result.success = false;
         console.error(`[Sync] FAILURE Atlas cleanup ${name}:`, err.message);
-        if (result.errors.length < MAX_ERRORS_IN_RESPONSE) {
-          result.errors.push({
-            collection: name,
+        if (result.syncErrors.length < MAX_ERRORS_IN_RESPONSE) {
+          result.syncErrors.push({
+            collectionName: name,
             id: "",
             message: `Atlas cleanup: ${err.message}`,
           });

@@ -17,7 +17,7 @@ const syncNow = async (req, res) => {
       deletedFromAtlas: stats.deletedFromAtlas,
       deletedByCollection: stats.deletedByCollection,
       durationMs: stats.durationMs,
-      errors: stats.errors,
+      syncErrors: stats.syncErrors,
     };
 
     if (!stats.atlasAvailable) {
@@ -44,7 +44,7 @@ const syncNow = async (req, res) => {
       deletedFromAtlas: 0,
       deletedByCollection: {},
       durationMs: 0,
-      errors: [{ collection: "", id: "", message: err.message }],
+      syncErrors: [{ collectionName: "", id: "", message: err.message }],
     });
   }
 };

@@ -773,12 +773,46 @@ export default function AllBills() {
                 >
                   {showPassword ? (
                     <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm10 5a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
-                      <path d="M4.1 4.1 19.9 19.9" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+                      <path
+                        d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7Z"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M10.5 10.5a3 3 0 0 0 4 4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M6 6l12 12"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      />
                     </svg>
                   ) : (
                     <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm10 5a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
+                      <path
+                        d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7Z"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      />
                     </svg>
                   )}
                 </button>
@@ -788,6 +822,7 @@ export default function AllBills() {
                 <button
                   type="button"
                   className="bills-btn-secondary"
+                  style={jobcardStyleButtons.printEdit}
                   onClick={() => {
                     setShowPasswordModal(false);
                     setBillToDelete(null);
@@ -798,7 +833,12 @@ export default function AllBills() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="bills-btn-primary" disabled={validatingPassword} style={{ background: "#dc2626", boxShadow: "0 2px 8px rgba(220,38,38,0.3)" }}>
+                <button
+                  type="submit"
+                  className="bills-btn-primary"
+                  disabled={validatingPassword}
+                  style={jobcardStyleButtons.delete}
+                >
                   {validatingPassword ? "Checking..." : "Delete"}
                 </button>
               </div>

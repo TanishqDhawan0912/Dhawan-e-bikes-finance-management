@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const softDeletePlugin = require("./plugins/softDelete");
 
 const VALID_VOLTAGES = ["48V", "60V", "72V"];
 const VALID_BATTERY_TYPES = ["lead", "lithium"];
@@ -57,6 +58,8 @@ const oldChargerSchema = new mongoose.Schema(
     versionKey: false,
   }
 );
+
+oldChargerSchema.plugin(softDeletePlugin);
 
 // Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
 oldChargerSchema.index({ createdAt: 1 });

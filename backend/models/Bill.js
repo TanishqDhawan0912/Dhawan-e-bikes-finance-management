@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const softDeletePlugin = require("./plugins/softDelete");
 
 const paymentEntrySchema = new mongoose.Schema({
   amount: { type: Number, required: true, min: 0 },
@@ -96,6 +97,8 @@ const billSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+billSchema.plugin(softDeletePlugin);
 
 // Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
 billSchema.index({ createdAt: 1 });

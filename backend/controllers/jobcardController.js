@@ -424,7 +424,11 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
         (row) => normalizePmcNoForMatch(row?.pmcNo || "") === pmcKey
       );
       if (scooty) {
-        await OldScooty.deleteOne({ _id: scooty._id });
+        await OldScooty.updateOne(
+          { _id: scooty._id },
+          { $set: { isDeleted: true } }
+        );
+        console.log("[soft-delete] OldScooty (jobcard sale):", String(scooty._id));
         jobcard.consumedOldScooties.push(scooty);
       }
     }
@@ -580,7 +584,11 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
           .sort({ entryDate: 1, createdAt: 1 })
           .lean();
         if (row) {
-          await OldCharger.deleteOne({ _id: row._id });
+          await OldCharger.updateOne(
+            { _id: row._id },
+            { $set: { isDeleted: true } }
+          );
+          console.log("[soft-delete] OldCharger (jobcard sale):", String(row._id));
           jobcard.consumedOldChargers.push({
             voltage: row.voltage,
             batteryType: row.batteryType,
@@ -878,7 +886,11 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
   if (mode === "restore") {
     // 1) Remove entries that were added by this jobcard through scrapAvailable.
     if (jobcardNumber) {
-      await BatteryScrap.deleteMany({ jobcardNumber });
+      await BatteryScrap.updateMany(
+        { jobcardNumber },
+        { $set: { isDeleted: true } }
+      );
+      console.log("[soft-delete] BatteryScrap (jobcard restore):", jobcardNumber);
     }
 
     // 2) Re-add units that were consumed from existing scrap stock.
@@ -969,7 +981,11 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
 
         const left = cur - take;
         if (left <= 0) {
-          await BatteryScrap.deleteOne({ _id: d._id });
+          await BatteryScrap.updateOne(
+            { _id: d._id },
+            { $set: { isDeleted: true } }
+          );
+          console.log("[soft-delete] BatteryScrap (consumed):", String(d._id));
         } else {
           await BatteryScrap.updateOne(
             { _id: d._id },
@@ -1049,7 +1065,11 @@ const adjustOldChargerEntriesForReplacementChargers = async (
         const vk = summaryKeyForVoltage(row.voltage);
         await adjustOldChargerSummaryByStatusDelta(vk, row.status, -1);
       }
-      await OldCharger.deleteMany({ jobcardNumber });
+      await OldCharger.updateMany(
+        { jobcardNumber },
+        { $set: { isDeleted: true } }
+      );
+      console.log("[soft-delete] OldCharger (jobcard restore):", jobcardNumber);
     }
 
     const consumed = jobcard.consumedOldChargers || [];
@@ -1122,7 +1142,14 @@ const adjustOldChargerEntriesForReplacementChargers = async (
       .lean();
 
     if (docs.length) {
-      await OldCharger.deleteMany({ _id: { $in: docs.map((d) => d._id) } });
+      await OldCharger.updateMany(
+        { _id: { $in: docs.map((d) => d._id) } },
+        { $set: { isDeleted: true } }
+      );
+      console.log(
+        "[soft-delete] OldCharger (stock sale consumed):",
+        docs.length
+      );
 
       if (!jobcard.consumedOldChargers) jobcard.consumedOldChargers = [];
       for (const d of docs) {
@@ -1722,8 +1749,12 @@ const deleteJobcard = async (req, res) => {
       }
     }
 
-    await jobcard.deleteOne();
-    res.json({ message: "Jobcard deleted successfully" });
+    await Jobcard.updateOne(
+      { _id: req.params.id },
+      { $set: { isDeleted: true, inventoryAdjusted: false } }
+    );
+    console.log("[soft-delete] Jobcard:", req.params.id);
+    res.json({ message: "Jobcard soft deleted successfully" });
   } catch (error) {
     console.error("Error deleting jobcard:", error);
     res.status(500).json({ message: "Server error", error: error.message });

@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const syncLogErrorSchema = new mongoose.Schema(
   {
-    collection: { type: String, default: "" },
+    collectionName: { type: String, default: "" },
     id: { type: String, default: "" },
     message: { type: String, default: "" },
   },
@@ -24,7 +24,7 @@ const syncLogSchema = new mongoose.Schema(
     deletedFromAtlas: { type: Number, default: 0 },
     durationMs: { type: Number, default: 0 },
     deletedByCollection: { type: mongoose.Schema.Types.Mixed, default: {} },
-    errors: { type: [syncLogErrorSchema], default: [] },
+    syncErrors: { type: [syncLogErrorSchema], default: [] },
   },
   { timestamps: false, versionKey: false }
 );
@@ -33,9 +33,7 @@ const syncLogSchema = new mongoose.Schema(
 const SYNC_LOG_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 // TTL on runAt: only rows with runAt older than 30 days are removed; recent logs stay.
-syncLogSchema.index(
-  { runAt: 1 },
-  { expireAfterSeconds: SYNC_LOG_TTL_SECONDS }
-);
+syncLogSchema.index({ runAt: 1 }, { expireAfterSeconds: SYNC_LOG_TTL_SECONDS });
 
 module.exports = mongoose.model("SyncLog", syncLogSchema);
+

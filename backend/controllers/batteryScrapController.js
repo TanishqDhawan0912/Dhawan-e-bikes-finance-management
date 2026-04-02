@@ -94,8 +94,9 @@ const deleteBatteryScrap = async (req, res) => {
     if (!scrap) {
       return res.status(404).json({ message: "Scrap entry not found" });
     }
-    await BatteryScrap.deleteOne({ _id: id });
-    return res.status(200).json({ message: "Deleted", id });
+    await BatteryScrap.updateOne({ _id: id }, { $set: { isDeleted: true } });
+    console.log("[soft-delete] BatteryScrap:", id);
+    return res.status(200).json({ message: "Soft deleted", id });
   } catch (error) {
     console.error("Error deleting battery scrap:", error);
     return res

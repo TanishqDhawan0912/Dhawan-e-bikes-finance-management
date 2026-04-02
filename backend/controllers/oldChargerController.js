@@ -101,16 +101,18 @@ const getOldChargers = async (req, res) => {
 const deleteOldCharger = async (req, res) => {
   try {
     const { id } = req.params;
-    const deleted = await OldCharger.findByIdAndDelete(id);
-    if (!deleted) {
+    const existing = await OldCharger.findById(id);
+    if (!existing) {
       return res.status(404).json({ message: "Old charger entry not found" });
     }
+    await OldCharger.updateOne({ _id: id }, { $set: { isDeleted: true } });
+    console.log("[soft-delete] OldCharger:", id);
     await adjustOldChargerSummaryByStatusDelta(
-      summaryKeyForVoltage(deleted.voltage),
-      deleted.status,
+      summaryKeyForVoltage(existing.voltage),
+      existing.status,
       -1
     );
-    return res.status(200).json({ message: "Deleted", id: deleted._id });
+    return res.status(200).json({ message: "Soft deleted", id });
   } catch (error) {
     console.error("Error deleting old charger:", error);
     return res

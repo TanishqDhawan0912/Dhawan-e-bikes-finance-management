@@ -33,6 +33,7 @@ const oldScootyRoutes = require("./routes/oldScootyRoutes");
 const jobcardRoutes = require("./routes/jobcardRoutes");
 const billRoutes = require("./routes/billRoutes");
 const syncRoutes = require("./routes/syncRoutes");
+const restoreRoutes = require("./routes/restoreRoutes");
 require("./models/SyncLog");
 
 // Use routes
@@ -50,6 +51,7 @@ app.use("/api/old-scooties", oldScootyRoutes);
 app.use("/api/jobcards", jobcardRoutes);
 app.use("/api/bills", billRoutes);
 app.use(syncRoutes);
+app.use(restoreRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

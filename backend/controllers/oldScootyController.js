@@ -42,7 +42,10 @@ const upsertBatteryAndChargerEntriesForOldScooty = async (oldScootyDoc) => {
   if (!oldScootyDoc?._id) return;
 
   // Remove previous linked entries (idempotent for create+edit flows).
-  await BatteryScrap.deleteMany({ oldScootyId: oldScootyDoc._id });
+  await BatteryScrap.updateMany(
+    { oldScootyId: oldScootyDoc._id },
+    { $set: { isDeleted: true } }
+  );
 
   const prevChargers = await OldCharger.find({
     oldScootyId: oldScootyDoc._id,
@@ -55,7 +58,10 @@ const upsertBatteryAndChargerEntriesForOldScooty = async (oldScootyDoc) => {
         -1
       );
     }
-    await OldCharger.deleteMany({ oldScootyId: oldScootyDoc._id });
+    await OldCharger.updateMany(
+      { oldScootyId: oldScootyDoc._id },
+      { $set: { isDeleted: true } }
+    );
   }
 
   const entryDate = oldScootyDoc.entryDate ? new Date(oldScootyDoc.entryDate) : new Date();
@@ -458,7 +464,10 @@ const deleteOldScooty = async (req, res) => {
 
     // Remove linked old battery/charger entries (since the scooty is deleted).
     try {
-      await BatteryScrap.deleteMany({ oldScootyId: existing._id });
+      await BatteryScrap.updateMany(
+        { oldScootyId: existing._id },
+        { $set: { isDeleted: true } }
+      );
       const prevChargers = await OldCharger.find({
         oldScootyId: existing._id,
       }).lean();
@@ -471,7 +480,10 @@ const deleteOldScooty = async (req, res) => {
           );
         }
       }
-      await OldCharger.deleteMany({ oldScootyId: existing._id });
+      await OldCharger.updateMany(
+        { oldScootyId: existing._id },
+        { $set: { isDeleted: true } }
+      );
     } catch (invErr) {
       console.error(
         "Error removing old battery/charger entries while deleting old scooty:",
@@ -479,8 +491,14 @@ const deleteOldScooty = async (req, res) => {
       );
     }
 
-    await existing.deleteOne();
-    return res.status(200).json({ message: "Old scooty deleted successfully" });
+    await OldScooty.updateOne(
+      { _id: existing._id },
+      { $set: { isDeleted: true } }
+    );
+    console.log("[soft-delete] OldScooty:", String(existing._id));
+    return res
+      .status(200)
+      .json({ message: "Old scooty soft deleted successfully" });
   } catch (error) {
     console.error("Error deleting old scooty:", error);
     return res

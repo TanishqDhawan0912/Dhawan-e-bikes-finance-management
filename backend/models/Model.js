@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const softDeletePlugin = require("./plugins/softDelete");
 
 const modelSchema = new mongoose.Schema(
   {
@@ -213,6 +214,8 @@ modelSchema.pre("save", function (next) {
   }
   next();
 });
+
+modelSchema.plugin(softDeletePlugin);
 
 // Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
 modelSchema.index({ createdAt: 1 });

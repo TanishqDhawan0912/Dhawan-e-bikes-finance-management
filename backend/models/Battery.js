@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const softDeletePlugin = require("./plugins/softDelete");
 
 const batterySchema = new mongoose.Schema(
   {
@@ -99,6 +100,8 @@ const batterySchema = new mongoose.Schema(
     versionKey: false,
   }
 );
+
+batterySchema.plugin(softDeletePlugin);
 
 // Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
 batterySchema.index({ createdAt: 1 });

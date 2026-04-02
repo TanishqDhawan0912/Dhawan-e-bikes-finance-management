@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const softDeletePlugin = require("./plugins/softDelete");
 
 const spareSchema = new mongoose.Schema(
   {
@@ -113,6 +114,8 @@ const spareSchema = new mongoose.Schema(
     versionKey: false,
   }
 );
+
+spareSchema.plugin(softDeletePlugin);
 
 // Virtual field to calculate total quantity from stockEntries
 spareSchema.virtual("totalQuantity").get(function () {

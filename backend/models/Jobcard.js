@@ -5,6 +5,7 @@
  * Atlas connection — see config/database.js. No separate Job collection or model.
  */
 const mongoose = require("mongoose");
+const softDeletePlugin = require("./plugins/softDelete");
 
 const jobcardPartSchema = new mongoose.Schema({
   // For normal parts this references a Spare document.
@@ -397,6 +398,8 @@ const jobcardSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+jobcardSchema.plugin(softDeletePlugin);
 
 // Atlas/local sync: candidate query uses createdAt >= cutoff (6-month window).
 jobcardSchema.index({ createdAt: 1 });

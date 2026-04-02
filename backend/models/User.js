@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const softDeletePlugin = require("./plugins/softDelete");
 
 const userSchema = new mongoose.Schema(
   {
@@ -47,6 +48,8 @@ const userSchema = new mongoose.Schema(
     toObject: { virtuals: true },
   }
 );
+
+userSchema.plugin(softDeletePlugin);
 
 // Encrypt password using bcrypt
 userSchema.pre("save", async function (next) {
