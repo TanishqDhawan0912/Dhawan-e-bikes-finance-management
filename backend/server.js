@@ -5,6 +5,10 @@ const morgan = require("morgan");
 const cron = require("node-cron");
 const { connectMongoDatabases } = require("./config/database");
 const { syncAllLocalToAtlas } = require("./services/atlasSync");
+const {
+  startBackupScheduler,
+  stopBackupScheduler,
+} = require("./services/mongoBackup");
 
 const app = express();
 
@@ -119,10 +123,23 @@ if (!Number.isInteger(PORT) || PORT <= 0 || PORT > 65535) {
       });
       console.log(`[Sync] Recurring sync scheduled: SYNC_CRON="${cronExpr}"`);
     }
+
+    startBackupScheduler({ runOnStart: true });
   });
 
   server.on("error", (err) => {
     console.error("Server error:", err);
     process.exit(1);
   });
+
+  const shutdown = () => {
+    try {
+      stopBackupScheduler();
+    } catch (_) {
+      /* ignore */
+    }
+    server.close(() => process.exit(0));
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 })();
