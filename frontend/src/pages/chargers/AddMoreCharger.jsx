@@ -5,6 +5,7 @@ import {
   formatDate,
   formatDateForInput,
 } from "../../utils/dateUtils";
+import { API_BASE } from "../../config/api";
 import DatePicker from "../../components/DatePicker";
 
 /** Batch size when bought; unchanged when jobcards deduct stock (FIFO). */
@@ -52,7 +53,7 @@ export default function AddMoreCharger() {
   const fetchcharger = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:5000/api/chargers/${id}`);
+      const res = await fetch(`${API_BASE}/chargers/${id}`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.message || "Error fetching charger");
@@ -83,7 +84,7 @@ export default function AddMoreCharger() {
       if (totalQuantity <= 0) return;
 
       try {
-        const res = await fetch(`http://localhost:5000/api/chargers/${id}`, {
+        const res = await fetch(`${API_BASE}/chargers/${id}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
@@ -161,7 +162,7 @@ export default function AddMoreCharger() {
     setPasswordError("");
 
     try {
-      const response = await fetch("http://localhost:5000/api/admin/auth", {
+      const response = await fetch(`${API_BASE}/admin/auth`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -351,7 +352,7 @@ export default function AddMoreCharger() {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/chargers/${id}`, {
+      const res = await fetch(`${API_BASE}/chargers/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -463,7 +464,7 @@ export default function AddMoreCharger() {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/chargers/${id}`, {
+      const res = await fetch(`${API_BASE}/chargers/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

@@ -2,9 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { getTodayForInput } from "../../utils/dateUtils";
 import DatePicker from "../../components/DatePicker";
-
-const API = "http://localhost:5000/api";
-
+import { API_BASE } from "../../config/api";
 const MAIN_TABS = [
   { id: "customer", label: "Customer Details" },
   { id: "model", label: "Model Details" },
@@ -546,11 +544,11 @@ export default function NewBill({
     (async () => {
       try {
         const [modelsRes, batteriesRes, chargersRes] = await Promise.all([
-          fetch(`${API}/models?limit=2000`, {
+          fetch(`${API_BASE}/models?limit=2000`, {
             headers: { Referer: `${window.location.origin}/admin` },
           }),
-          fetch(`${API}/batteries`),
-          fetch(`${API}/chargers`),
+          fetch(`${API_BASE}/batteries`),
+          fetch(`${API_BASE}/chargers`),
         ]);
         if (modelsRes.ok) {
           const data = await modelsRes.json();
@@ -1033,7 +1031,7 @@ export default function NewBill({
       };
       const isEdit = mode === "edit";
       const res = await fetch(
-        isEdit ? `${API}/bills/${billId}` : `${API}/bills`,
+        isEdit ? `${API_BASE}/bills/${billId}` : `${API_BASE}/bills`,
         {
           method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -2239,7 +2237,7 @@ export default function NewBill({
                     }
                     try {
                       const res = await fetch(
-                        `${API}/spares/suggestions/names?search=${encodeURIComponent(
+                        `${API_BASE}/spares/suggestions/names?search=${encodeURIComponent(
                           value.trim()
                         )}`
                       );
@@ -2296,7 +2294,7 @@ export default function NewBill({
                       setShowAccessorySuggestions(false);
                       try {
                         const res = await fetch(
-                          `${API}/spares?search=${encodeURIComponent(name)}`
+                          `${API_BASE}/spares?search=${encodeURIComponent(name)}`
                         );
                         const data = await res.json();
                         if (res.ok && Array.isArray(data) && data.length > 0) {
@@ -2351,7 +2349,7 @@ export default function NewBill({
                             try {
                               // Fetch full spare details by name via search
                               const res = await fetch(
-                                `${API}/spares?search=${encodeURIComponent(
+                                `${API_BASE}/spares?search=${encodeURIComponent(
                                   name
                                 )}`
                               );

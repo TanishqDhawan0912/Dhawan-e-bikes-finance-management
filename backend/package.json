@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Backend for Finance Management System",
   "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node server.js",
     "start:all": "concurrently \"npm run start\" \"cd ../frontend && npm run dev\"",

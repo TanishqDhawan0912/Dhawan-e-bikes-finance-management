@@ -24,8 +24,16 @@ async function connectDatabase() {
       serverSelectionTimeoutMS: 10_000,
     });
     console.log("[MongoDB] Connected —", maskMongoUri(uri));
+
+    mongoose.connection.on("error", (err) => {
+      console.error("[MongoDB] Runtime connection error:", err?.message || err);
+    });
+    mongoose.connection.on("disconnected", () => {
+      console.warn("[MongoDB] Disconnected from cluster");
+    });
   } catch (err) {
-    console.error("[MongoDB] Connection FAILED —", err.message);
+    console.error("[MongoDB] Initial connection FAILED —", err?.message || err);
+    if (err?.name) console.error("[MongoDB] Error name:", err.name);
     console.error("[MongoDB] URI (masked):", maskMongoUri(uri));
     throw err;
   }

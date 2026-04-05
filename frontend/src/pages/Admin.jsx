@@ -2,6 +2,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { formatDate, getTodayForInput } from "../utils/dateUtils";
 
+import { API_BASE } from "../config/api";
 /** Parse yyyy-mm-dd to local Date (noon) for stable calendar math */
 function ymdToLocalDate(ymd) {
   const parts = String(ymd || "").split("-");
@@ -157,7 +158,7 @@ export default function Admin() {
       // Add cache-busting timestamp so latest model changes always reflect
       const timestamp = Date.now();
       const response = await fetch(
-        `http://localhost:5000/api/models?limit=1000&admin=1&t=${timestamp}`
+        `${API_BASE}/models?limit=1000&admin=1&t=${timestamp}`
       );
       const data = await response.json();
 
@@ -199,7 +200,7 @@ export default function Admin() {
       // Add cache-busting parameter to ensure fresh data
       const timestamp = Date.now();
       const response = await fetch(
-        `http://localhost:5000/api/spares?t=${timestamp}`
+        `${API_BASE}/spares?t=${timestamp}`
       );
 
       const data = await response.json();
@@ -231,7 +232,7 @@ export default function Admin() {
 
       const timestamp = Date.now();
       const response = await fetch(
-        `http://localhost:5000/api/batteries?t=${timestamp}`
+        `${API_BASE}/batteries?t=${timestamp}`
       );
       const data = await response.json();
 
@@ -262,7 +263,7 @@ export default function Admin() {
       setChargersError("");
       const timestamp = Date.now();
       const response = await fetch(
-        `http://localhost:5000/api/chargers?t=${timestamp}`
+        `${API_BASE}/chargers?t=${timestamp}`
       );
       const data = await response.json();
       if (!response.ok) {
@@ -285,7 +286,7 @@ export default function Admin() {
       setBillsError("");
       const timestamp = Date.now();
       const response = await fetch(
-        `http://localhost:5000/api/bills?t=${timestamp}`
+        `${API_BASE}/bills?t=${timestamp}`
       );
       const data = await response.json();
       if (!response.ok) {
@@ -306,7 +307,7 @@ export default function Admin() {
       setJobcardsError("");
       const timestamp = Date.now();
       const response = await fetch(
-        `http://localhost:5000/api/jobcards?status=finalized&t=${timestamp}`
+        `${API_BASE}/jobcards?status=finalized&t=${timestamp}`
       );
       const data = await response.json();
       if (!response.ok) {
@@ -327,7 +328,7 @@ export default function Admin() {
     try {
       const timestamp = Date.now();
       const response = await fetch(
-        `http://localhost:5000/api/old-scooties?t=${timestamp}`
+        `${API_BASE}/old-scooties?t=${timestamp}`
       );
       const data = await response.json();
       if (!response.ok) {
@@ -774,7 +775,7 @@ export default function Admin() {
   const updateModelPrice = async (modelId, newPrice) => {
     try {
       const response = await fetch(
-        `http://localhost:5000/api/models/${modelId}`,
+        `${API_BASE}/models/${modelId}`,
         {
           method: "PUT",
           headers: {
@@ -3748,7 +3749,7 @@ export default function Admin() {
                                         let deletedCount = 0;
                                         for (const model of group.models) {
                                           const response = await fetch(
-                                            `http://localhost:5000/api/models/${model._id}`,
+                                            `${API_BASE}/models/${model._id}`,
                                             {
                                               method: "DELETE",
                                             }

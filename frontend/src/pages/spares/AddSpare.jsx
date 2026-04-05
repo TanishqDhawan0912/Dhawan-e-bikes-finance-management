@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 // displayDate helper removed; no date UI on add spare
 
 // Separate component for portal suggestions to avoid Babel parser issues
+import { API_BASE } from "../../config/api";
 function SuggestionsPortal({
   suggestions,
   selectedIndex,
@@ -413,7 +414,7 @@ function AddSpare() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/spares/suggestions/names?search=${encodeURIComponent(
+        `${API_BASE}/spares/suggestions/names?search=${encodeURIComponent(
           searchStr
         )}`
       );
@@ -457,7 +458,7 @@ function AddSpare() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/models/suggestions?search=${encodeURIComponent(
+        `${API_BASE}/models/suggestions?search=${encodeURIComponent(
           searchStr
         )}`
       );
@@ -498,7 +499,7 @@ function AddSpare() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/spares/suggestions/suppliers?search=${encodeURIComponent(
+        `${API_BASE}/spares/suggestions/suppliers?search=${encodeURIComponent(
           searchStr
         )}`
       );
@@ -530,7 +531,7 @@ function AddSpare() {
     
     try {
       const modelsParam = JSON.stringify(selectedModels);
-      const url = `http://localhost:5000/api/spares/check-duplicate?name=${encodeURIComponent(
+      const url = `${API_BASE}/spares/check-duplicate?name=${encodeURIComponent(
         name
       )}&models=${encodeURIComponent(modelsParam)}&supplierName=${encodeURIComponent(supplier)}`;
       
@@ -762,7 +763,7 @@ function AddSpare() {
         stockEntries: [],
       };
 
-      const response = await fetch("http://localhost:5000/api/spares", {
+      const response = await fetch(`${API_BASE}/spares`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1097,7 +1098,6 @@ function AddSpare() {
                   min="0"
                   step="0.01"
                   required
-                  disabled={isDuplicate}
                   disabled={isDuplicate}
                   onWheel={(e) => e.target.blur()}
                   style={{

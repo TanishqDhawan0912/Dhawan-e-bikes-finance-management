@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
+import { API_BASE } from "../config/api";
 export default function ModelsSearch({ onSelectModel }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -20,7 +21,7 @@ export default function ModelsSearch({ onSelectModel }) {
       setIsLoading(true);
       try {
         const response = await fetch(
-          `http://localhost:5000/api/models?search=${encodeURIComponent(
+          `${API_BASE}/models?search=${encodeURIComponent(
             searchTerm
           )}&limit=10`
         );

@@ -6,6 +6,7 @@ import { useSessionTimeout } from "../../hooks/useSessionTimeout";
 
 // Separate component for portal suggestions to avoid Babel parser issues
 // Separate component for portal suggestions to avoid Babel parser issues
+import { API_BASE } from "../../config/api";
 function SuggestionsPortal({
   suggestions,
   selectedIndex,
@@ -252,7 +253,7 @@ export default function AddModel() {
     }
 
     try {
-      const checkUrl = `http://localhost:5000/api/models/check-purchase-price?modelName=${encodeURIComponent(
+      const checkUrl = `${API_BASE}/models/check-purchase-price?modelName=${encodeURIComponent(
         currentFormData.modelName
       )}&company=${encodeURIComponent(
         currentFormData.company
@@ -303,7 +304,7 @@ export default function AddModel() {
       const fetchModelData = async () => {
         try {
           const response = await fetch(
-            `http://localhost:5000/api/models/${modelId}`
+            `${API_BASE}/models/${modelId}`
           );
           const data = await response.json();
 
@@ -744,13 +745,13 @@ export default function AddModel() {
       console.log("Making API call to suggestions endpoint");
       console.log(
         "API URL:",
-        `http://localhost:5000/api/models/suggestions?search=${encodeURIComponent(
+        `${API_BASE}/models/suggestions?search=${encodeURIComponent(
           searchTerm.trim()
         )}`
       );
 
       const response = await fetch(
-        `http://localhost:5000/api/models/suggestions?search=${encodeURIComponent(
+        `${API_BASE}/models/suggestions?search=${encodeURIComponent(
           searchTerm.trim()
         )}`
       );
@@ -823,14 +824,14 @@ export default function AddModel() {
       );
       console.log(
         "API URL:",
-        `http://localhost:5000/api/models/company-suggestions?search=${encodeURIComponent(
+        `${API_BASE}/models/company-suggestions?search=${encodeURIComponent(
           searchTerm.trim()
         )}`
       );
 
       // Use the dedicated company suggestions endpoint with bulletproof logic
       const response = await fetch(
-        `http://localhost:5000/api/models/company-suggestions?search=${encodeURIComponent(
+        `${API_BASE}/models/company-suggestions?search=${encodeURIComponent(
           searchTerm.trim()
         )}`
       );
@@ -955,7 +956,7 @@ export default function AddModel() {
 
       // First test if backend is accessible
       try {
-        const testResponse = await fetch("http://localhost:5000/api/models");
+        const testResponse = await fetch(`${API_BASE}/models`);
         console.log("Backend connectivity test - status:", testResponse.status);
         if (testResponse.status !== 200) {
           throw new Error("Backend not responding correctly");
@@ -967,7 +968,7 @@ export default function AddModel() {
       }
 
       // Build the duplicate check URL (only checks model name, company, and warranty)
-      const checkUrl = `http://localhost:5000/api/models/check-duplicate?modelName=${encodeURIComponent(
+      const checkUrl = `${API_BASE}/models/check-duplicate?modelName=${encodeURIComponent(
         formData.modelName
       )}&company=${encodeURIComponent(
         formData.company
@@ -1058,7 +1059,7 @@ export default function AddModel() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("http://localhost:5000/api/models", {
+      const response = await fetch(`${API_BASE}/models`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

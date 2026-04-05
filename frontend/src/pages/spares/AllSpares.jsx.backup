@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE } from "../../config/api";
 
 export default function AllSpares() {
   const navigate = useNavigate();
@@ -13,7 +14,7 @@ export default function AllSpares() {
 
   const fetchSpares = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/spares");
+      const response = await fetch(`${API_BASE}/spares`);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -41,7 +42,7 @@ export default function AllSpares() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/spares/${spareId}`,
+        `${API_BASE}/spares/${spareId}`,
         {
           method: "DELETE",
         }

@@ -6,6 +6,7 @@ import React, {
   useMemo,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { API_BASE } from "../../config/api";
 import { formatDate } from "../../utils/dateUtils";
 
 // Helper function to display dd/mm/yyyy dates
@@ -189,7 +190,7 @@ function AddMoreStock() {
     setPasswordError("");
 
     try {
-      const response = await fetch("http://localhost:5000/api/admin/auth", {
+      const response = await fetch(`${API_BASE}/admin/auth`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -228,7 +229,7 @@ function AddMoreStock() {
 
   const fetchModelDetails = useCallback(async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/models/${id}`);
+      const response = await fetch(`${API_BASE}/models/${id}`);
       const data = await response.json();
 
       if (!response.ok) {
@@ -602,7 +603,7 @@ function AddMoreStock() {
         colorQuantities: updatedColorQuantities,
       };
 
-      const response = await fetch(`http://localhost:5000/api/models/${id}`, {
+      const response = await fetch(`${API_BASE}/models/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -779,7 +780,7 @@ function AddMoreStock() {
         colorQuantities: updatedColorQuantities,
       };
 
-      const response = await fetch(`http://localhost:5000/api/models/${id}`, {
+      const response = await fetch(`${API_BASE}/models/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -857,7 +858,7 @@ function AddMoreStock() {
         })
       );
 
-      const response = await fetch(`http://localhost:5000/api/models/${id}`, {
+      const response = await fetch(`${API_BASE}/models/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -936,7 +937,7 @@ function AddMoreStock() {
         })
       );
 
-      const response = await fetch(`http://localhost:5000/api/models/${id}`, {
+      const response = await fetch(`${API_BASE}/models/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

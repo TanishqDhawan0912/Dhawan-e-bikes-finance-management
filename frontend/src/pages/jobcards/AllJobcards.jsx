@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import JobcardPrintView from "../../components/JobcardPrintView";
 
+import { API_BASE } from "../../config/api";
 export default function AllJobcards() {
   const navigate = useNavigate();
   const [jobcards, setJobcards] = useState([]);
@@ -25,7 +26,7 @@ export default function AllJobcards() {
     try {
       setLoading(true);
       const filter = filterType === "all" ? "status=finalized" : `status=finalized&jobcardType=${filterType}`;
-      const response = await fetch(`http://localhost:5000/api/jobcards?${filter}`);
+      const response = await fetch(`${API_BASE}/jobcards?${filter}`);
       if (!response.ok) {
         throw new Error("Failed to fetch finalized jobcards");
       }
@@ -275,7 +276,7 @@ export default function AllJobcards() {
 
     try {
       // Validate password against backend admin security key
-      const response = await fetch("http://localhost:5000/api/admin/auth", {
+      const response = await fetch(`${API_BASE}/admin/auth`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -303,7 +304,7 @@ export default function AllJobcards() {
 
   const deleteJobcard = async (jobcardId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/jobcards/${jobcardId}`, {
+      const response = await fetch(`${API_BASE}/jobcards/${jobcardId}`, {
         method: "DELETE",
       });
 

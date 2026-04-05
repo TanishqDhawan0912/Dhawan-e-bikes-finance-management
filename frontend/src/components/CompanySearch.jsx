@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
+import { API_BASE } from "../config/api";
 export default function CompanySearch({ onSelectCompany }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -23,7 +24,7 @@ export default function CompanySearch({ onSelectCompany }) {
       setIsLoading(true);
       try {
         // Use the existing models API endpoint to search for companies
-        const apiUrl = `http://localhost:5000/api/models?search=${encodeURIComponent(
+        const apiUrl = `${API_BASE}/models?search=${encodeURIComponent(
           searchTerm.trim()
         )}&limit=50`;
 

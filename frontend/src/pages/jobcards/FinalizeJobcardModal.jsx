@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DatePicker from "../../components/DatePicker";
 
+import { API_BASE } from "../../config/api";
 export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEdit }) {
   const navigate = useNavigate();
   const today = new Date().toISOString().split("T")[0];
@@ -196,7 +197,7 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
             paymentDate,
           };
 
-      const response = await fetch(`http://localhost:5000/api/jobcards/${jobcard._id}/finalize`, {
+      const response = await fetch(`${API_BASE}/jobcards/${jobcard._id}/finalize`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

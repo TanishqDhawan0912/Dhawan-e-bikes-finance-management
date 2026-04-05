@@ -3,8 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaSearch } from "react-icons/fa";
 import DatePicker from "../../components/DatePicker";
 
-const API = "http://localhost:5000/api";
 
+import { API_BASE } from "../../config/api";
 function formatDateShort(dateString) {
   if (!dateString) return "N/A";
   try {
@@ -147,7 +147,7 @@ export default function AllBills() {
   const fetchBills = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API}/bills`);
+      const res = await fetch(`${API_BASE}/bills`);
       if (!res.ok) throw new Error("Failed to fetch bills");
       const data = await res.json();
       setBills(data);
@@ -211,7 +211,7 @@ export default function AllBills() {
     setPasswordError("");
     setValidatingPassword(true);
     try {
-      const res = await fetch(`${API}/admin/auth`, {
+      const res = await fetch(`${API_BASE}/admin/auth`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ securityKey: password }),
@@ -231,7 +231,7 @@ export default function AllBills() {
 
   const deleteBill = async (billId) => {
     try {
-      const res = await fetch(`${API}/bills/${billId}`, { method: "DELETE" });
+      const res = await fetch(`${API_BASE}/bills/${billId}`, { method: "DELETE" });
       if (!res.ok) {
         const errData = await res.json();
         throw new Error(errData.message || "Failed to delete bill");
@@ -257,7 +257,7 @@ export default function AllBills() {
     const newPending = Math.max(0, totals.netAmount - newPaid);
     setDeletingPaymentIndex({ id: bill._id, index: paymentIndex });
     try {
-      const res = await fetch(`${API}/bills/${bill._id}`, {
+      const res = await fetch(`${API_BASE}/bills/${bill._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -318,7 +318,7 @@ export default function AllBills() {
 
     setServiceSaving(true);
     try {
-      const res = await fetch(`${API}/bills/${bill._id}`, {
+      const res = await fetch(`${API_BASE}/bills/${bill._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ services: sanitizedServices }),
@@ -369,7 +369,7 @@ export default function AllBills() {
     ];
 
     try {
-      const res = await fetch(`${API}/bills/${bill._id}`, {
+      const res = await fetch(`${API_BASE}/bills/${bill._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

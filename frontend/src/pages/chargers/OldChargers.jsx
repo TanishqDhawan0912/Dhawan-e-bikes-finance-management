@@ -3,6 +3,7 @@ import { useSessionTimeout } from "../../hooks/useSessionTimeout";
 import { formatDate, getTodayForInput } from "../../utils/dateUtils";
 import DatePicker from "../../components/DatePicker";
 
+import { API_BASE } from "../../config/api";
 export default function OldChargers() {
   useSessionTimeout();
 
@@ -137,7 +138,7 @@ export default function OldChargers() {
       setError("");
 
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/old-chargers", {
+      const res = await fetch(`${API_BASE}/old-chargers`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: token ? `Bearer ${token}` : "",
@@ -162,7 +163,7 @@ export default function OldChargers() {
   const saveSummary = async (stats) => {
     try {
       const token = localStorage.getItem("token");
-      await fetch("http://localhost:5000/api/old-chargers/summary", {
+      await fetch(`${API_BASE}/old-chargers/summary`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -183,7 +184,7 @@ export default function OldChargers() {
   useEffect(() => {
     if (loading) return;
     const token = localStorage.getItem("token");
-    fetch("http://localhost:5000/api/old-chargers/summary", {
+    fetch(`${API_BASE}/old-chargers/summary`, {
       headers: {
         "Content-Type": "application/json",
         Authorization: token ? `Bearer ${token}` : "",
@@ -257,7 +258,7 @@ export default function OldChargers() {
       const token = localStorage.getItem("token");
       
       // entryDate is already in yyyy-mm-dd format from DatePicker
-      const res = await fetch("http://localhost:5000/api/old-chargers", {
+      const res = await fetch(`${API_BASE}/old-chargers`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -312,7 +313,7 @@ export default function OldChargers() {
       setDeletingId(charger._id);
       setError("");
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:5000/api/old-chargers/${charger._id}`, {
+      const res = await fetch(`${API_BASE}/old-chargers/${charger._id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

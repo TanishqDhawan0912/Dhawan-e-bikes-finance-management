@@ -4,6 +4,7 @@ import { formatDateForInput } from "../../utils/dateUtils";
 import DatePicker from "../../components/DatePicker";
 
 // Check if ID is a valid MongoDB ObjectId (24 hex characters)
+import { API_BASE } from "../../config/api";
 const isValidObjectId = (id) => {
   return id && /^[0-9a-fA-F]{24}$/.test(id);
 };
@@ -49,7 +50,7 @@ export default function EditCharger() {
     const fetchCharger = async () => {
       try {
         const response = await fetch(
-          `http://localhost:5000/api/chargers/${id}`
+          `${API_BASE}/chargers/${id}`
         );
         if (!response.ok) {
           throw new Error("Charger not found");
@@ -87,7 +88,7 @@ export default function EditCharger() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/chargers/suggestions/name?q=${encodeURIComponent(
+        `${API_BASE}/chargers/suggestions/name?q=${encodeURIComponent(
           query
         )}`
       );
@@ -109,7 +110,7 @@ export default function EditCharger() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/chargers/suggestions/supplier?q=${encodeURIComponent(
+        `${API_BASE}/chargers/suggestions/supplier?q=${encodeURIComponent(
           query
         )}`
       );
@@ -196,7 +197,7 @@ export default function EditCharger() {
       };
 
       const response = await fetch(
-        `http://localhost:5000/api/chargers/${id}`,
+        `${API_BASE}/chargers/${id}`,
         {
           method: "PUT",
           headers: {

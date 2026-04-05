@@ -6,6 +6,7 @@ import React, {
   useMemo,
 } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE } from "../../config/api";
 import { createPortal } from "react-dom";
 import { getTextColorForBackground } from "../../utils/themeUtils";
 
@@ -253,7 +254,7 @@ function AllSpares() {
       // Add cache-busting parameter to ensure fresh data
       const timestamp = Date.now();
       const response = await fetch(
-        `http://localhost:5000/api/spares?t=${timestamp}`
+        `${API_BASE}/spares?t=${timestamp}`
       );
 
       if (!response.ok) {
@@ -397,7 +398,7 @@ function AllSpares() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/spares/${spareId}`,
+        `${API_BASE}/spares/${spareId}`,
         {
           method: "DELETE",
         }
@@ -536,7 +537,7 @@ function AllSpares() {
   const fetchNameSuggestions = async (searchStr) => {
     try {
       const response = await fetch(
-        `http://localhost:5000/api/spares/suggestions/names?search=${encodeURIComponent(
+        `${API_BASE}/spares/suggestions/names?search=${encodeURIComponent(
           searchStr
         )}`
       );
@@ -568,7 +569,7 @@ function AllSpares() {
   const fetchModelSuggestions = async (searchStr) => {
     try {
       const response = await fetch(
-        `http://localhost:5000/api/spares/suggestions/models?search=${encodeURIComponent(
+        `${API_BASE}/spares/suggestions/models?search=${encodeURIComponent(
           searchStr
         )}`
       );
@@ -600,7 +601,7 @@ function AllSpares() {
   const fetchSupplierSuggestions = async (searchStr) => {
     try {
       const response = await fetch(
-        `http://localhost:5000/api/spares/suggestions/suppliers?search=${encodeURIComponent(
+        `${API_BASE}/spares/suggestions/suppliers?search=${encodeURIComponent(
           searchStr
         )}`
       );

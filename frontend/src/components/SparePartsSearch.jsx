@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
+import { API_BASE } from "../config/api";
 export default function SparePartsSearch({ onSelectPart }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [modelSearchTerm, setModelSearchTerm] = useState("");
@@ -19,7 +20,7 @@ export default function SparePartsSearch({ onSelectPart }) {
         setIsLoading(true);
         const timestamp = Date.now();
         const response = await fetch(
-          `http://localhost:5000/api/spares?t=${timestamp}`
+          `${API_BASE}/spares?t=${timestamp}`
         );
 
         if (!response.ok) {

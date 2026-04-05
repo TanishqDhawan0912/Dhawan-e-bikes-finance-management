@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatDate } from "../../utils/dateUtils";
 
+import { API_BASE } from "../../config/api";
 export default function AllChargers() {
   const navigate = useNavigate();
   const [chargers, setchargers] = useState([]);
@@ -17,7 +18,7 @@ export default function AllChargers() {
       // Add cache-busting parameter to ensure fresh data
       const timestamp = Date.now();
       const response = await fetch(
-        `http://localhost:5000/api/chargers?t=${timestamp}`
+        `${API_BASE}/chargers?t=${timestamp}`
       );
 
       if (!response.ok) {
@@ -167,7 +168,7 @@ export default function AllChargers() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/chargers/${ChargerId}`,
+        `${API_BASE}/chargers/${ChargerId}`,
         {
           method: "DELETE",
         }

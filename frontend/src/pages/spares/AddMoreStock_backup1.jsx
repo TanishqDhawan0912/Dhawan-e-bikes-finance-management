@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { API_BASE } from "../../config/api";
 
 const style = {
   padding: "2rem",
@@ -29,7 +30,7 @@ function AddMoreStock() {
 
   const fetchSpareDetails = useCallback(async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/spares/${id}`);
+      const response = await fetch(`${API_BASE}/spares/${id}`);
       const data = await response.json();
 
       console.log("API Response:", data);
@@ -87,7 +88,7 @@ function AddMoreStock() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/spares/${id}/add-stock`,
+        `${API_BASE}/spares/${id}/add-stock`,
         {
           method: "POST",
           headers: {

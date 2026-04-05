@@ -4,6 +4,7 @@ import { formatDate } from "../../utils/dateUtils";
 import { useSessionTimeout } from "../../hooks/useSessionTimeout";
 
 // Add CSS animation for moving line
+import { API_BASE } from "../../config/api";
 const style = document.createElement("style");
 style.textContent = `
   @keyframes moveLine {
@@ -107,7 +108,7 @@ function AllModels() {
       }
 
       const response = await fetch(
-        `http://localhost:5000/api/models?${queryParams}`
+        `${API_BASE}/models?${queryParams}`
       );
       const data = await response.json();
 
@@ -521,7 +522,7 @@ function AllModels() {
         }));
 
         const response = await fetch(
-          `http://localhost:5000/api/models/${modelId}`,
+          `${API_BASE}/models/${modelId}`,
           {
             method: "DELETE",
           }

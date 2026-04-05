@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import NewBill from "./NewBill";
 
-const API = "http://localhost:5000/api";
 
+import { API_BASE } from "../../config/api";
 export default function EditBill() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -27,7 +27,7 @@ export default function EditBill() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API}/models?limit=500`);
+        const res = await fetch(`${API_BASE}/models?limit=500`);
         if (res.ok) {
           const data = await res.json();
           setModels(Array.isArray(data) ? data : []);
@@ -44,7 +44,7 @@ export default function EditBill() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API}/bills/${id}`);
+        const res = await fetch(`${API_BASE}/bills/${id}`);
         if (!res.ok) throw new Error("Bill not found");
         const data = await res.json();
         if (cancelled) return;
@@ -106,7 +106,7 @@ export default function EditBill() {
         descriptionVariant: descriptionVariant.trim(),
         modelColor: modelColor.trim(),
       };
-      const res = await fetch(`${API}/bills/${id}`, {
+      const res = await fetch(`${API_BASE}/bills/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 // Check if ID is a valid MongoDB ObjectId (24 hex characters)
+import { API_BASE } from "../../config/api";
 const isValidObjectId = (id) => {
   return id && /^[0-9a-fA-F]{24}$/.test(id);
 };
@@ -49,7 +50,7 @@ export default function EditBattery() {
     const fetchBattery = async () => {
       try {
         const response = await fetch(
-          `http://localhost:5000/api/batteries/${id}`
+          `${API_BASE}/batteries/${id}`
         );
         if (!response.ok) {
           throw new Error("Battery not found");
@@ -96,7 +97,7 @@ export default function EditBattery() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/batteries/suggestions/name?q=${encodeURIComponent(
+        `${API_BASE}/batteries/suggestions/name?q=${encodeURIComponent(
           query
         )}`
       );
@@ -118,7 +119,7 @@ export default function EditBattery() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/batteries/suggestions/supplier?q=${encodeURIComponent(
+        `${API_BASE}/batteries/suggestions/supplier?q=${encodeURIComponent(
           query
         )}`
       );
@@ -259,7 +260,7 @@ export default function EditBattery() {
       };
 
       const response = await fetch(
-        `http://localhost:5000/api/batteries/${id}`,
+        `${API_BASE}/batteries/${id}`,
         {
           method: "PUT",
           headers: {

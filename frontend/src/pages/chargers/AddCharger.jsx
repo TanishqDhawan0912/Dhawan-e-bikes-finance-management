@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getTodayForInput } from "../../utils/dateUtils";
 import DatePicker from "../../components/DatePicker";
 
+import { API_BASE } from "../../config/api";
 export default function AddCharger() {
   const navigate = useNavigate();
 
@@ -55,7 +56,7 @@ export default function AddCharger() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/chargers/suggestions/name?q=${encodeURIComponent(
+        `${API_BASE}/chargers/suggestions/name?q=${encodeURIComponent(
           query
         )}`
       );
@@ -77,7 +78,7 @@ export default function AddCharger() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/chargers/suggestions/supplier?q=${encodeURIComponent(
+        `${API_BASE}/chargers/suggestions/supplier?q=${encodeURIComponent(
           query
         )}`
       );
@@ -99,7 +100,7 @@ export default function AddCharger() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/chargers/suggestions/batteryType?q=${encodeURIComponent(
+        `${API_BASE}/chargers/suggestions/batteryType?q=${encodeURIComponent(
           query
         )}`
       );
@@ -121,7 +122,7 @@ export default function AddCharger() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/chargers/suggestions/voltage?q=${encodeURIComponent(
+        `${API_BASE}/chargers/suggestions/voltage?q=${encodeURIComponent(
           query
         )}`
       );
@@ -350,7 +351,7 @@ export default function AddCharger() {
 
     setIsCheckingDuplicate(true);
     try {
-      let url = `http://localhost:5000/api/chargers/check-duplicate?name=${encodeURIComponent(
+      let url = `${API_BASE}/chargers/check-duplicate?name=${encodeURIComponent(
         name
       )}&supplierName=${encodeURIComponent(supplierName)}`;
       if (batteryType) {
@@ -417,7 +418,7 @@ export default function AddCharger() {
     if (name && supplierName) {
       // Force a synchronous duplicate check before allowing submission
       try {
-        let url = `http://localhost:5000/api/chargers/check-duplicate?name=${encodeURIComponent(
+        let url = `${API_BASE}/chargers/check-duplicate?name=${encodeURIComponent(
           name
         )}&supplierName=${encodeURIComponent(supplierName)}`;
         if (batteryType) {
@@ -467,7 +468,7 @@ export default function AddCharger() {
         minStockLevel: parseFloat(formData.minStockLevel) || 0,
       };
 
-      const response = await fetch("http://localhost:5000/api/chargers", {
+      const response = await fetch(`${API_BASE}/chargers`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

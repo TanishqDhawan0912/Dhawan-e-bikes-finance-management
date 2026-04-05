@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getTodayForInput } from "../../utils/dateUtils";
 import DatePicker from "../../components/DatePicker";
 
+import { API_BASE } from "../../config/api";
 export default function AddBattery() {
   const navigate = useNavigate();
 
@@ -56,7 +57,7 @@ export default function AddBattery() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/batteries/suggestions/name?q=${encodeURIComponent(
+        `${API_BASE}/batteries/suggestions/name?q=${encodeURIComponent(
           query
         )}`
       );
@@ -78,7 +79,7 @@ export default function AddBattery() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/batteries/suggestions/supplier?q=${encodeURIComponent(
+        `${API_BASE}/batteries/suggestions/supplier?q=${encodeURIComponent(
           query
         )}`
       );
@@ -102,7 +103,7 @@ export default function AddBattery() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/batteries/suggestions/ampere?q=${encodeURIComponent(
+        `${API_BASE}/batteries/suggestions/ampere?q=${encodeURIComponent(
           numericQuery
         )}`
       );
@@ -355,7 +356,7 @@ export default function AddBattery() {
     console.log("Checking duplicate for:", { name, ampereValue, supplierName });
     setIsCheckingDuplicate(true);
     try {
-      const url = `http://localhost:5000/api/batteries/check-duplicate?name=${encodeURIComponent(
+      const url = `${API_BASE}/batteries/check-duplicate?name=${encodeURIComponent(
         name
       )}&ampereValue=${encodeURIComponent(
         ampereValue
@@ -422,7 +423,7 @@ export default function AddBattery() {
     if (name && ampereValue && supplierName) {
       // Force a synchronous duplicate check before allowing submission
       try {
-        const url = `http://localhost:5000/api/batteries/check-duplicate?name=${encodeURIComponent(
+        const url = `${API_BASE}/batteries/check-duplicate?name=${encodeURIComponent(
           name
         )}&ampereValue=${encodeURIComponent(
           ampereValue
@@ -485,7 +486,7 @@ export default function AddBattery() {
         purchaseDate: formData.purchaseDate || null,
       };
 
-      const response = await fetch("http://localhost:5000/api/batteries", {
+      const response = await fetch(`${API_BASE}/batteries`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

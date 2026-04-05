@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getTodayFormatted, formatDate } from "../../utils/dateUtils";
 
+import { API_BASE } from "../../config/api";
 export default function EditModel() {
   const navigate = useNavigate();
   const { id } = useParams(); // Get model ID from URL
@@ -27,7 +28,7 @@ export default function EditModel() {
     const fetchModel = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`http://localhost:5000/api/models/${id}`);
+        const response = await fetch(`${API_BASE}/models/${id}`);
 
         if (!response.ok) {
           throw new Error("Model not found");
@@ -139,8 +140,8 @@ export default function EditModel() {
 
     try {
       const url = isAdminEdit
-        ? `http://localhost:5000/api/models/${id}?admin=true&applyToGroup=true`
-        : `http://localhost:5000/api/models/${id}`;
+        ? `${API_BASE}/models/${id}?admin=true&applyToGroup=true`
+        : `${API_BASE}/models/${id}`;
       const response = await fetch(url, {
         method: "PUT",
         headers: {

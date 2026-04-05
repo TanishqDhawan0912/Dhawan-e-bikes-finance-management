@@ -6,14 +6,27 @@ const { connectDatabase, closeDatabase } = require("./config/database");
 
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(morgan("dev"));
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
 
-// Routes will be added here
+const PORT = Number(process.env.PORT) || 5000;
+const HOST = process.env.HOST || "0.0.0.0";
+
+// Middleware — allow all origins (tighten for production later if needed)
+app.use(
+  cors({
+    origin: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+app.use(express.json());
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+
+// Health check (Render / load balancers)
 app.get("/", (req, res) => {
-  res.send("Finance Management API is running");
+  res.type("text/plain").send("API Running");
 });
 
 // Import routes
@@ -54,27 +67,36 @@ app.use((err, req, res, next) => {
   res.status(500).send("Something broke!");
 });
 
-const portRaw = process.env.PORT?.trim();
-const PORT = portRaw !== undefined && portRaw !== "" ? Number(portRaw) : NaN;
-if (!Number.isInteger(PORT) || PORT <= 0 || PORT > 65535) {
-  console.error(
-    "[Server] Exiting: set PORT in environment to an integer 1–65535 (e.g. PORT=5000)."
-  );
-  process.exit(1);
-}
-
 (async function startServer() {
+  if (process.env.NODE_ENV === "production") {
+    const secret = process.env.JWT_SECRET?.trim();
+    if (!secret) {
+      console.error(
+        "[Server] JWT_SECRET is required in production (Render → Environment)."
+      );
+      process.exit(1);
+    }
+  }
+
   try {
     await connectDatabase();
-  } catch {
+  } catch (err) {
+    console.error("[Server] MongoDB connection failed — exiting.");
     console.error(
-      "[Server] Exiting: MongoDB connection failed (check MONGO_URI)."
+      "[Server] Ensure MONGO_URI is set (Render: Dashboard → Environment).",
+      err?.message || err
     );
+    if (err?.name) console.error("[Server] Error name:", err.name);
     process.exit(1);
   }
 
-  const server = app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  const server = app.listen(PORT, HOST, () => {
+    const publicUrl = process.env.RENDER_EXTERNAL_URL;
+    if (publicUrl) {
+      console.log(`Server listening — public URL: ${publicUrl}`);
+    } else {
+      console.log(`Server listening on http://${HOST}:${PORT}`);
+    }
   });
 
   server.on("error", (err) => {
