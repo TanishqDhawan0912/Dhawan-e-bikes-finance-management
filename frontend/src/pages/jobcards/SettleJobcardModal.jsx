@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import DatePicker from "../../components/DatePicker";
+import { getTodayForInput } from "../../utils/dateUtils";
 
 import { API_BASE } from "../../config/api";
 export default function SettleJobcardModal({ jobcard, onClose, onSuccess }) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayForInput();
   const [formData, setFormData] = useState({
     paymentAmount: "",
     paymentMode: "cash",
@@ -69,7 +70,7 @@ export default function SettleJobcardModal({ jobcard, onClose, onSuccess }) {
       // Otherwise, return initial payment if paidAmount exists
       payments = [{
         amount: jobcard.paidAmount,
-        date: jobcard.date || new Date().toISOString().split("T")[0],
+        date: jobcard.date || getTodayForInput(),
         paymentMode: jobcard.paymentMode || "cash",
       }];
     }

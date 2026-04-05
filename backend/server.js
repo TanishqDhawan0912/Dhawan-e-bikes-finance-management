@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
 const { connectDatabase, closeDatabase } = require("./config/database");
+const { buildCorsOptions } = require("./config/corsOptions");
 
 const app = express();
 
@@ -13,26 +14,72 @@ if (process.env.NODE_ENV === "production") {
 const PORT = Number(process.env.PORT) || 5000;
 const HOST = process.env.HOST || "0.0.0.0";
 
-// Middleware — allow all origins (tighten for production later if needed)
-app.use(
-  cors({
-    origin: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+app.use(cors(buildCorsOptions()));
 app.use(express.json());
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
-// Health check (Render / load balancers)
+// Health check (Render / load balancers) — plain text for simple probes
 app.get("/", (req, res) => {
   res.type("text/plain").send("API Running");
+});
+
+// JSON health (optional monitoring / debugging)
+app.get("/health", (req, res) => {
+  res.json({
+    ok: true,
+    service: "dhawan-e-bikes-finance-api",
+    uptime: process.uptime(),
+    env: process.env.NODE_ENV || "development",
+  });
+});
+
+app.get("/test", (req, res) => {
+  res.type("text/plain").send("Backend working");
+});
+
+app.get("/db-test", async (req, res) => {
+  const User = require("./models/User");
+  try {
+    const userCount = await User.countDocuments().maxTimeMS(8000);
+
+    const payload = {
+      success: true,
+      message: "Database reachable",
+      userCount,
+    };
+
+    // Avoid exposing PII on a public URL in production
+    if (process.env.NODE_ENV !== "production") {
+      const users = await User.find()
+        .select("-password")
+        .limit(5)
+        .lean()
+        .maxTimeMS(8000);
+      payload.sampleCount = users.length;
+      payload.users = users.map((u) => ({
+        id: String(u._id),
+        email: u.email,
+        name: u.name,
+        role: u.role,
+      }));
+    }
+
+    return res.status(200).json(payload);
+  } catch (err) {
+    console.error("[db-test] Query failed:", err?.message || err);
+    return res.status(500).json({
+      success: false,
+      message: "Database query failed",
+      ...(process.env.NODE_ENV !== "production" && {
+        detail: err?.message,
+      }),
+    });
+  }
 });
 
 // Import routes
 const modelRoutes = require("./routes/modelRoutes");
 const spareRoutes = require("./routes/spareRoutes");
-const orderRoutes = require("./routes/orderRoutes");
 const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const batteryRoutes = require("./routes/batteryRoutes");
@@ -48,7 +95,6 @@ const restoreRoutes = require("./routes/restoreRoutes");
 // Use routes
 app.use("/api/models", modelRoutes);
 app.use("/api/spares", spareRoutes);
-app.use("/api/orders", orderRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/batteries", batteryRoutes);
@@ -61,10 +107,33 @@ app.use("/api/jobcards", jobcardRoutes);
 app.use("/api/bills", billRoutes);
 app.use(restoreRoutes);
 
-// Error handling middleware
+// Unmatched API routes → JSON 404 (mounted routers only handle their prefix)
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Route not found",
+    method: req.method,
+    path: req.originalUrl,
+  });
+});
+
+// Error handling middleware — JSON for API clients
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send("Something broke!");
+  console.error("[Express]", err?.stack || err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  if (err.name === "CastError") {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid document id",
+    });
+  }
+  const status = Number(err.statusCode || err.status) || 500;
+  res.status(status).json({
+    success: false,
+    message: err.message || "Something broke!",
+  });
 });
 
 (async function startServer() {

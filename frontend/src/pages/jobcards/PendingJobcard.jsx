@@ -6,6 +6,7 @@ import JobcardPrintView from "../../components/JobcardPrintView";
 import DatePicker from "../../components/DatePicker";
 
 import { API_BASE } from "../../config/api";
+import { getFetchErrorMessage } from "../../utils/apiError";
 export default function PendingJobcard() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -231,8 +232,9 @@ export default function PendingJobcard() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to delete jobcard");
+        throw new Error(
+          await getFetchErrorMessage(response, "Failed to delete jobcard")
+        );
       }
 
       alert("Jobcard deleted successfully!");

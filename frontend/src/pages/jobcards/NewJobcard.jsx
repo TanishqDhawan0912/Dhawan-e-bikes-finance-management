@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import SparePartsSearch from "../../components/SparePartsSearch";
 import DatePicker from "../../components/DatePicker";
 import { API_BASE } from "../../config/api";
+import { getTodayForInput } from "../../utils/dateUtils";
 
 // Helper function to check if a value is a valid MongoDB ObjectId
 const isValidObjectId = (id) => {
@@ -106,8 +107,8 @@ export default function NewJobcard() {
   // Active tab for adding parts (can be service, replacement, or sales)
   const [activeTab, setActiveTab] = useState(null); // null, "service", "replacement", or "sales"
 
-  // Get today's date in YYYY-MM-DD format
-  const today = new Date().toISOString().split("T")[0];
+  // Local calendar date (not UTC — toISOString() can be the previous day in IST, etc.)
+  const today = getTodayForInput();
 
   // Form state
   const [formData, setFormData] = useState({

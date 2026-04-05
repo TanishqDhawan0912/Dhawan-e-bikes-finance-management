@@ -668,7 +668,7 @@ exports.updateModel = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Delete model (soft delete)
+// @desc    Delete model (permanent)
 // @route   DELETE /api/models/:id
 // @access  Public (for now, add auth later)
 exports.deleteModel = asyncHandler(async (req, res) => {
@@ -681,8 +681,7 @@ exports.deleteModel = asyncHandler(async (req, res) => {
     });
   }
 
-  // Soft delete by setting isActive to false
-  await Model.findByIdAndUpdate(req.params.id, { isActive: false });
+  await Model.findByIdAndDelete(req.params.id);
 
   res.status(200).json({
     success: true,

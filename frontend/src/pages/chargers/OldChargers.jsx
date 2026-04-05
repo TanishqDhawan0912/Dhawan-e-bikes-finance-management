@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSessionTimeout } from "../../hooks/useSessionTimeout";
-import { formatDate, getTodayForInput } from "../../utils/dateUtils";
+import {
+  formatDate,
+  formatDateForInput,
+  getTodayForInput,
+} from "../../utils/dateUtils";
 import DatePicker from "../../components/DatePicker";
 
 import { API_BASE } from "../../config/api";
@@ -12,6 +16,7 @@ export default function OldChargers() {
   const [ampere, setAmpere] = useState("3A");
   const [status, setStatus] = useState("notWorking");
   const [entryDate, setEntryDate] = useState(getTodayForInput());
+  const [editingChargerId, setEditingChargerId] = useState(null);
   const [oldChargers, setOldChargers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -131,10 +136,33 @@ export default function OldChargers() {
     color: "#111827",
   });
 
-  // Fetch existing old charger entries
-  const fetchOldChargers = async () => {
+  const applyPersistedSummary = (data, chargerList) => {
+    const volts = ["48V", "60V", "72V", "Other"];
+    const allZero = volts.every(
+      (v) =>
+        (data[v]?.total ?? 0) === 0 &&
+        (data[v]?.working ?? 0) === 0 &&
+        (data[v]?.notWorking ?? 0) === 0
+    );
+    if (allZero) {
+      setVoltageStats(buildVoltageStats(chargerList));
+    } else {
+      setVoltageStats({
+        "48V": data["48V"] || { total: 0, working: 0, notWorking: 0 },
+        "60V": data["60V"] || { total: 0, working: 0, notWorking: 0 },
+        "72V": data["72V"] || { total: 0, working: 0, notWorking: 0 },
+        Other: data.Other || { total: 0, working: 0, notWorking: 0 },
+      });
+    }
+  };
+
+  /** @param {{ silent?: boolean }} opts */
+  const fetchOldChargers = async (opts = {}) => {
+    const silent = Boolean(opts.silent);
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       setError("");
 
       const token = localStorage.getItem("token");
@@ -151,12 +179,34 @@ export default function OldChargers() {
       }
 
       const data = await res.json();
-      setOldChargers(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setOldChargers(list);
+      return list;
     } catch (err) {
       console.error("Error fetching old chargers:", err);
       setError(err.message || "Failed to load old charger entries");
+      return [];
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const reloadListAndSummary = async () => {
+    const list = await fetchOldChargers({ silent: true });
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${API_BASE}/old-chargers/summary`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      });
+      const data = res.ok ? await res.json() : {};
+      applyPersistedSummary(data, list);
+    } catch {
+      setVoltageStats(buildVoltageStats(list));
     }
   };
 
@@ -191,27 +241,34 @@ export default function OldChargers() {
       },
     })
       .then((res) => (res.ok ? res.json() : {}))
-      .then((data) => {
-        const volts = ["48V", "60V", "72V", "Other"];
-        const allZero = volts.every(
-          (v) =>
-            (data[v]?.total ?? 0) === 0 &&
-            (data[v]?.working ?? 0) === 0 &&
-            (data[v]?.notWorking ?? 0) === 0
-        );
-        if (allZero) {
-          setVoltageStats(buildVoltageStats(oldChargers));
-        } else {
-          setVoltageStats({
-            "48V": data["48V"] || { total: 0, working: 0, notWorking: 0 },
-            "60V": data["60V"] || { total: 0, working: 0, notWorking: 0 },
-            "72V": data["72V"] || { total: 0, working: 0, notWorking: 0 },
-            Other: data.Other || { total: 0, working: 0, notWorking: 0 },
-          });
-        }
-      })
+      .then((data) => applyPersistedSummary(data, oldChargers))
       .catch(() => setVoltageStats(buildVoltageStats(oldChargers)));
   }, [loading]);
+
+  const resetFormToDefaults = () => {
+    setVoltage("48V");
+    setBatteryType("lead");
+    setAmpere("3A");
+    setStatus("notWorking");
+    setEntryDate(getTodayForInput());
+  };
+
+  const beginEditEntry = (charger) => {
+    if (!charger?._id) return;
+    setEditingChargerId(charger._id);
+    setVoltage(charger.voltage || "48V");
+    setBatteryType(charger.batteryType || "lead");
+    setAmpere(charger.ampere || "3A");
+    setStatus(charger.status || "notWorking");
+    setEntryDate(formatDateForInput(charger.entryDate) || getTodayForInput());
+    setError("");
+  };
+
+  const cancelEditEntry = () => {
+    setEditingChargerId(null);
+    resetFormToDefaults();
+    setError("");
+  };
 
   // Persist table edits (debounced); skip first run so we don't save on initial load
   useEffect(() => {
@@ -256,48 +313,61 @@ export default function OldChargers() {
       setError("");
 
       const token = localStorage.getItem("token");
-      
-      // entryDate is already in yyyy-mm-dd format from DatePicker
-      const res = await fetch(`${API_BASE}/old-chargers`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-        body: JSON.stringify({
-          voltage: voltage.trim(),
-          batteryType: batteryType.trim(),
-          ampere: ampere.trim(),
-          status: status.trim(),
-          entryDate: entryDate,
-        }),
-      });
+      const payload = {
+        voltage: voltage.trim(),
+        batteryType: batteryType.trim(),
+        ampere: ampere.trim(),
+        status: status.trim(),
+        entryDate: entryDate,
+      };
+
+      const isEdit = Boolean(editingChargerId);
+      const res = await fetch(
+        isEdit
+          ? `${API_BASE}/old-chargers/${editingChargerId}`
+          : `${API_BASE}/old-chargers`,
+        {
+          method: isEdit ? "PUT" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(data.message || "Failed to add old charger entry");
+        throw new Error(
+          data.message ||
+            (isEdit ? "Failed to update old charger entry" : "Failed to add old charger entry")
+        );
       }
 
-      // Prepend new entry (API already sorts, but we keep UI instant)
-      setOldChargers((prev) => [data, ...prev]);
-
-      // Apply new entry to summary table (form → summary; reverse does not apply)
-      const voltKey = data.voltage && ["48V", "60V", "72V"].includes(data.voltage) ? data.voltage : "Other";
-      setVoltageStats((prev) => {
-        const s = prev[voltKey] || { total: 0, working: 0, notWorking: 0 };
-        const working = data.status === "working" ? (s.working || 0) + 1 : s.working || 0;
-        const notWorking = data.status !== "working" ? (s.notWorking || 0) + 1 : s.notWorking || 0;
-        const total = (s.total || 0) + 1;
-        return { ...prev, [voltKey]: { total, working, notWorking } };
-      });
-
-      setVoltage("48V");
-      setBatteryType("lead");
-      setAmpere("3A");
-      setStatus("notWorking");
-      // Keep entryDate as today's date
-      setEntryDate(getTodayForInput());
+      if (isEdit) {
+        setEditingChargerId(null);
+        resetFormToDefaults();
+        await reloadListAndSummary();
+      } else {
+        setOldChargers((prev) => [data, ...prev]);
+        const voltKey =
+          data.voltage && ["48V", "60V", "72V"].includes(data.voltage)
+            ? data.voltage
+            : "Other";
+        setVoltageStats((prev) => {
+          const s = prev[voltKey] || { total: 0, working: 0, notWorking: 0 };
+          const working =
+            data.status === "working" ? (s.working || 0) + 1 : s.working || 0;
+          const notWorking =
+            data.status !== "working"
+              ? (s.notWorking || 0) + 1
+              : s.notWorking || 0;
+          const total = (s.total || 0) + 1;
+          return { ...prev, [voltKey]: { total, working, notWorking } };
+        });
+        resetFormToDefaults();
+      }
     } catch (err) {
       console.error("Error adding old charger:", err);
       setError(err.message || "Failed to add old charger entry");
@@ -419,7 +489,7 @@ export default function OldChargers() {
             color: "#111827",
           }}
         >
-          Add Old Charger Entry
+          {editingChargerId ? "Edit Old Charger Entry" : "Add Old Charger Entry"}
         </h2>
 
         {error && (
@@ -594,22 +664,47 @@ export default function OldChargers() {
           </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={submitting}
-          style={{
-            padding: "0.5rem 1.25rem",
-            borderRadius: "9999px",
-            border: "none",
-            backgroundColor: submitting ? "#9ca3af" : "#111827",
-            color: "white",
-            fontSize: "0.9rem",
-            fontWeight: 500,
-            cursor: submitting ? "not-allowed" : "pointer",
-          }}
-        >
-          {submitting ? "Saving..." : "Add Old Charger"}
-        </button>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center" }}>
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{
+              padding: "0.5rem 1.25rem",
+              borderRadius: "9999px",
+              border: "none",
+              backgroundColor: submitting ? "#9ca3af" : "#111827",
+              color: "white",
+              fontSize: "0.9rem",
+              fontWeight: 500,
+              cursor: submitting ? "not-allowed" : "pointer",
+            }}
+          >
+            {submitting
+              ? "Saving..."
+              : editingChargerId
+                ? "Save changes"
+                : "Add Old Charger"}
+          </button>
+          {editingChargerId && (
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={cancelEditEntry}
+              style={{
+                padding: "0.5rem 1.25rem",
+                borderRadius: "9999px",
+                border: "1px solid #d1d5db",
+                backgroundColor: "#fff",
+                color: "#374151",
+                fontSize: "0.9rem",
+                fontWeight: 500,
+                cursor: submitting ? "not-allowed" : "pointer",
+              }}
+            >
+              Cancel edit
+            </button>
+          )}
+        </div>
       </form>
 
         {/* Preview totals aside */}
@@ -862,24 +957,45 @@ export default function OldChargers() {
                         )}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteEntry(charger)}
-                      disabled={deletingId === charger._id}
-                      title="Delete entry"
-                      style={{
-                        padding: "0.35rem 0.6rem",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "0.375rem",
-                        backgroundColor: deletingId === charger._id ? "#f3f4f6" : "#fff",
-                        color: "#dc2626",
-                        fontSize: "0.8rem",
-                        fontWeight: 500,
-                        cursor: deletingId === charger._id ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      {deletingId === charger._id ? "..." : "Delete"}
-                    </button>
+                    <div style={{ display: "flex", gap: "0.35rem", flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        onClick={() => beginEditEntry(charger)}
+                        disabled={Boolean(deletingId) || submitting}
+                        title="Edit entry"
+                        style={{
+                          padding: "0.35rem 0.6rem",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "0.375rem",
+                          backgroundColor: "#fff",
+                          color: "#2563eb",
+                          fontSize: "0.8rem",
+                          fontWeight: 500,
+                          cursor:
+                            deletingId || submitting ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEntry(charger)}
+                        disabled={deletingId === charger._id}
+                        title="Delete entry"
+                        style={{
+                          padding: "0.35rem 0.6rem",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "0.375rem",
+                          backgroundColor: deletingId === charger._id ? "#f3f4f6" : "#fff",
+                          color: "#dc2626",
+                          fontSize: "0.8rem",
+                          fontWeight: 500,
+                          cursor: deletingId === charger._id ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {deletingId === charger._id ? "..." : "Delete"}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

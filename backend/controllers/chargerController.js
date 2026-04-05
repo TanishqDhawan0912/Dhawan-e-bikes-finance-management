@@ -226,9 +226,9 @@ const deleteCharger = async (req, res) => {
       return res.status(404).json({ message: "Charger not found" });
     }
 
-    await Charger.updateOne({ _id: req.params.id }, { $set: { isDeleted: true } });
-    console.log("[soft-delete] Charger:", req.params.id);
-    res.json({ message: "Charger soft deleted" });
+    await Charger.findByIdAndDelete(req.params.id);
+    console.log("[hard-delete] Charger:", req.params.id);
+    res.json({ message: "Charger deleted" });
   } catch (error) {
     console.error("Error deleting charger:", error);
     res.status(500).json({ message: "Server error", error: error.message });

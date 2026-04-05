@@ -13,7 +13,6 @@ const MODEL_PATHS = [
   "../models/OldChargerScrap",
   "../models/OldChargerSummary",
   "../models/OldScooty",
-  "../models/Order",
   "../models/Spare",
   "../models/User",
 ];

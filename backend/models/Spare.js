@@ -199,6 +199,38 @@ spareSchema.pre(
   }
 );
 
+/**
+ * Adjust top-level quantity (used by PUT /spares/:id/stock).
+ * (arg, "out"|"in") or a signed number: positive adds stock, negative removes.
+ */
+spareSchema.methods.updateStock = async function (arg1, arg2) {
+  let delta;
+  if (arg2 === "out") {
+    delta = -Math.abs(Number(arg1));
+  } else if (arg2 === "in") {
+    delta = Math.abs(Number(arg1));
+  } else {
+    delta = Number(arg1);
+  }
+  if (!Number.isFinite(delta) || delta === 0) {
+    return;
+  }
+
+  const doc = await this.constructor
+    .findById(this._id)
+    .select("quantity")
+    .lean();
+  if (!doc) {
+    throw new Error("Spare not found");
+  }
+  const nextQ = Math.max(0, (doc.quantity || 0) + delta);
+  await this.constructor.updateOne(
+    { _id: this._id },
+    { $set: { quantity: nextQ } }
+  );
+  this.quantity = nextQ;
+};
+
 // Ensure virtual fields are included in JSON output
 spareSchema.set("toJSON", { virtuals: true });
 spareSchema.set("toObject", { virtuals: true });

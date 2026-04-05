@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import JobcardPrintView from "../../components/JobcardPrintView";
+import { getTodayForInput } from "../../utils/dateUtils";
+import { getFetchErrorMessage } from "../../utils/apiError";
 
 import { API_BASE } from "../../config/api";
 export default function AllJobcards() {
@@ -194,7 +196,7 @@ export default function AllJobcards() {
     } else if (jobcard.paidAmount && jobcard.paidAmount > 0) {
       payments = [{
         amount: jobcard.paidAmount,
-        date: jobcard.date || new Date().toISOString().split("T")[0],
+        date: jobcard.date || getTodayForInput(),
         paymentMode: jobcard.paymentMode || "cash",
       }];
     }
@@ -309,8 +311,9 @@ export default function AllJobcards() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to delete jobcard");
+        throw new Error(
+          await getFetchErrorMessage(response, "Failed to delete jobcard")
+        );
       }
 
       alert("Jobcard deleted successfully!");

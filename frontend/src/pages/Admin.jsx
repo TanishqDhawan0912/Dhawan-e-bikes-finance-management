@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { formatDate, getTodayForInput } from "../utils/dateUtils";
 
 import { API_BASE } from "../config/api";
+import { getFetchErrorMessage } from "../utils/apiError";
 /** Parse yyyy-mm-dd to local Date (noon) for stable calendar math */
 function ymdToLocalDate(ymd) {
   const parts = String(ymd || "").split("-");
@@ -3747,6 +3748,7 @@ export default function Admin() {
 
                                       try {
                                         let deletedCount = 0;
+                                        let lastError = "";
                                         for (const model of group.models) {
                                           const response = await fetch(
                                             `${API_BASE}/models/${model._id}`,
@@ -3757,11 +3759,17 @@ export default function Admin() {
 
                                           if (response.ok) {
                                             deletedCount++;
+                                          } else {
+                                            lastError = await getFetchErrorMessage(
+                                              response,
+                                              "Delete failed"
+                                            );
                                           }
                                         }
-
-                                        // Refresh the models list
                                         await fetchModels();
+                                        if (lastError && deletedCount < group.models.length) {
+                                          throw new Error(lastError);
+                                        }
 
                                         alert(
                                           `Successfully deleted ${deletedCount} model(s) for ${group.modelName} - ${group.company}`

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { formatDate } from "../../utils/dateUtils";
 
 import { API_BASE } from "../../config/api";
+import { getFetchErrorMessage } from "../../utils/apiError";
 /** Left = sum of remaining pieces in layers; aligns with FIFO stockEntries.quantity. */
 function batteryStockAggregates(battery) {
   const entries = Array.isArray(battery.stockEntries) ? battery.stockEntries : [];
@@ -171,8 +172,9 @@ export default function AllBatteries() {
       );
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Error deleting battery");
+        throw new Error(
+          await getFetchErrorMessage(response, "Error deleting battery")
+        );
       }
 
       // Remove from local state

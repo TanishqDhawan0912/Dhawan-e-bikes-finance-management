@@ -1,12 +1,21 @@
-/** Default when `VITE_API_URL` is unset (local dev). */
-const DEV_API_ORIGIN = "http://localhost:5000";
-
+/**
+ * API origin: `import.meta.env.VITE_API_URL` (set in Vercel for production builds).
+ * Local dev: falls back to http://localhost:5000 when unset.
+ * Production build without env: falls back to deployed Render API (set VITE_API_URL in Vercel anyway).
+ */
 const envUrl = import.meta.env.VITE_API_URL?.trim();
-const origin = (envUrl || DEV_API_ORIGIN).replace(/\/$/, "");
+const LOCAL_DEV_ORIGIN = "http://localhost:5000";
+const DEPLOYED_API_ORIGIN =
+  "https://dhawan-e-bikes-finance-management.onrender.com";
+
+const origin = (
+  envUrl ||
+  (import.meta.env.DEV ? LOCAL_DEV_ORIGIN : DEPLOYED_API_ORIGIN)
+).replace(/\/$/, "");
 
 if (import.meta.env.PROD && !envUrl) {
-  console.error(
-    "[api] VITE_API_URL was not set at build time. API calls will use localhost and will fail for users. Set VITE_API_URL in Vercel (or your host) to your Render API origin, then redeploy."
+  console.warn(
+    "[api] VITE_API_URL was not set at build time; using Render API URL fallback. Set VITE_API_URL in Vercel to https://dhawan-e-bikes-finance-management.onrender.com for explicit configuration."
   );
 }
 

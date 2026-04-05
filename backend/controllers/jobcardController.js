@@ -1716,7 +1716,7 @@ const settleJobcard = async (req, res) => {
   }
 };
 
-// @desc    Delete jobcard
+// @desc    Delete jobcard (permanent — restores inventory first when applicable)
 // @route   DELETE /api/jobcards/:id
 // @access  Public
 const deleteJobcard = async (req, res) => {
@@ -1749,12 +1749,9 @@ const deleteJobcard = async (req, res) => {
       }
     }
 
-    await Jobcard.updateOne(
-      { _id: req.params.id },
-      { $set: { isDeleted: true, inventoryAdjusted: false } }
-    );
-    console.log("[soft-delete] Jobcard:", req.params.id);
-    res.json({ message: "Jobcard soft deleted successfully" });
+    await Jobcard.findByIdAndDelete(req.params.id);
+    console.log("[hard-delete] Jobcard:", req.params.id);
+    res.json({ message: "Jobcard deleted successfully" });
   } catch (error) {
     console.error("Error deleting jobcard:", error);
     res.status(500).json({ message: "Server error", error: error.message });

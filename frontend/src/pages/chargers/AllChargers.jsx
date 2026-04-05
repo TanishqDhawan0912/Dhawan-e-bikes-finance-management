@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { formatDate } from "../../utils/dateUtils";
 
 import { API_BASE } from "../../config/api";
+import { getFetchErrorMessage } from "../../utils/apiError";
 export default function AllChargers() {
   const navigate = useNavigate();
   const [chargers, setchargers] = useState([]);
@@ -175,8 +176,9 @@ export default function AllChargers() {
       );
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Error deleting Charger");
+        throw new Error(
+          await getFetchErrorMessage(response, "Error deleting Charger")
+        );
       }
 
       // Remove from local state

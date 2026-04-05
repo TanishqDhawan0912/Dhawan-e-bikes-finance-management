@@ -50,7 +50,35 @@ const getOldChargerScraps = async (req, res) => {
   }
 };
 
+// @desc    Permanently delete an old charger scrap entry
+// @route   DELETE /api/old-charger-scraps/:id
+const deleteOldChargerScrap = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const removed = await OldChargerScrap.findByIdAndDelete(id);
+    if (!removed) {
+      return res.status(404).json({
+        success: false,
+        message: "Old charger scrap not found",
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Deleted",
+      id: String(removed._id),
+    });
+  } catch (error) {
+    console.error("Error deleting old charger scrap:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createOldChargerScrap,
   getOldChargerScraps,
+  deleteOldChargerScrap,
 };

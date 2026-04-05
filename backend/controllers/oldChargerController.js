@@ -5,60 +5,78 @@ const {
   summaryKeyForVoltage,
 } = require("../utils/oldChargerSummaryAdjust");
 
+const ALLOWED_VOLTAGES = ["48V", "60V", "72V"];
+const ALLOWED_BATTERY_TYPES = ["lead", "lithium"];
+const ALLOWED_AMPERES = ["3A", "4A", "5A"];
+const ALLOWED_STATUSES = ["working", "notWorking"];
+
+function parseOldChargerFields(body) {
+  const { voltage, batteryType, ampere, status, entryDate } = body;
+
+  if (!voltage || !voltage.trim()) {
+    return { ok: false, message: "Voltage is required" };
+  }
+  const voltageNorm = voltage.trim().toUpperCase();
+  if (!ALLOWED_VOLTAGES.includes(voltageNorm)) {
+    return { ok: false, message: "Voltage must be 48V, 60V, or 72V" };
+  }
+
+  if (!batteryType || !batteryType.trim()) {
+    return { ok: false, message: "Battery type is required" };
+  }
+  const batteryTypeNorm = batteryType.trim().toLowerCase();
+  if (!ALLOWED_BATTERY_TYPES.includes(batteryTypeNorm)) {
+    return { ok: false, message: "Battery type must be lead or lithium" };
+  }
+
+  if (!ampere || !ampere.trim()) {
+    return { ok: false, message: "Ampere is required" };
+  }
+  const ampereNorm = ampere.trim().toUpperCase();
+  if (!ALLOWED_AMPERES.includes(ampereNorm)) {
+    return { ok: false, message: "Ampere must be 3A, 4A, or 5A" };
+  }
+
+  if (!status || !status.trim()) {
+    return { ok: false, message: "Status is required" };
+  }
+  const statusNorm = status.trim();
+  if (!ALLOWED_STATUSES.includes(statusNorm)) {
+    return { ok: false, message: "Status must be working or not working" };
+  }
+
+  if (!entryDate) {
+    return { ok: false, message: "Entry date is required" };
+  }
+
+  return {
+    ok: true,
+    voltageNorm,
+    batteryTypeNorm,
+    ampereNorm,
+    statusNorm,
+    entryDate: new Date(entryDate),
+  };
+}
+
 // @desc    Create a new old charger entry
 // @route   POST /api/old-chargers
 // @access  Private
 const createOldCharger = async (req, res) => {
   try {
-    const { voltage, batteryType, ampere, status, entryDate } = req.body;
-
-    const allowedVoltages = ["48V", "60V", "72V"];
-    const allowedBatteryTypes = ["lead", "lithium"];
-    const allowedAmperes = ["3A", "4A", "5A"];
-    const allowedStatuses = ["working", "notWorking"];
-
-    if (!voltage || !voltage.trim()) {
-      return res.status(400).json({ message: "Voltage is required" });
+    const parsed = parseOldChargerFields(req.body);
+    if (!parsed.ok) {
+      return res.status(400).json({ message: parsed.message });
     }
-    const voltageNorm = voltage.trim().toUpperCase();
-    if (!allowedVoltages.includes(voltageNorm)) {
-      return res.status(400).json({ message: "Voltage must be 48V, 60V, or 72V" });
-    }
-
-    if (!batteryType || !batteryType.trim()) {
-      return res.status(400).json({ message: "Battery type is required" });
-    }
-    const batteryTypeNorm = batteryType.trim().toLowerCase();
-    if (!allowedBatteryTypes.includes(batteryTypeNorm)) {
-      return res.status(400).json({ message: "Battery type must be lead or lithium" });
-    }
-
-    if (!ampere || !ampere.trim()) {
-      return res.status(400).json({ message: "Ampere is required" });
-    }
-    const ampereNorm = ampere.trim().toUpperCase();
-    if (!allowedAmperes.includes(ampereNorm)) {
-      return res.status(400).json({ message: "Ampere must be 3A, 4A, or 5A" });
-    }
-
-    if (!status || !status.trim()) {
-      return res.status(400).json({ message: "Status is required" });
-    }
-    const statusNorm = status.trim();
-    if (!allowedStatuses.includes(statusNorm)) {
-      return res.status(400).json({ message: "Status must be working or not working" });
-    }
-
-    if (!entryDate) {
-      return res.status(400).json({ message: "Entry date is required" });
-    }
+    const { voltageNorm, batteryTypeNorm, ampereNorm, statusNorm, entryDate } =
+      parsed;
 
     const oldCharger = new OldCharger({
       voltage: voltageNorm,
       batteryType: batteryTypeNorm,
       ampere: ampereNorm,
       status: statusNorm,
-      entryDate: new Date(entryDate),
+      entryDate,
       source: "manual",
     });
 
@@ -105,16 +123,64 @@ const deleteOldCharger = async (req, res) => {
     if (!existing) {
       return res.status(404).json({ message: "Old charger entry not found" });
     }
-    await OldCharger.updateOne({ _id: id }, { $set: { isDeleted: true } });
-    console.log("[soft-delete] OldCharger:", id);
     await adjustOldChargerSummaryByStatusDelta(
       summaryKeyForVoltage(existing.voltage),
       existing.status,
       -1
     );
-    return res.status(200).json({ message: "Soft deleted", id });
+    await OldCharger.findByIdAndDelete(id);
+    console.log("[hard-delete] OldCharger:", id);
+    return res.status(200).json({ message: "Deleted", id });
   } catch (error) {
     console.error("Error deleting old charger:", error);
+    return res
+      .status(500)
+      .json({ message: "Server error", error: error.message });
+  }
+};
+
+// @desc    Update an old charger entry
+// @route   PUT /api/old-chargers/:id
+// @access  Private
+const updateOldCharger = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await OldCharger.findById(id);
+    if (!existing) {
+      return res.status(404).json({ message: "Old charger entry not found" });
+    }
+
+    const parsed = parseOldChargerFields(req.body);
+    if (!parsed.ok) {
+      return res.status(400).json({ message: parsed.message });
+    }
+    const { voltageNorm, batteryTypeNorm, ampereNorm, statusNorm, entryDate } =
+      parsed;
+
+    const beforeKey = summaryKeyForVoltage(existing.voltage);
+    const beforeStatus = existing.status;
+    const afterKey = summaryKeyForVoltage(voltageNorm);
+    const afterStatus = statusNorm;
+
+    if (beforeKey !== afterKey || beforeStatus !== afterStatus) {
+      await adjustOldChargerSummaryByStatusDelta(
+        beforeKey,
+        beforeStatus,
+        -1
+      );
+      await adjustOldChargerSummaryByStatusDelta(afterKey, afterStatus, 1);
+    }
+
+    existing.voltage = voltageNorm;
+    existing.batteryType = batteryTypeNorm;
+    existing.ampere = ampereNorm;
+    existing.status = statusNorm;
+    existing.entryDate = entryDate;
+
+    const saved = await existing.save();
+    return res.status(200).json(saved);
+  } catch (error) {
+    console.error("Error updating old charger:", error);
     return res
       .status(500)
       .json({ message: "Server error", error: error.message });
@@ -180,6 +246,7 @@ module.exports = {
   createOldCharger,
   getOldChargers,
   deleteOldCharger,
+  updateOldCharger,
   getOldChargerSummary,
   updateOldChargerSummary,
 };

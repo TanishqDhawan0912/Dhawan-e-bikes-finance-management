@@ -5,6 +5,7 @@ import { useSessionTimeout } from "../../hooks/useSessionTimeout";
 
 // Add CSS animation for moving line
 import { API_BASE } from "../../config/api";
+import { getFetchErrorMessage } from "../../utils/apiError";
 const style = document.createElement("style");
 style.textContent = `
   @keyframes moveLine {
@@ -528,15 +529,15 @@ function AllModels() {
           }
         );
 
-        const data = await response.json();
-        console.log("Delete API response:", data);
-
         if (!response.ok) {
-          console.error("Delete failed:", data.message);
-          // If delete failed, revert the change (fetch models again)
+          const msg = await getFetchErrorMessage(response, "Error deleting model");
+          console.error("Delete failed:", msg);
           await fetchModels();
-          throw new Error(data.message || "Error deleting model");
+          throw new Error(msg);
         }
+
+        const data = await response.json().catch(() => ({}));
+        console.log("Delete API response:", data);
 
         console.log("Delete successful (optimistic update should persist)");
         // Do NOT fetch models immediately after success to avoid race condition

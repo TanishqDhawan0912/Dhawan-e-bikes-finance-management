@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DatePicker from "../../components/DatePicker";
+import { getTodayForInput } from "../../utils/dateUtils";
 
 import { API_BASE } from "../../config/api";
 export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEdit }) {
   const navigate = useNavigate();
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayForInput();
   const [formData, setFormData] = useState({
     labour: "",
     discount: "",

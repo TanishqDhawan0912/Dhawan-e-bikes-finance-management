@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { API_BASE } from "../../config/api";
 import { createPortal } from "react-dom";
 import { getTextColorForBackground } from "../../utils/themeUtils";
+import { getFetchErrorMessage } from "../../utils/apiError";
 
 /** Same piece count as Add More Stock "Total Stock": layers first, then legacy quantity. */
 function getSpareTotalStockPieces(spare) {
@@ -405,8 +406,9 @@ function AllSpares() {
       );
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Error deleting spare");
+        throw new Error(
+          await getFetchErrorMessage(response, "Error deleting spare")
+        );
       }
 
       // Remove from local state

@@ -264,9 +264,9 @@ const deleteBattery = async (req, res) => {
       return res.status(404).json({ message: "Battery not found" });
     }
 
-    await Battery.updateOne({ _id: req.params.id }, { $set: { isDeleted: true } });
-    console.log("[soft-delete] Battery:", req.params.id);
-    res.json({ message: "Battery soft deleted" });
+    await Battery.findByIdAndDelete(req.params.id);
+    console.log("[hard-delete] Battery:", req.params.id);
+    res.json({ message: "Battery deleted" });
   } catch (error) {
     console.error("Error deleting battery:", error);
     res.status(500).json({ message: "Server error", error: error.message });

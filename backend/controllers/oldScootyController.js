@@ -462,28 +462,22 @@ const deleteOldScooty = async (req, res) => {
       }
     }
 
-    // Remove linked old battery/charger entries (since the scooty is deleted).
+    // Remove linked scrap + old chargers from Atlas (adjust summary first).
     try {
-      await BatteryScrap.updateMany(
-        { oldScootyId: existing._id },
-        { $set: { isDeleted: true } }
-      );
-      const prevChargers = await OldCharger.find({
-        oldScootyId: existing._id,
-      }).lean();
-      if (prevChargers.length) {
-        for (const row of prevChargers) {
-          await adjustOldChargerSummaryByStatusDelta(
-            row.voltage,
-            row.status,
-            -1
-          );
-        }
+      const oid = existing._id;
+      await BatteryScrap.deleteMany({ oldScootyId: oid });
+
+      const prevChargers = await OldCharger.collection
+        .find({ oldScootyId: oid })
+        .toArray();
+      for (const row of prevChargers) {
+        await adjustOldChargerSummaryByStatusDelta(
+          row.voltage,
+          row.status,
+          -1
+        );
       }
-      await OldCharger.updateMany(
-        { oldScootyId: existing._id },
-        { $set: { isDeleted: true } }
-      );
+      await OldCharger.deleteMany({ oldScootyId: oid });
     } catch (invErr) {
       console.error(
         "Error removing old battery/charger entries while deleting old scooty:",
@@ -491,14 +485,9 @@ const deleteOldScooty = async (req, res) => {
       );
     }
 
-    await OldScooty.updateOne(
-      { _id: existing._id },
-      { $set: { isDeleted: true } }
-    );
-    console.log("[soft-delete] OldScooty:", String(existing._id));
-    return res
-      .status(200)
-      .json({ message: "Old scooty soft deleted successfully" });
+    await OldScooty.findByIdAndDelete(existing._id);
+    console.log("[hard-delete] OldScooty:", String(existing._id));
+    return res.status(200).json({ message: "Old scooty deleted successfully" });
   } catch (error) {
     console.error("Error deleting old scooty:", error);
     return res

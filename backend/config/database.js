@@ -23,7 +23,12 @@ async function connectDatabase() {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 10_000,
     });
-    console.log("[MongoDB] Connected —", maskMongoUri(uri));
+    console.log(
+      "[MongoDB] Connected successfully —",
+      maskMongoUri(uri),
+      "| db:",
+      mongoose.connection.name
+    );
 
     mongoose.connection.on("error", (err) => {
       console.error("[MongoDB] Runtime connection error:", err?.message || err);

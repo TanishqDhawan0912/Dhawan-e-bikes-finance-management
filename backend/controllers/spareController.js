@@ -418,9 +418,9 @@ const deleteSpare = async (req, res) => {
       return res.status(404).json({ message: "Spare not found" });
     }
 
-    await Spare.updateOne({ _id: req.params.id }, { $set: { isDeleted: true } });
-    console.log("[soft-delete] Spare:", req.params.id);
-    res.json({ message: "Spare soft deleted" });
+    await Spare.findByIdAndDelete(req.params.id);
+    console.log("[hard-delete] Spare:", req.params.id);
+    res.json({ message: "Spare deleted" });
   } catch (error) {
     console.error("Error deleting spare:", error);
     res.status(500).json({ message: "Server error", error: error.message });

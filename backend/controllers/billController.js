@@ -57,18 +57,20 @@ async function removeOldScootyLinkedToBill(bill) {
   const oldScootyId = String(bill?.oldScootyId || "").trim();
   if (!oldScootyId || !isObjectId(oldScootyId)) return;
 
-  await BatteryScrap.updateMany({ oldScootyId }, { $set: { isDeleted: true } });
+  const oid = new mongoose.Types.ObjectId(oldScootyId);
 
-  const prevChargers = await OldCharger.find({ oldScootyId }).lean();
-  if (prevChargers.length) {
-    for (const row of prevChargers) {
-      await adjustOldChargerSummaryByStatusDelta(row.voltage, row.status, -1);
-    }
-    await OldCharger.updateMany({ oldScootyId }, { $set: { isDeleted: true } });
+  await BatteryScrap.deleteMany({ oldScootyId: oid });
+
+  const prevChargers = await OldCharger.collection
+    .find({ oldScootyId: oid })
+    .toArray();
+  for (const row of prevChargers) {
+    await adjustOldChargerSummaryByStatusDelta(row.voltage, row.status, -1);
   }
+  await OldCharger.deleteMany({ oldScootyId: oid });
 
-  await OldScooty.updateOne({ _id: oldScootyId }, { $set: { isDeleted: true } });
-  console.log("[soft-delete] OldScooty (bill unlink):", oldScootyId);
+  await OldScooty.deleteOne({ _id: oid });
+  console.log("[hard-delete] OldScooty (bill unlink):", oldScootyId);
 }
 
 async function upsertOldScootyFromBill(bill, body) {
@@ -136,21 +138,15 @@ async function upsertOldScootyFromBill(bill, body) {
   const saved = await doc.save();
   bill.oldScootyId = String(saved._id);
 
-  // Idempotent: replace linked scrap + old-charger rows based on this old scooty.
-  await BatteryScrap.updateMany(
-    { oldScootyId: saved._id },
-    { $set: { isDeleted: true } }
-  );
-  const prevChargers = await OldCharger.find({ oldScootyId: saved._id }).lean();
-  if (prevChargers.length) {
-    for (const row of prevChargers) {
-      await adjustOldChargerSummaryByStatusDelta(row.voltage, row.status, -1);
-    }
-    await OldCharger.updateMany(
-      { oldScootyId: saved._id },
-      { $set: { isDeleted: true } }
-    );
+  // Idempotent: remove prior linked scrap + old-charger rows, then recreate as needed.
+  await BatteryScrap.deleteMany({ oldScootyId: saved._id });
+  const prevChargers = await OldCharger.collection
+    .find({ oldScootyId: saved._id })
+    .toArray();
+  for (const row of prevChargers) {
+    await adjustOldChargerSummaryByStatusDelta(row.voltage, row.status, -1);
   }
+  await OldCharger.deleteMany({ oldScootyId: saved._id });
 
   if (withBattery && batteryCount > 0) {
     await BatteryScrap.create({
@@ -562,9 +558,9 @@ const deleteBill = async (req, res) => {
     if (!bill) return res.status(404).json({ message: "Bill not found" });
     await adjustBillInventory(bill, "restore");
     await removeOldScootyLinkedToBill(bill);
-    await Bill.updateOne({ _id: req.params.id }, { $set: { isDeleted: true } });
-    console.log("[soft-delete] Bill:", req.params.id);
-    res.json({ message: "Bill soft deleted" });
+    await Bill.findByIdAndDelete(req.params.id);
+    console.log("[hard-delete] Bill:", req.params.id);
+    res.json({ message: "Bill deleted" });
   } catch (error) {
     console.error("Error deleting bill:", error);
     res.status(500).json({ message: "Server error", error: error.message });

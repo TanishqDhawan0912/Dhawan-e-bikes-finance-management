@@ -16,6 +16,7 @@ Set these in the Render dashboard (**Environment** for the service):
 | `MONGO_URI`    | Yes      | MongoDB connection string (e.g. Atlas). |
 | `JWT_SECRET`   | Yes      | Secret for signing JWTs; use a long random string. |
 | `PORT`         | No       | Render injects `PORT` automatically; you usually do not set it. |
+| `CORS_ORIGINS` | No       | Comma-separated allowed browser origins. If unset, defaults include your Vercel app and local dev URLs. |
 
 Optional:
 
@@ -37,6 +38,15 @@ Copy from `.env.example` locally; never commit real secrets.
 ## Health check
 
 Render can use **Health Check Path** `/` — the app responds with plain text `API Running`.
+
+## Diagnostic routes (after deploy)
+
+| Path | Purpose |
+|------|---------|
+| `GET /` | Plain text `API Running` (load balancers). |
+| `GET /health` | JSON `{ ok, service, uptime, env }`. |
+| `GET /test` | Plain text `Backend working`. |
+| `GET /db-test` | JSON: confirms MongoDB + `User` collection. In **production** only `userCount` is returned (no email/name). In **development**, includes a small redacted sample. |
 
 ## Frontend / other clients
 
