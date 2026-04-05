@@ -6,12 +6,12 @@ const Model = require("../models/Model");
 const updateExistingPurchaseDates = async () => {
   try {
     // Connect to MongoDB
-    const localUri = process.env.MONGO_LOCAL_URI?.trim();
-    if (!localUri) {
-      console.error("MONGO_LOCAL_URI is not set");
+    const uri = process.env.MONGO_URI?.trim();
+    if (!uri) {
+      console.error("MONGO_URI is not set");
       process.exit(1);
     }
-    await mongoose.connect(localUri);
+    await mongoose.connect(uri);
 
     console.log("Connected to MongoDB");
 

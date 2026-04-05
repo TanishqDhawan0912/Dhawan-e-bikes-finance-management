@@ -217,7 +217,7 @@ modelSchema.pre("save", function (next) {
 
 modelSchema.plugin(softDeletePlugin);
 
-// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+// Indexing for date-range queries and lastSyncedAt bookkeeping.
 modelSchema.index({ createdAt: 1 });
 modelSchema.index({ updatedAt: 1 });
 

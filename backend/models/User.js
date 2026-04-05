@@ -101,7 +101,7 @@ userSchema.pre("find", function () {
   this.find({ isActive: { $ne: false } });
 });
 
-// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+// Indexing for date-range queries and lastSyncedAt bookkeeping.
 userSchema.index({ createdAt: 1 });
 userSchema.index({ updatedAt: 1 });
 

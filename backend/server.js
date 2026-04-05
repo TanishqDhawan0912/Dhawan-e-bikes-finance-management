@@ -2,13 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
-const cron = require("node-cron");
-const { connectMongoDatabases } = require("./config/database");
-const { syncAllLocalToAtlas } = require("./services/atlasSync");
-const {
-  startBackupScheduler,
-  stopBackupScheduler,
-} = require("./services/mongoBackup");
+const { connectDatabase, closeDatabase } = require("./config/database");
 
 const app = express();
 
@@ -36,9 +30,7 @@ const oldChargerScrapRoutes = require("./routes/oldChargerScrapRoutes");
 const oldScootyRoutes = require("./routes/oldScootyRoutes");
 const jobcardRoutes = require("./routes/jobcardRoutes");
 const billRoutes = require("./routes/billRoutes");
-const syncRoutes = require("./routes/syncRoutes");
 const restoreRoutes = require("./routes/restoreRoutes");
-require("./models/SyncLog");
 
 // Use routes
 app.use("/api/models", modelRoutes);
@@ -54,7 +46,6 @@ app.use("/api/old-charger-scraps", oldChargerScrapRoutes);
 app.use("/api/old-scooties", oldScootyRoutes);
 app.use("/api/jobcards", jobcardRoutes);
 app.use("/api/bills", billRoutes);
-app.use(syncRoutes);
 app.use(restoreRoutes);
 
 // Error handling middleware
@@ -74,57 +65,16 @@ if (!Number.isInteger(PORT) || PORT <= 0 || PORT > 65535) {
 
 (async function startServer() {
   try {
-    await connectMongoDatabases();
+    await connectDatabase();
   } catch {
     console.error(
-      "[Server] Exiting: local MongoDB (primary) is required and could not connect."
+      "[Server] Exiting: MongoDB connection failed (check MONGO_URI)."
     );
     process.exit(1);
   }
 
-  const server = app.listen(PORT, async () => {
+  const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-
-    try {
-      console.log("[Sync] Initial Atlas sync (startup)…");
-      const initial = await syncAllLocalToAtlas();
-      console.log("[Sync] Initial sync result:", {
-        success: initial.success,
-        skipped: Boolean(initial.skipped),
-        totalCandidates: initial.totalCandidates,
-        synced: initial.synced,
-        failed: initial.failed,
-        deletedFromAtlas: initial.deletedFromAtlas,
-        durationMs: initial.durationMs,
-      });
-    } catch (err) {
-      console.error("[Sync] Initial sync error:", err.message);
-    }
-
-    const cronExpr = process.env.SYNC_CRON?.trim() || "0 */6 * * *";
-    if (!cron.validate(cronExpr)) {
-      console.error(
-        "[Sync] Invalid SYNC_CRON; expected 5-field cron (e.g. 0 */6 * * *). Scheduled sync disabled."
-      );
-    } else {
-      cron.schedule(cronExpr, () => {
-        syncAllLocalToAtlas()
-          .then((r) => {
-            console.log("[Sync] Scheduled run result:", {
-              success: r.success,
-              skipped: Boolean(r.skipped),
-              totalCandidates: r.totalCandidates,
-              synced: r.synced,
-              failed: r.failed,
-              durationMs: r.durationMs,
-            });
-          })
-          .catch((e) => console.error("[Sync] Scheduled run error:", e.message));
-      });
-      console.log(`[Sync] Recurring sync scheduled: SYNC_CRON="${cronExpr}"`);
-    }
-
-    startBackupScheduler({ runOnStart: true });
   });
 
   server.on("error", (err) => {
@@ -133,12 +83,11 @@ if (!Number.isInteger(PORT) || PORT <= 0 || PORT > 65535) {
   });
 
   const shutdown = () => {
-    try {
-      stopBackupScheduler();
-    } catch (_) {
-      /* ignore */
-    }
-    server.close(() => process.exit(0));
+    server.close(() => {
+      closeDatabase()
+        .catch(() => {})
+        .finally(() => process.exit(0));
+    });
   };
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);

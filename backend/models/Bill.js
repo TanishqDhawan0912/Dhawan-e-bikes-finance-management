@@ -100,7 +100,7 @@ const billSchema = new mongoose.Schema(
 
 billSchema.plugin(softDeletePlugin);
 
-// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+// Indexing for date-range queries and lastSyncedAt bookkeeping.
 billSchema.index({ createdAt: 1 });
 billSchema.index({ updatedAt: 1 });
 

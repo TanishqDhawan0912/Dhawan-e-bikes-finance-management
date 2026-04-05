@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { getLocalModelsOrdered } = require("../config/atlasModels");
+const { getLocalModelsOrdered } = require("../config/modelsRegistry");
 
 function parseId(idParam) {
   const raw = String(idParam || "").trim();

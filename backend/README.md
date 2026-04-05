@@ -40,9 +40,14 @@ npm run install:all
 - `npm run install:all` - Install dependencies for both backend and frontend
 - `npm run install:frontend` - Install frontend dependencies only
 
+## Environment (backend)
+
+- **`MONGO_URI`** — Required. Single MongoDB connection string (e.g. MongoDB Atlas). The app uses one `mongoose.connect(MONGO_URI)`; there is no secondary or local database connection.
+- **`PORT`** — Optional; defaults handled in code (typically `5000`).
+
 ## Port Configuration
 
-- Backend: Automatically finds available port (starts at 5000)
+- Backend: listens on `PORT` (e.g. 5000)
 - Frontend: Vite dev server (usually port 5173)
 
 ## Deployment

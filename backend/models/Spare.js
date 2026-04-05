@@ -203,7 +203,7 @@ spareSchema.pre(
 spareSchema.set("toJSON", { virtuals: true });
 spareSchema.set("toObject", { virtuals: true });
 
-// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+// Indexing for date-range queries and lastSyncedAt bookkeeping.
 spareSchema.index({ createdAt: 1 });
 spareSchema.index({ updatedAt: 1 });
 

@@ -43,7 +43,7 @@ const batteryScrapSchema = new mongoose.Schema(
 
 batteryScrapSchema.plugin(softDeletePlugin);
 
-// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+// Indexing for date-range queries and lastSyncedAt bookkeeping.
 batteryScrapSchema.index({ createdAt: 1 });
 batteryScrapSchema.index({ updatedAt: 1 });
 

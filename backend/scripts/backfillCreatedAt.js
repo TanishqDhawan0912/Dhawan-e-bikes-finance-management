@@ -8,7 +8,7 @@
  */
 require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
 const mongoose = require("mongoose");
-const { getLocalModelsOrdered } = require("../config/atlasModels");
+const { getLocalModelsOrdered } = require("../config/modelsRegistry");
 
 async function backfillCollection(collection, modelName) {
   const filter = {
@@ -66,9 +66,9 @@ async function backfillCollectionCursor(collection, modelName, filter) {
 }
 
 (async function main() {
-  const uri = process.env.MONGO_LOCAL_URI?.trim();
+  const uri = process.env.MONGO_URI?.trim();
   if (!uri) {
-    console.error("[migrate:created-at] MONGO_LOCAL_URI is not set.");
+    console.error("[migrate:created-at] MONGO_URI is not set.");
     process.exit(1);
   }
 
@@ -77,7 +77,7 @@ async function backfillCollectionCursor(collection, modelName, filter) {
   let totalModified = 0;
   let totalMatched = 0;
 
-  console.log("[migrate:created-at] Backfilling missing createdAt on primary DB…");
+  console.log("[migrate:created-at] Backfilling missing createdAt…");
 
   for (const M of models) {
     if (!M.schema.path("createdAt") || !M.schema.path("updatedAt")) {

@@ -21,7 +21,7 @@ const oldChargerSummarySchema = new mongoose.Schema(
 
 oldChargerSummarySchema.plugin(softDeletePlugin);
 
-// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+// Indexing for date-range queries and lastSyncedAt bookkeeping.
 oldChargerSummarySchema.index({ createdAt: 1 });
 oldChargerSummarySchema.index({ updatedAt: 1 });
 

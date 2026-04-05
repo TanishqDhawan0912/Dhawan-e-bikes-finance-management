@@ -1,8 +1,6 @@
 /**
  * Jobcard — canonical model for service / job records.
  * MongoDB collection: jobcards (Mongoose default for model name "Jobcard").
- * Same schema is registered on the primary (local) connection and optionally on a secondary
- * Atlas connection — see config/database.js. No separate Job collection or model.
  */
 const mongoose = require("mongoose");
 const softDeletePlugin = require("./plugins/softDelete");
@@ -388,7 +386,7 @@ const jobcardSchema = new mongoose.Schema(
       enum: ["pending", "finalized"],
       default: "pending",
     },
-    /** Jobcard cloud sync: last successful sync time (null = never synced) */
+    /** Optional client-reported sync timestamp (e.g. mobile); null if unused */
     lastSyncedAt: {
       type: Date,
       default: null,
@@ -401,9 +399,7 @@ const jobcardSchema = new mongoose.Schema(
 
 jobcardSchema.plugin(softDeletePlugin);
 
-// Atlas/local sync: candidate query uses createdAt >= cutoff (6-month window).
 jobcardSchema.index({ createdAt: 1 });
-// Sync dirty check: $expr updatedAt > lastSyncedAt uses updatedAt; index supports planning.
 jobcardSchema.index({ updatedAt: 1 });
 
 // Generate jobcard number before saving: jc-date-(entry number of that date)
@@ -429,15 +425,9 @@ jobcardSchema.pre("save", async function (next) {
   next();
 });
 
-/** Register Jobcard on a specific connection (e.g. MongoDB Atlas secondary). */
-function attachJobcardModel(connection) {
-  return connection.models.Jobcard || connection.model("Jobcard", jobcardSchema);
-}
-
 const Jobcard =
   mongoose.models.Jobcard || mongoose.model("Jobcard", jobcardSchema);
 
 module.exports = Jobcard;
-module.exports.attachJobcardModel = attachJobcardModel;
 module.exports.jobcardSchema = jobcardSchema;
 

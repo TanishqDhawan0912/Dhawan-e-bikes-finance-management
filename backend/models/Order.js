@@ -79,7 +79,7 @@ const orderSchema = new mongoose.Schema(
 
 orderSchema.plugin(softDeletePlugin);
 
-// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+// Indexing for date-range queries and lastSyncedAt bookkeeping.
 orderSchema.index({ createdAt: 1 });
 orderSchema.index({ updatedAt: 1 });
 

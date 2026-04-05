@@ -1761,7 +1761,7 @@ const deleteJobcard = async (req, res) => {
   }
 };
 
-// @desc    Update Jobcard.lastSyncedAt after successful cloud sync
+// @desc    Update Jobcard.lastSyncedAt (e.g. client-reported)
 // @route   PATCH /api/jobcards/:id/synced
 // @access  Public (add auth later)
 const markJobcardSynced = async (req, res) => {

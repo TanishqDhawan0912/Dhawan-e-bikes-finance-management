@@ -134,7 +134,7 @@ const oldScootySchema = new mongoose.Schema(
 
 oldScootySchema.plugin(softDeletePlugin);
 
-// Atlas/local sync: createdAt range + updatedAt vs lastSyncedAt in candidate filter.
+// Indexing for date-range queries and lastSyncedAt bookkeeping.
 oldScootySchema.index({ createdAt: 1 });
 oldScootySchema.index({ updatedAt: 1 });
 
