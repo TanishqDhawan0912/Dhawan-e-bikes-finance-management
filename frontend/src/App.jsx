@@ -83,13 +83,17 @@ function AppLayout() {
   const classNames = useMemo(() => {
     const isJobcardPage = pathname.startsWith("/jobcards");
     const isSparesPage = pathname.startsWith("/spares");
+    const isBatteriesPage = pathname.startsWith("/batteries");
+    const isChargersPage = pathname.startsWith("/chargers");
     const isModelsPage = pathname.startsWith("/models");
     const isBillsPage = pathname.startsWith("/bills");
     const isHomePage = pathname === "/";
+    const usesSparesShell =
+      isSparesPage || isBatteriesPage || isChargersPage;
 
     return {
       root: `app-root ${isJobcardPage ? "jobcard-root" : ""} ${
-        isSparesPage ? "spares-root" : ""
+        usesSparesShell ? "spares-root" : ""
       } ${isModelsPage ? "models-root" : ""} ${
         isBillsPage ? "bills-root" : ""
       }`.trim(),

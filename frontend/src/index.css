@@ -1,5 +1,11 @@
 /* Base Styles */
-html,
+html {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
 body {
   height: 100%;
   margin: 0;
@@ -62,62 +68,63 @@ body {
   color: #111827;
 }
 
-/* Hide scrollbars globally */
-::-webkit-scrollbar {
-  display: none;
+/* App shell: fill viewport; scroll happens inside .app-main */
+#root {
+  height: 100%;
 }
 
-/* Hide scrollbars for IE, Edge and Firefox */
-* {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
-}
-
-/* App Root */
+/* App shell: single column, main fills viewport and scrolls when content is tall */
 .app-root {
+  height: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  background: #dce2ef;
 }
 
-/* App Root */
-.app-root {
-  min-height: 100vh;
+.app-main {
   display: flex;
   flex-direction: column;
-}
-
-/* Jobcard root - allow scrolling */
-.jobcard-root {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.jobcard-root .app-main {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  height: calc(100vh - 64px);
 }
 
-/* Spares root - allow scrolling */
+/* Jobcard / sidebar-style full-height routes */
+.jobcard-root,
 .spares-root {
   height: 100vh;
-  display: flex;
-  flex-direction: column;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
 }
 
-.spares-root .app-main {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  height: calc(100vh - 64px);
+.jobcard-root .app-main,
+.spares-root .app-main,
+.app-root.models-root .app-main,
+.app-root.bills-root .app-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* Other pages - allow scrolling */
-.app-root:not(.jobcard-root) .app-main:not(.home-page) {
-  flex: 1;
+/* Inner sidebar main column scrolls (fixed left nav stays put) */
+.jobcards-content,
+.spares-content,
+.models-content,
+.bills-content {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Standalone pages (admin, etc.): main scrolls */
+.app-root:not(.jobcard-root):not(.spares-root) .app-main:not(.home-page) {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -145,42 +152,18 @@ body {
   padding: 1rem 0;
 }
 
-/* Home Page Specific Styles */
+/* Home: scroll when menu tiles exceed viewport height */
 .home-page {
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
 .home-page > * {
   flex-shrink: 0;
-  max-height: 100%;
-}
-
-/* Ensure other pages can scroll */
-.app-main:not(.home-page) {
-  overflow-y: auto;
-  overflow-x: hidden;
-  flex: 1;
-}
-
-/* Hide scrollbar visually but keep scroll functionality */
-.jobcard-root .app-main::-webkit-scrollbar {
-  width: 6px;
-  background: transparent;
-}
-
-.jobcard-root .app-main::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.jobcard-root .app-main::-webkit-scrollbar-thumb {
-  background: transparent;
-}
-
-.jobcard-root .app-main::-webkit-scrollbar-thumb:hover {
-  background: rgba(193, 193, 193, 0.3);
 }
 
 a {
@@ -198,12 +181,7 @@ button {
   font-family: inherit;
 }
 
-.app-root {
-  min-height: 100vh;
-  background: #dce2ef;
-}
-
-.app-main {
+.app-main:not(.home-page) {
   padding-bottom: 3rem;
 }
 
@@ -226,7 +204,9 @@ button {
 /* Jobcards Layout */
 .jobcards-layout {
   display: flex;
-  min-height: 100vh;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
   background-color: #f5f7fa;
 }
 
@@ -290,61 +270,70 @@ button {
 }
 
 .jobcards-content {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   margin-left: 250px;
   padding: 2rem;
   max-width: calc(100% - 250px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Spares Layout */
 .spares-layout {
   display: flex;
-  min-height: 100vh;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
   background-color: #f5f7fa;
 }
 
 .spares-content {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   margin-left: 250px;
   padding: 2rem;
   max-width: calc(100% - 250px);
   overflow-y: auto;
   overflow-x: hidden;
-  height: calc(100vh - 64px);
 }
 
 /* Models Layout */
 .models-layout {
   display: flex;
-  min-height: 100vh;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
   background-color: #f5f7fa;
 }
 
 .models-content {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   margin-left: 250px;
   padding: 2rem;
   max-width: calc(100% - 250px);
   overflow-y: auto;
   overflow-x: hidden;
-  height: 100vh;
 }
 
 /* Bills Layout – same theme as Models/Spares */
 .bills-layout {
   display: flex;
-  min-height: 100vh;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
   background-color: #f5f7fa;
 }
 
 .bills-content {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   margin-left: 250px;
   padding: 2rem;
   max-width: calc(100% - 250px);
   overflow-y: auto;
   overflow-x: hidden;
-  height: 100vh;
 }
 
 /* New Bill form – tabs & subtabs (stretch to full page) */
@@ -1210,12 +1199,17 @@ button {
 
 .bill-tabs {
   display: flex;
+  flex-wrap: nowrap;
   gap: 0.25rem;
   margin-bottom: 1.5rem;
   border-bottom: 2px solid #e5e7eb;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .bill-tab {
+  flex: 0 0 auto;
   padding: 0.6rem 1.25rem;
   font-size: 0.95rem;
   font-weight: 500;
@@ -1226,6 +1220,7 @@ button {
   margin-bottom: -2px;
   cursor: pointer;
   transition: color 0.2s, border-color 0.2s;
+  white-space: nowrap;
 }
 
 .bill-tab:hover {
@@ -1239,11 +1234,17 @@ button {
 
 .bill-subtabs {
   display: flex;
+  flex-wrap: nowrap;
   gap: 0.25rem;
   margin-bottom: 1rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
 }
 
 .bill-subtab {
+  flex: 0 0 auto;
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
@@ -1253,6 +1254,7 @@ button {
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .bill-subtab:hover {
