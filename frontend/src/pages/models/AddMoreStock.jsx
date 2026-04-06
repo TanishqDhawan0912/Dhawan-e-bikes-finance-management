@@ -146,6 +146,7 @@ function AddMoreStock() {
   const [editingEntry, setEditingEntry] = useState(null);
   const [showEditDatePicker, setShowEditDatePicker] = useState(false);
   const [selectedColorIndex, setSelectedColorIndex] = useState({}); // Track selected color per entry group
+  const [selectedEntryTabByDate, setSelectedEntryTabByDate] = useState({}); // dateLabel -> tab index
   const formSectionRef = useRef(null);
   const editFormSectionRef = useRef(null);
   const datePickerRef = useRef(null);
@@ -518,26 +519,7 @@ function AddMoreStock() {
       // Filter out entries (no need to check quantity since we removed it)
       const filteredEntries = currentStockEntries.filter((entry) => entry);
 
-      // Duplicate check by purchase date
-      const newDate = displayDate(newStockEntry.purchaseDate);
-      const hasDuplicateDate = filteredEntries.some(
-        (entry) => displayDate(entry.purchaseDate) === newDate
-      );
-      if (hasDuplicateDate) {
-        setFormWarning("A stock entry with this purchase date already exists");
-        setTimeout(() => setFormWarning(""), 3000);
-        setIsSubmitting(false);
-        // Scroll to top to show the warning
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        // Also scroll to form section if ref is available
-        setTimeout(() => {
-          formSectionRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-        }, 100);
-        return;
-      }
+      // NOTE: we allow multiple stockEntries with the same purchase date.
 
       // Add the new entry
       // Get description - if empty, use latest entry's description
@@ -562,7 +544,15 @@ function AddMoreStock() {
         sellingPrice: parseFloat(newStockEntry.sellingPrice) || 0,
         purchasePrice: parseFloat(newStockEntry.purchasePrice) || 0,
         colorQuantities: newStockEntry.colorQuantities
-          .filter((entry) => entry.color && entry.quantity)
+          // Allow 0 so user can explicitly set a colour to zero.
+          .filter(
+            (entry) =>
+              entry.color &&
+              entry.color.toString().trim() !== "" &&
+              entry.quantity !== undefined &&
+              entry.quantity !== null &&
+              entry.quantity !== ""
+          )
           .map((entry) => ({
             color: entry.color,
             quantity: parseInt(entry.quantity) || 0,
@@ -629,6 +619,11 @@ function AddMoreStock() {
       }
 
       await fetchModelDetails();
+      window.dispatchEvent(
+        new CustomEvent("modelDataUpdated", {
+          detail: { modelId: id, reason: "addStockEntry" },
+        })
+      );
 
       // Reset form
       setNewStockEntry({
@@ -700,24 +695,7 @@ function AddMoreStock() {
         (_, idx) => idx !== editingEntryIndex
       );
 
-      const newDate = displayDate(editingEntry.purchaseDate);
-      const hasDuplicateDate = filteredEntries.some(
-        (e) => displayDate(e.purchaseDate) === newDate
-      );
-      if (hasDuplicateDate) {
-        setFormWarning("A stock entry with this purchase date already exists");
-        setTimeout(() => setFormWarning(""), 3000);
-        // Scroll to top to show the warning
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        // Also scroll to form section if ref is available
-        setTimeout(() => {
-          formSectionRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-        }, 100);
-        return;
-      }
+      // NOTE: we allow multiple stockEntries with the same purchase date.
 
       // Get description - if empty, use latest entry's description (excluding current entry)
       let finalDescription = editingEntry.description || [];
@@ -741,7 +719,15 @@ function AddMoreStock() {
         sellingPrice: parseFloat(editingEntry.sellingPrice) || 0,
         purchasePrice: parseFloat(editingEntry.purchasePrice) || 0,
         colorQuantities: editingEntry.colorQuantities
-          .filter((entry) => entry.color && entry.quantity)
+          // Allow 0 so user can explicitly set a colour to zero.
+          .filter(
+            (entry) =>
+              entry.color &&
+              entry.color.toString().trim() !== "" &&
+              entry.quantity !== undefined &&
+              entry.quantity !== null &&
+              entry.quantity !== ""
+          )
           .map((entry) => ({
             color: entry.color,
             quantity: parseInt(entry.quantity) || 0,
@@ -805,6 +791,11 @@ function AddMoreStock() {
       }
 
       await fetchModelDetails();
+      window.dispatchEvent(
+        new CustomEvent("modelDataUpdated", {
+          detail: { modelId: id, reason: "editStockEntry" },
+        })
+      );
       setEditingEntryIndex(null);
       setEditingEntry(null);
       setFormError("");
@@ -874,6 +865,11 @@ function AddMoreStock() {
       }
 
       await fetchModelDetails();
+      window.dispatchEvent(
+        new CustomEvent("modelDataUpdated", {
+          detail: { modelId: id, reason: "deleteStockEntry" },
+        })
+      );
     } catch (error) {
       console.error("Error deleting stock entry:", error);
       setFormError(error.message || "Failed to delete stock entry");
@@ -953,6 +949,11 @@ function AddMoreStock() {
       }
 
       await fetchModelDetails();
+      window.dispatchEvent(
+        new CustomEvent("modelDataUpdated", {
+          detail: { modelId: id, reason: "deleteColorFromEntry" },
+        })
+      );
     } catch (error) {
       console.error("Error deleting color from entry:", error);
       setFormError(error.message || "Failed to delete color from entry");
@@ -1019,8 +1020,17 @@ function AddMoreStock() {
     );
   }
 
-  const sortedEntries = sortEntriesByDate(model?.stockEntries || []);
-  const groupedEntries = groupEntriesByDate(sortedEntries);
+  // Keep original indices so edit/delete always target the right entry,
+  // and render each entry individually (don't group by date) to avoid
+  // mismatches when multiple entries share the same purchase date.
+  const indexedEntries = Array.isArray(model?.stockEntries)
+    ? model.stockEntries.map((entry, idx) => ({ entry, idx }))
+    : [];
+  const sortedIndexedEntries = [...indexedEntries].sort((a, b) => {
+    const dateA = new Date(parseDate(a.entry?.purchaseDate || ""));
+    const dateB = new Date(parseDate(b.entry?.purchaseDate || ""));
+    return dateB - dateA; // newest first
+  });
 
   // Calculate colors with quantities from all stock entries dynamically
   const getColorsWithQuantities = () => {
@@ -3059,7 +3069,7 @@ function AddMoreStock() {
             </div>
           </div>
 
-          {groupedEntries.length > 0 ? (
+          {sortedIndexedEntries.length > 0 ? (
             <div
               style={{
                 display: "flex",
@@ -3067,135 +3077,198 @@ function AddMoreStock() {
                 gap: "1.5rem",
               }}
             >
-              {groupedEntries.map((group, groupIndex) => {
-                const firstEntry = group.entries[0];
-                const originalIndex = model.stockEntries.findIndex(
-                  (e) => displayDate(e.purchaseDate) === group.date
-                );
-                // Get data from the specific stock entry
-                const entryColorQuantities = firstEntry?.colorQuantities || [];
-                const entryBatteriesPerSet = firstEntry?.batteriesPerSet || 5;
-                // Ensure purchase price is parsed as a number
-                const entryPurchasePrice = parseFloat(firstEntry?.purchasePrice) || 0;
-                const entrySellingPrice = parseFloat(firstEntry?.sellingPrice) || 0;
-                const entryDescription = firstEntry?.description || [];
-                const entryPurchasedInWarranty =
-                  firstEntry?.purchasedInWarranty || false;
+              {(() => {
+                // Group entries by purchase date label; show tabs within each date
+                // for different descriptions under the same date.
+                const groups = new Map();
+                sortedIndexedEntries.forEach(({ entry, idx: originalIndex }) => {
+                  const dateLabel = displayDate(entry?.purchaseDate || "") || "Unknown date";
+                  const list = groups.get(dateLabel) || [];
+                  list.push({ entry, originalIndex });
+                  groups.set(dateLabel, list);
+                });
 
-                // Calculate total quantity from this entry's colorQuantities
-                const totalQuantity = entryColorQuantities.reduce(
-                  (sum, cq) => sum + (parseInt(cq.quantity) || 0),
-                  0
-                );
-                // Price per piece is the same as purchase price entered
-                const pricePerPiece = entryPurchasePrice;
-                // Calculate total purchase price (total quantity × purchase price)
-                const totalValue = totalQuantity * entryPurchasePrice;
+                return Array.from(groups.entries()).map(([dateLabel, items]) => {
+                  const activeTab =
+                    selectedEntryTabByDate[dateLabel] !== undefined
+                      ? selectedEntryTabByDate[dateLabel]
+                      : 0;
+                  const safeTab = Math.min(
+                    Math.max(0, activeTab),
+                    Math.max(0, items.length - 1)
+                  );
 
-                return (
-                  <div
-                    key={group.date}
-                    style={{
-                      backgroundColor: "white",
-                      border: "3px solid #e5e7eb",
-                      borderRadius: "0.5rem",
-                      padding: "1.5rem",
-                    }}
-                  >
-                    {/* Date Header */}
+                  const { entry, originalIndex } = items[safeTab] || items[0];
+
+                  const entryColorQuantities = entry?.colorQuantities || [];
+                  const entryBatteriesPerSet = entry?.batteriesPerSet || 5;
+                  const entryPurchasePrice = parseFloat(entry?.purchasePrice) || 0;
+                  const entrySellingPrice = parseFloat(entry?.sellingPrice) || 0;
+                  const entryDescription = entry?.description || [];
+                  const entryPurchasedInWarranty =
+                    entry?.purchasedInWarranty || false;
+
+                  const totalQuantity = entryColorQuantities.reduce(
+                    (sum, cq) => sum + (parseInt(cq.quantity) || 0),
+                    0
+                  );
+                  const pricePerPiece = entryPurchasePrice;
+                  const totalValue = totalQuantity * entryPurchasePrice;
+
+                  return (
                     <div
+                      key={`${dateLabel}-${items.length}`}
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: "1rem",
+                        backgroundColor: "white",
+                        border: "3px solid #e5e7eb",
+                        borderRadius: "0.5rem",
+                        padding: "1.5rem",
                       }}
                     >
-                      <h4
-                        style={{
-                          margin: 0,
-                          fontSize: "1rem",
-                          fontWeight: "600",
-                          color: "#1f2937",
-                        }}
-                      >
-                        {group.date}
-                      </h4>
+                      {/* Date Header */}
                       <div
                         style={{
                           display: "flex",
-                          gap: "0.5rem",
+                          justifyContent: "space-between",
                           alignItems: "center",
+                          marginBottom: "1rem",
                         }}
                       >
-                      <button
-                        onClick={() => {
-                          if (originalIndex !== -1) {
-                            handleEditEntry(originalIndex, firstEntry);
-                          }
-                        }}
-                        style={{
-                          backgroundColor: "#3b82f6",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "0.375rem",
-                          padding: "0.5rem 1rem",
-                          fontSize: "0.875rem",
-                          fontWeight: "500",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.5rem",
-                        }}
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
-                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                        <span>Edit</span>
-                      </button>
-                        <button
-                          onClick={() => {
-                            if (originalIndex !== -1) {
-                              handleDeleteStockEntry(originalIndex);
-                            }
-                          }}
+                        <h4
                           style={{
-                            backgroundColor: "#dc2626",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "0.375rem",
-                            padding: "0.5rem 1rem",
-                            fontSize: "0.875rem",
-                            fontWeight: "500",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
+                            margin: 0,
+                            fontSize: "1rem",
+                            fontWeight: "600",
+                            color: "#1f2937",
                           }}
                         >
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
+                          {dateLabel}
+                        </h4>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.5rem",
+                            alignItems: "center",
+                          }}
+                        >
+                          <button
+                            onClick={() => {
+                              handleEditEntry(originalIndex, entry);
+                            }}
+                            style={{
+                              backgroundColor: "#3b82f6",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "0.375rem",
+                              padding: "0.5rem 1rem",
+                              fontSize: "0.875rem",
+                              fontWeight: "500",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
                           >
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                          </svg>
-                          <span>Delete</span>
-                        </button>
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+                              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleDeleteStockEntry(originalIndex);
+                            }}
+                            style={{
+                              backgroundColor: "#dc2626",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "0.375rem",
+                              padding: "0.5rem 1rem",
+                              fontSize: "0.875rem",
+                              fontWeight: "500",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            <span>Delete</span>
+                          </button>
+                        </div>
                       </div>
-                    </div>
+
+                      {/* Tabs for same-date entries (based on description) */}
+                      {items.length > 1 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.5rem",
+                            flexWrap: "nowrap",
+                            overflowX: "auto",
+                            overflowY: "hidden",
+                            paddingBottom: "0.25rem",
+                            marginBottom: "0.75rem",
+                            WebkitOverflowScrolling: "touch",
+                          }}
+                        >
+                          {items.map((it, idx) => {
+                            const desc = Array.isArray(it.entry?.description)
+                              ? it.entry.description.filter(Boolean)
+                              : [];
+                            const label =
+                              desc.length > 0 ? desc.join(" • ") : `Entry ${idx + 1}`;
+                            const isActive = idx === safeTab;
+                            return (
+                              <button
+                                key={`${dateLabel}-tab-${it.originalIndex}`}
+                                type="button"
+                                onClick={() =>
+                                  setSelectedEntryTabByDate((prev) => ({
+                                    ...prev,
+                                    [dateLabel]: idx,
+                                  }))
+                                }
+                                style={{
+                                  flex: "0 0 auto",
+                                  whiteSpace: "nowrap",
+                                  padding: "0.35rem 0.75rem",
+                                  borderRadius: 999,
+                                  border: isActive
+                                    ? "1px solid #2563eb"
+                                    : "1px solid #e5e7eb",
+                                  backgroundColor: isActive ? "#dbeafe" : "#fff",
+                                  color: isActive ? "#1d4ed8" : "#374151",
+                                  fontSize: "0.8rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                                title={label}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
 
                     {/* Additional Info */}
                     <div
@@ -3267,7 +3340,7 @@ function AddMoreStock() {
                         }}
                       >
                         {entryColorQuantities.map((cq, cqIndex) => {
-                          const entryKey = `${group.date}-${originalIndex}`;
+                          const entryKey = `${displayDate(entry?.purchaseDate || "")}-${originalIndex}`;
                           const isSelected =
                             selectedColorIndex[entryKey] === cqIndex ||
                             (selectedColorIndex[entryKey] === undefined &&
@@ -3532,8 +3605,9 @@ function AddMoreStock() {
                       </div>
                     </div>
                   </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           ) : (
             <div
@@ -3580,7 +3654,7 @@ function AddMoreStock() {
       </div>
 
       {/* Summary Section - Total Quantity and Total Value */}
-      {groupedEntries.length > 0 && (
+      {sortedIndexedEntries.length > 0 && (
         <div
           style={{
             marginTop: "2rem",

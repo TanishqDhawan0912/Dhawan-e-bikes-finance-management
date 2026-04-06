@@ -43,9 +43,16 @@ export default function EditModel() {
           sellingPrice: model.data.sellingPrice ? model.data.sellingPrice.toString() : "",
         });
 
-        // Calculate total quantity from stock entries
+        // Calculate total quantity from stock entries (source of truth).
+        // IMPORTANT: if stockEntries exist, a total of 0 is valid and should NOT
+        // fall back to legacy fields (which can be stale).
+        const hasStockEntries =
+          model.data.stockEntries && Array.isArray(model.data.stockEntries);
+        const hasColorQuantities =
+          model.data.colorQuantities && Array.isArray(model.data.colorQuantities);
+
         let calculatedTotalQuantity = 0;
-        if (model.data.stockEntries && Array.isArray(model.data.stockEntries)) {
+        if (hasStockEntries) {
           model.data.stockEntries.forEach((entry) => {
             if (entry.colorQuantities && Array.isArray(entry.colorQuantities)) {
               entry.colorQuantities.forEach((cq) => {
@@ -53,17 +60,13 @@ export default function EditModel() {
               });
             }
           });
-        }
-        // Fallback to model.colorQuantities or model.quantity
-        if (calculatedTotalQuantity === 0) {
-          if (model.data.colorQuantities && Array.isArray(model.data.colorQuantities)) {
-            calculatedTotalQuantity = model.data.colorQuantities.reduce(
-              (sum, cq) => sum + (parseInt(cq.quantity) || 0),
-              0
-            );
-          } else {
-            calculatedTotalQuantity = model.data.quantity || 0;
-          }
+        } else if (hasColorQuantities) {
+          calculatedTotalQuantity = model.data.colorQuantities.reduce(
+            (sum, cq) => sum + (parseInt(cq.quantity) || 0),
+            0
+          );
+        } else {
+          calculatedTotalQuantity = model.data.quantity || 0;
         }
         setTotalQuantity(calculatedTotalQuantity);
 

@@ -605,6 +605,21 @@ exports.updateModel = asyncHandler(async (req, res) => {
         return validated;
       });
       updateData.stockEntries = validatedEntries;
+
+      // When stockEntries are provided, also derive model-level colorQuantities from them.
+      // This keeps the admin "All Models" table in sync and supports zero quantities.
+      const totals = new Map();
+      validatedEntries.forEach((e) => {
+        (e.colorQuantities || []).forEach((cq) => {
+          const color = (cq.color || "").trim();
+          if (!color) return;
+          const prev = totals.get(color) || 0;
+          totals.set(color, prev + (parseInt(cq.quantity, 10) || 0));
+        });
+      });
+      updateData.colorQuantities = Array.from(totals.entries()).map(
+        ([color, qty]) => ({ color, quantity: qty })
+      );
     }
   }
   // Only update model-level fields if explicitly provided (not from stockEntries)
@@ -656,10 +671,11 @@ exports.updateModel = asyncHandler(async (req, res) => {
     }
   }
 
-  model = await Model.findByIdAndUpdate(req.params.id, updateData, {
-    new: true,
-    runValidators: true,
-  });
+  // IMPORTANT: use document.save() so Model pre-save middleware runs.
+  // findByIdAndUpdate bypasses middleware, which can leave `quantity` stale
+  // and break stockStatus/out-of-stock logic in the UI.
+  Object.assign(model, updateData);
+  await model.save();
 
   res.status(200).json({
     success: true,

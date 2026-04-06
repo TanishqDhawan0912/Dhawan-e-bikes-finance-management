@@ -95,6 +95,7 @@ function AllModels() {
       const queryParams = new URLSearchParams({
         page: pagination.page,
         limit: pagination.limit,
+        t: String(Date.now()), // cache-bust so stock edits reflect immediately
       });
 
       // Removed debouncedSearchTerm to prevent auto-refresh on search
@@ -141,6 +142,22 @@ function AllModels() {
     filterStock,
     filterColor,
   ]);
+
+  // Refresh when returning from Add/Edit stock, or when tab regains focus.
+  useEffect(() => {
+    const onFocus = () => {
+      fetchModels();
+    };
+    const onModelUpdated = () => {
+      fetchModels();
+    };
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("modelDataUpdated", onModelUpdated);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("modelDataUpdated", onModelUpdated);
+    };
+  }, [fetchModels]);
 
   // Group models by name and company
   const getModelsGroupedByNameAndCompany = () => {
@@ -255,7 +272,11 @@ function AllModels() {
     };
 
     filteredModels.forEach((model) => {
-      const key = `${model.modelName}-${model.company}`;
+      // Grouping MUST include warranty, otherwise different warranty buckets
+      // get merged and the UI can show stale/non-matching totals after stock edits.
+      const key = `${model.modelName}-${model.company}-${
+        model.purchasedInWarranty ? "w" : "nw"
+      }`;
       if (!grouped[key]) {
         grouped[key] = {
           modelName: model.modelName,
@@ -285,93 +306,45 @@ function AllModels() {
         }
       }
 
-      // Aggregate colors from stockEntries if available
-      let hasColorsFromStockEntries = false;
-      if (
-        model.stockEntries &&
-        Array.isArray(model.stockEntries) &&
-        model.stockEntries.length > 0
-      ) {
+      // Build per-model color totals with a single source of truth.
+      // Prefer stockEntries (live layer data). If absent, fall back to model.colorQuantities,
+      // then legacy (model.colour + model.quantity).
+      const perModelColorTotals = new Map();
+      const hasStockEntries =
+        Array.isArray(model.stockEntries) && model.stockEntries.length > 0;
+
+      if (hasStockEntries) {
         model.stockEntries.forEach((entry) => {
-          if (
-            entry.colorQuantities &&
-            Array.isArray(entry.colorQuantities) &&
-            entry.colorQuantities.length > 0
-          ) {
-            hasColorsFromStockEntries = true;
+          if (Array.isArray(entry?.colorQuantities)) {
             entry.colorQuantities.forEach((cq) => {
-              if (cq.color && cq.color.trim() !== "") {
-                const existingColor = grouped[key].colours.find(
-                  (c) => c.colour === cq.color
-                );
-                const quantityToAdd = parseInt(cq.quantity) || 0;
-                if (existingColor) {
-                  existingColor.quantity += quantityToAdd;
-                } else {
-                  grouped[key].colours.push({
-                    colour: cq.color,
-                    quantity: quantityToAdd,
-                  });
-                }
-                grouped[key].totalQuantity += quantityToAdd;
-              }
+              const c = (cq?.color || "").toString().trim();
+              if (!c) return;
+              const prev = perModelColorTotals.get(c) || 0;
+              perModelColorTotals.set(c, prev + (parseInt(cq?.quantity) || 0));
             });
           }
         });
-      }
-
-      // Also check model.colorQuantities directly (aggregated from stockEntries)
-      if (
-        model.colorQuantities &&
-        Array.isArray(model.colorQuantities) &&
-        model.colorQuantities.length > 0
-      ) {
+      } else if (Array.isArray(model.colorQuantities) && model.colorQuantities.length > 0) {
         model.colorQuantities.forEach((cq) => {
-          if (cq.color && cq.color.trim() !== "") {
-            const existingColor = grouped[key].colours.find(
-              (c) => c.colour === cq.color
-            );
-            const quantityToAdd = parseInt(cq.quantity) || 0;
-            if (existingColor) {
-              // Only update if the quantity from colorQuantities is greater (more recent/accurate)
-              if (quantityToAdd > existingColor.quantity) {
-                // Adjust total quantity
-                grouped[key].totalQuantity -= existingColor.quantity;
-                existingColor.quantity = quantityToAdd;
-                grouped[key].totalQuantity += quantityToAdd;
-              }
-            } else {
-              grouped[key].colours.push({
-                colour: cq.color,
-                quantity: quantityToAdd,
-              });
-              grouped[key].totalQuantity += quantityToAdd;
-            }
-          }
+          const c = (cq?.color || "").toString().trim();
+          if (!c) return;
+          perModelColorTotals.set(c, parseInt(cq?.quantity) || 0);
         });
+      } else if (model.colour && model.colour.trim() !== "") {
+        perModelColorTotals.set(model.colour, model.quantity || 0);
       }
 
-      // Fallback: use old colour field if no colorQuantities found
-      if (
-        !hasColorsFromStockEntries &&
-        (!model.colorQuantities || model.colorQuantities.length === 0) &&
-        model.colour &&
-        model.colour.trim() !== ""
-      ) {
-        let modelQuantity = model.quantity || 0;
-        const existingColor = grouped[key].colours.find(
-          (c) => c.colour === model.colour
-        );
+      // Apply per-model totals into the group aggregate.
+      perModelColorTotals.forEach((qty, colour) => {
+        const existingColor = grouped[key].colours.find((c) => c.colour === colour);
+        const quantityToAdd = parseInt(qty) || 0;
         if (existingColor) {
-          existingColor.quantity += modelQuantity;
+          existingColor.quantity += quantityToAdd;
         } else {
-          grouped[key].colours.push({
-            colour: model.colour,
-            quantity: modelQuantity,
-          });
+          grouped[key].colours.push({ colour, quantity: quantityToAdd });
         }
-        grouped[key].totalQuantity += modelQuantity;
-      }
+        grouped[key].totalQuantity += quantityToAdd;
+      });
 
       grouped[key].totalValue +=
         (model.purchasePrice || 0) * (model.quantity || 0);
@@ -936,7 +909,11 @@ function AllModels() {
               getModelsGroupedByNameAndCompany().map((group) => {
                 const priceStatus = getGroupPriceStatus(group);
                 return (
-                <React.Fragment key={`${group.modelName}-${group.company}`}>
+                <React.Fragment
+                  key={`${group.modelName}-${group.company}-${
+                    group.inWarranty ? "w" : "nw"
+                  }`}
+                >
                   {/* Group Header */}
                   <tr>
                     <td
@@ -1147,7 +1124,9 @@ function AllModels() {
                   {group.colours.length > 0 ? (
                     group.colours.map((colorEntry, colorIndex) => (
                       <tr
-                        key={`${group.modelName}-${group.company}-${colorIndex}`}
+                        key={`${group.modelName}-${group.company}-${
+                          group.inWarranty ? "w" : "nw"
+                        }-${colorIndex}`}
                         style={{
                           borderBottom: "1px solid #f3f4f6",
                           transition: "background-color 0.15s ease",
@@ -1371,7 +1350,9 @@ function AllModels() {
                   ) : (
                     // Fallback: single row for models without colors
                     <tr
-                      key={`${group.modelName}-${group.company}-fallback`}
+                      key={`${group.modelName}-${group.company}-${
+                        group.inWarranty ? "w" : "nw"
+                      }-fallback`}
                       style={{
                         borderBottom: "1px solid #f3f4f6",
                         transition: "background-color 0.15s ease",
