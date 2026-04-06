@@ -1503,12 +1503,14 @@ const finalizeJobcard = async (req, res) => {
         paymentDateString = `${day}/${month}/${year}`;
       }
 
-      // Get current time in HH:mm AM/PM format
+      // Get current time in HH:mm AM/PM format (IST).
+      // Server may run in UTC; force Asia/Kolkata so stored times match India local time.
       const now = new Date();
       const paymentTime = now.toLocaleTimeString("en-IN", {
         hour: "2-digit",
         minute: "2-digit",
         hour12: true,
+        timeZone: "Asia/Kolkata",
       });
 
       // Check if this payment already exists in history (to avoid duplicates)
@@ -1523,6 +1525,7 @@ const finalizeJobcard = async (req, res) => {
         jobcard.paymentHistory.push({
           amount: paidAmount,
           date: paymentDateString,
+          paidAt: now,
           time: paymentTime,
           paymentMode: paymentMode || "cash",
         });
@@ -1640,22 +1643,25 @@ const settleJobcard = async (req, res) => {
           hour: "2-digit",
           minute: "2-digit",
           hour12: true,
+          timeZone: "Asia/Kolkata",
         });
         jobcard.paymentHistory.push({
           amount: jobcard.paidAmount,
           date: jobcard.date || new Date().toISOString().split("T")[0],
+          paidAt: new Date(),
           time: initialTime,
           paymentMode: jobcard.paymentMode || "cash",
         });
       }
     }
 
-    // Get current time in HH:mm AM/PM format
+    // Get current time in HH:mm AM/PM format (IST)
     const now = new Date();
     const paymentTime = now.toLocaleTimeString("en-IN", {
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
+      timeZone: "Asia/Kolkata",
     });
 
     // Format payment date
@@ -1683,6 +1689,7 @@ const settleJobcard = async (req, res) => {
     jobcard.paymentHistory.push({
       amount: amount,
       date: paymentDateString,
+      paidAt: now,
       time: paymentTime,
       paymentMode: paymentMode || "cash",
     });

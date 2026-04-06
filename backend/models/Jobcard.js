@@ -318,6 +318,11 @@ const jobcardSchema = new mongoose.Schema(
           type: String,
           required: true,
         },
+        // Canonical timestamp for this payment (used for correct time display across timezones).
+        paidAt: {
+          type: Date,
+          default: Date.now,
+        },
         time: {
           type: String,
           default: "",

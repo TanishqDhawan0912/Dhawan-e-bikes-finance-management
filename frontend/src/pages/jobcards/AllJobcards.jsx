@@ -255,6 +255,21 @@ export default function AllJobcards() {
   };
 
   const formatPaymentTime = (payment) => {
+    // Prefer a canonical timestamp if available (avoids server timezone/ICU issues).
+    if (payment?.paidAt) {
+      try {
+        const d = new Date(payment.paidAt);
+        if (!Number.isNaN(d.getTime())) {
+          return d.toLocaleTimeString("en-IN", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          });
+        }
+      } catch {
+        // fall through
+      }
+    }
     // Check if payment has a time field
     if (payment.time && payment.time !== "") {
       // Time is stored as string in HH:mm AM/PM format from backend

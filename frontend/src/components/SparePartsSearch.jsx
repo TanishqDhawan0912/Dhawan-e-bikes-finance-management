@@ -318,6 +318,7 @@ export default function SparePartsSearch({ onSelectPart }) {
             boxShadow: "0 8px 16px rgba(0,0,0,0.15)",
             maxHeight: "400px",
             overflowY: "auto",
+            overflowX: "hidden",
             zIndex: 1000,
             listStyle: "none",
             padding: 0,
@@ -390,6 +391,7 @@ export default function SparePartsSearch({ onSelectPart }) {
                       color: isSelected ? "white" : "#1f2937",
                       fontSize: "0.875rem",
                       flex: 1,
+                      minWidth: 0,
                     }}
                   >
                     {spare.name}

@@ -54,6 +54,7 @@ function SuggestionsPortal({
     boxShadow: "0 10px 25px rgba(0,0,0,0.1), 0 4px 10px rgba(0,0,0,0.05)",
     maxHeight: 280,
     overflowY: "auto",
+    overflowX: "hidden",
     animation: "slideDown 0.2s ease-out",
   };
 
