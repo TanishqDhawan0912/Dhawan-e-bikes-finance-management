@@ -3247,22 +3247,13 @@ export default function NewJobcard() {
             >
               {/* Replacement-specific buttons */}
               {activeTab === "replacement" && (
-                <div style={{ marginBottom: "1.5rem" }}>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(4, 1fr)",
-                      gap: "0.75rem",
-                      marginBottom: "1rem",
-                    }}
-                  >
+                <div className="jobcard-replacement-type-wrap">
+                  <div className="jobcard-replacement-type-grid">
                     <button
                       type="button"
+                      className="jobcard-replacement-type-btn"
                       onClick={() => handleReplacementTypeClick("battery")}
                       style={{
-                        padding: "0.75rem 1rem",
-                        fontSize: "0.875rem",
-                        fontWeight: 600,
                         backgroundColor:
                           selectedReplacementType === "battery"
                             ? "#3b82f6"
@@ -3282,20 +3273,19 @@ export default function NewJobcard() {
                             ? "#10b981"
                             : "#d1d5db"
                         }`,
-                        borderRadius: "0.5rem",
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
                       }}
                     >
-                      🔋 Battery {hasReplacementType("battery") && "✓"}
+                      <span aria-hidden="true">🔋</span>
+                      <span>Battery</span>
+                      {hasReplacementType("battery") && (
+                        <span aria-hidden="true">✓</span>
+                      )}
                     </button>
                     <button
                       type="button"
+                      className="jobcard-replacement-type-btn"
                       onClick={() => handleReplacementTypeClick("charger")}
                       style={{
-                        padding: "0.75rem 1rem",
-                        fontSize: "0.875rem",
-                        fontWeight: 600,
                         backgroundColor:
                           selectedReplacementType === "charger"
                             ? "#3b82f6"
@@ -3315,20 +3305,19 @@ export default function NewJobcard() {
                             ? "#10b981"
                             : "#d1d5db"
                         }`,
-                        borderRadius: "0.5rem",
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
                       }}
                     >
-                      ⚡ Charger {hasReplacementType("charger") && "✓"}
+                      <span aria-hidden="true">⚡</span>
+                      <span>Charger</span>
+                      {hasReplacementType("charger") && (
+                        <span aria-hidden="true">✓</span>
+                      )}
                     </button>
                     <button
                       type="button"
+                      className="jobcard-replacement-type-btn"
                       onClick={() => handleReplacementTypeClick("controller")}
                       style={{
-                        padding: "0.75rem 1rem",
-                        fontSize: "0.875rem",
-                        fontWeight: 600,
                         backgroundColor:
                           selectedReplacementType === "controller"
                             ? "#3b82f6"
@@ -3348,20 +3337,19 @@ export default function NewJobcard() {
                             ? "#10b981"
                             : "#d1d5db"
                         }`,
-                        borderRadius: "0.5rem",
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
                       }}
                     >
-                      🎛️ Controller {hasReplacementType("controller") && "✓"}
+                      <span aria-hidden="true">🎛️</span>
+                      <span>Controller</span>
+                      {hasReplacementType("controller") && (
+                        <span aria-hidden="true">✓</span>
+                      )}
                     </button>
                     <button
                       type="button"
+                      className="jobcard-replacement-type-btn"
                       onClick={() => handleReplacementTypeClick("motor")}
                       style={{
-                        padding: "0.75rem 1rem",
-                        fontSize: "0.875rem",
-                        fontWeight: 600,
                         backgroundColor:
                           selectedReplacementType === "motor"
                             ? "#3b82f6"
@@ -3381,12 +3369,13 @@ export default function NewJobcard() {
                             ? "#10b981"
                             : "#d1d5db"
                         }`,
-                        borderRadius: "0.5rem",
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
                       }}
                     >
-                      ⚙️ Motor {hasReplacementType("motor") && "✓"}
+                      <span aria-hidden="true">⚙️</span>
+                      <span>Motor</span>
+                      {hasReplacementType("motor") && (
+                        <span aria-hidden="true">✓</span>
+                      )}
                     </button>
                   </div>
                 </div>

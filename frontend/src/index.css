@@ -2450,6 +2450,66 @@ button.admin-finance-tile:focus-visible {
   }
 }
 
+/* New Jobcard → Replacement: Battery / Charger / Controller / Motor */
+.jobcard-replacement-type-wrap {
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: 1.5rem;
+  box-sizing: border-box;
+}
+
+.jobcard-replacement-type-grid {
+  width: 100%;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  box-sizing: border-box;
+  justify-content: center;
+  align-items: stretch;
+}
+
+.jobcard-replacement-type-btn {
+  margin: 0;
+  min-width: 0;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  text-align: center;
+  line-height: 1.2;
+  box-sizing: border-box;
+  padding: 0.65rem 0.4rem;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 640px) {
+  .jobcard-replacement-type-grid {
+    gap: 0.5rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+@media (max-width: 430px) {
+  .jobcard-replacement-type-grid {
+    gap: 0.4rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .jobcard-replacement-type-btn {
+    padding: 0.55rem 0.25rem;
+    font-size: 0.7rem;
+    gap: 0.15rem;
+  }
+}
+
 /* All Jobcards: action buttons (Print / View Details / Delete) */
 .jobcards-card-actions {
   margin-top: 1rem;
