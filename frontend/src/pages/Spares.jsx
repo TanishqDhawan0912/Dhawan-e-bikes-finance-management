@@ -5,7 +5,7 @@ import {
   Navigate,
   useNavigate,
 } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import SparesSidebar from "../components/SparesSidebar";
 import AddSpare from "./spares/AddSpare";
 import EditSpare from "./spares/EditSpare";
@@ -27,6 +27,7 @@ const WelcomeMessage = () => (
 export default function Spares() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // When switching between sections inside Spares, always reset scroll to top.
   // Scroll happens inside `.spares-content` (not window) due to the app shell.
@@ -84,11 +85,26 @@ export default function Spares() {
 
   return (
     <div className="spares-layout">
-      <SparesSidebar />
+      <SparesSidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+      />
+      <div
+        className={`overlay ${isSidebarOpen ? "show" : ""}`}
+        onClick={() => setIsSidebarOpen(false)}
+      />
       <main className="spares-content">
         <header className="content-header">
           <div className="header-content">
             <div className="header-left">
+              <button
+                className="menu-toggle"
+                type="button"
+                onClick={() => setIsSidebarOpen((v) => !v)}
+                aria-label="Open menu"
+              >
+                ☰
+              </button>
               <h1>{getPageTitle()}</h1>
               <p>Manage your spare parts inventory efficiently</p>
             </div>

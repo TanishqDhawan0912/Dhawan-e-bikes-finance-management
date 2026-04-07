@@ -5,7 +5,7 @@ import {
   Navigate,
   useNavigate,
 } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import BatteriesSidebar from "../components/BatteriesSidebar";
 import AddBattery from "./batteries/AddBattery";
 import EditBattery from "./batteries/EditBattery";
@@ -16,6 +16,7 @@ import Scraps from "./scrap/Scraps";
 export default function Batteries() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Clean up any malformed URLs on mount and route changes
   useEffect(() => {
@@ -56,11 +57,26 @@ export default function Batteries() {
 
   return (
     <div className="spares-layout">
-      <BatteriesSidebar />
+      <BatteriesSidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+      />
+      <div
+        className={`overlay ${isSidebarOpen ? "show" : ""}`}
+        onClick={() => setIsSidebarOpen(false)}
+      />
       <main className="spares-content">
         <header className="content-header">
           <div className="header-content">
             <div className="header-left">
+              <button
+                className="menu-toggle"
+                type="button"
+                onClick={() => setIsSidebarOpen((v) => !v)}
+                aria-label="Open menu"
+              >
+                ☰
+              </button>
               <h1>{getPageTitle()}</h1>
               <p>Manage your battery and scrap inventory efficiently</p>
             </div>

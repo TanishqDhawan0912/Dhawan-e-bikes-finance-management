@@ -6,7 +6,7 @@ const menuItems = [
   { path: "all", label: "All Scrap", icon: "📋" },
 ];
 
-export default function ScrapSidebar() {
+export default function ScrapSidebar({ isOpen = false, onClose }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -19,6 +19,7 @@ export default function ScrapSidebar() {
       segments[0] === "scrap" ? "/scrap" : `/${segments[0]}/scrap`;
     // Navigate to the clean path
     navigate(`${basePath}/${path}`, { replace: true });
+    if (typeof onClose === "function") onClose();
   };
 
   // Check if the current path matches the menu item's path
@@ -32,7 +33,7 @@ export default function ScrapSidebar() {
   };
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${isOpen ? "open" : ""}`}>
       <div className="sidebar-header">
         <h3>Scrap</h3>
       </div>

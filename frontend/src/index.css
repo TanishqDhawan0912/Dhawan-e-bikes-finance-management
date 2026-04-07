@@ -4,6 +4,7 @@ html {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+  font-size: 16px;
 }
 
 body {
@@ -211,12 +212,16 @@ button {
 }
 
 .sidebar {
-  width: 250px;
+  width: 15.625rem; /* 250px */
+  min-width: 15.625rem; /* 250px */
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
   background: #1a365d;
   color: white;
   padding: 1.5rem 0;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
-  position: fixed;
+  position: sticky;
+  top: 0;
   height: 100vh;
   overflow-y: auto;
 }
@@ -272,9 +277,9 @@ button {
 .jobcards-content {
   flex: 1 1 auto;
   min-height: 0;
-  margin-left: 250px;
+  margin-left: 0;
   padding: 2rem;
-  max-width: calc(100% - 250px);
+  max-width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -291,9 +296,9 @@ button {
 .spares-content {
   flex: 1 1 auto;
   min-height: 0;
-  margin-left: 250px;
+  margin-left: 0;
   padding: 2rem;
-  max-width: calc(100% - 250px);
+  max-width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -310,9 +315,9 @@ button {
 .models-content {
   flex: 1 1 auto;
   min-height: 0;
-  margin-left: 250px;
+  margin-left: 0;
   padding: 2rem;
-  max-width: calc(100% - 250px);
+  max-width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -329,9 +334,9 @@ button {
 .bills-content {
   flex: 1 1 auto;
   min-height: 0;
-  margin-left: 250px;
+  margin-left: 0;
   padding: 2rem;
-  max-width: calc(100% - 250px);
+  max-width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -1300,6 +1305,39 @@ button {
 .form-section-inner .form-group {
   padding-left: 0;
   padding-right: 0;
+}
+
+/* Bills - tighten vertical spacing on mobile */
+@media (max-width: 430px) {
+  .bill-form-tabs-wrapper .form-section-inner {
+    padding: 0 1rem 1rem;
+  }
+
+  .bill-form-tabs-wrapper .form-row {
+    /* Override various desktop/jobcard form row styles on small screens */
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    gap: 0.75rem !important; /* inline style uses 1rem */
+  }
+
+  .bill-form-tabs-wrapper .form-group {
+    padding: 0 !important; /* base .form-group adds 0 1.5rem */
+    margin: 0 0 0.75rem 0 !important;
+  }
+
+  .bill-form-tabs-wrapper .form-group label {
+    margin-bottom: 0.25rem;
+  }
+
+  .bill-form-tabs-wrapper textarea {
+    margin-top: 0.25rem;
+  }
+
+  /* Slightly tighter section header inside bill tabs */
+  .bill-form-tabs-wrapper .form-section h3 {
+    padding: 0.85rem 1rem;
+  }
 }
 
 .bill-specs {
@@ -2431,6 +2469,7 @@ button.admin-finance-tile:focus-visible {
   margin: 1rem 0;
 }
 
+
 .selected-parts {
   margin-top: 1.5rem;
 }
@@ -2532,6 +2571,53 @@ button.admin-finance-tile:focus-visible {
   border-color: #1d4ed8;
 }
 
+/* Page headers (mobile-friendly) */
+.page-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.page-header-action {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 430px) {
+  .page-header-row {
+    margin-bottom: 1.25rem;
+  }
+
+  .page-header-action {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    border-radius: 8px;
+  }
+}
+
+/* Add More Stock (Spares) - mobile sizing + horizontal scroll for wide rows */
+.add-more-stock-page {
+  width: 100%;
+}
+
+@media (min-width: 641px) {
+  .add-more-stock-page {
+    padding: 2rem !important;
+  }
+
+  .add-more-stock-card {
+    padding: 2rem !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .add-more-stock-card {
+    padding: 1rem !important;
+  }
+}
+
 .btn-secondary {
   background-color: white;
   color: #374151;
@@ -2569,6 +2655,14 @@ button.admin-finance-tile:focus-visible {
     width: 100%;
   }
   /* Remove duplicate styles */
+}
+
+/* Override global mobile full-width buttons for page headers */
+@media (max-width: 640px) {
+  .page-header-row .page-header-action.btn {
+    width: auto;
+    flex: 0 0 auto;
+  }
 }
 
 .search-container {
@@ -2634,8 +2728,33 @@ button.admin-finance-tile:focus-visible {
 /* Spare Parts Search Styles */
 .spare-parts-search {
   padding: 1.5rem;
-  max-width: 1200px;
+  max-width: 100%;
+  width: 100%;
   margin: 0 auto;
+}
+
+.spare-parts-search-fields {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 430px) {
+  .spare-parts-search {
+    padding: 1rem;
+    overflow-x: hidden;
+  }
+
+  .spare-parts-search-fields {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Avoid focus ring visually overflowing to the right on mobile */
+  .spare-parts-search .search-input,
+  .spare-parts-search .search-input:focus {
+    box-shadow: none !important;
+    max-width: 100%;
+  }
 }
 
 .jobcard-form {
@@ -2698,12 +2817,29 @@ button.admin-finance-tile:focus-visible {
 
 .search-input {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 0.75rem 1rem;
   border: 1px solid #d1d5db;
   border-radius: 0.5rem;
   font-size: 1rem;
   transition: all 0.2s ease;
 }
+
+/* Prevent flex/grid children from forcing overflow */
+.search-box {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+input,
+select,
+textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 
 .search-input:focus {
   border-color: #3b82f6;
@@ -3335,20 +3471,21 @@ button.admin-finance-tile:focus-visible {
   width: 100%;
 }
 
-.search-input-group {
+/* Only All Models (and similar) use this layout; avoid forcing min-width on grids e.g. SparePartsSearch */
+.search-form .search-input-group {
   display: flex;
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
 }
 
-.search-box {
+.search-form .search-input-group .search-box {
   position: relative;
   flex: 1;
   min-width: 250px;
 }
 
-.search-input {
+.search-form .search-input {
   width: 100%;
   padding: 0.75rem 2.5rem 0.75rem 1rem;
   border: 2px solid #e5e7eb;
@@ -3357,7 +3494,7 @@ button.admin-finance-tile:focus-visible {
   transition: all 0.2s ease;
 }
 
-.search-input:focus {
+.search-form .search-input:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
@@ -3505,8 +3642,8 @@ button.admin-finance-tile:focus-visible {
 
 /* Smooth transitions for all search elements */
 .search-form,
-.search-input-group,
-.search-box,
+.search-form .search-input-group,
+.search-form .search-box,
 .filters-group {
   transition: all 0.3s ease;
 }
@@ -3595,7 +3732,7 @@ button.admin-finance-tile:focus-visible {
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-  .search-input-group {
+  .search-form .search-input-group {
     flex-direction: column;
     align-items: stretch;
   }
@@ -3622,6 +3759,11 @@ button.admin-finance-tile:focus-visible {
 
 .search-filters .search-box {
   flex: 1;
+  min-width: 300px;
+}
+
+/* Beat .search-form .search-input-group .search-box (250px) so All Models search stays wide enough */
+.search-filters .search-form .search-input-group .search-box {
   min-width: 300px;
 }
 
@@ -3912,4 +4054,113 @@ body {
     box-shadow: none !important;
     padding: 0 !important;
   }
+}
+
+/* =========================================================
+   Proportional scaling WITHOUT transform (no layout redesign)
+   Use font-size breakpoints + rem-based dimensions.
+   ========================================================= */
+
+.app-container {
+  max-width: 100%;
+  width: 100%;
+  margin: 0 auto;
+}
+
+@media (max-width: 1366px) {
+  html {
+    font-size: 14px;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+}
+
+@media (max-width: 430px) {
+  html {
+    font-size: 10px;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Mobile: stack layout; sidebar becomes drawer */
+  .main-layout,
+  .jobcards-layout,
+  .spares-layout,
+  .models-layout,
+  .bills-layout {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    z-index: 1000;
+    transform: translateX(-100%);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .main-content,
+  .jobcards-content,
+  .spares-content,
+  .models-content,
+  .bills-content {
+    margin-left: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 10px;
+  }
+}
+
+@media (min-width: 431px) {
+  .sidebar {
+    transform: none;
+  }
+}
+
+.menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #ffffff;
+  color: #111827;
+  cursor: pointer;
+  margin-right: 0.75rem;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 430px) {
+  .menu-toggle {
+    display: inline-flex;
+  }
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 999;
+  display: none;
+}
+
+.overlay.show {
+  display: block;
 }

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import JobcardPrintView from "../../components/JobcardPrintView";
+import DatePicker from "../../components/DatePicker";
 import { getTodayForInput } from "../../utils/dateUtils";
 import { getFetchErrorMessage } from "../../utils/apiError";
 
@@ -10,6 +11,10 @@ export default function AllJobcards() {
   const [jobcards, setJobcards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState("all"); // all, service, replacement, sales
+  const [searchName, setSearchName] = useState("");
+  const [searchMobile, setSearchMobile] = useState("");
+  const [searchPlace, setSearchPlace] = useState("");
+  const [filterDate, setFilterDate] = useState("");
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -41,6 +46,48 @@ export default function AllJobcards() {
       setLoading(false);
     }
   };
+
+  const filteredJobcards = useMemo(() => {
+    let filtered = [...jobcards];
+
+    if (searchName.trim()) {
+      const q = searchName.toLowerCase().trim();
+      filtered = filtered.filter((jc) =>
+        jc.customerName?.toLowerCase().includes(q)
+      );
+    }
+
+    if (searchMobile.trim()) {
+      const raw = searchMobile.trim();
+      const digitsOnly = raw.replace(/\D/g, "");
+      filtered = filtered.filter((jc) => {
+        const m = String(jc.mobile ?? "");
+        if (digitsOnly.length > 0) {
+          return m.replace(/\D/g, "").includes(digitsOnly);
+        }
+        return m.toLowerCase().includes(raw.toLowerCase());
+      });
+    }
+
+    if (searchPlace.trim()) {
+      const q = searchPlace.toLowerCase().trim();
+      filtered = filtered.filter((jc) =>
+        String(jc.place ?? "").toLowerCase().includes(q)
+      );
+    }
+
+    if (filterDate) {
+      filtered = filtered.filter((jc) => jc.date === filterDate);
+    }
+
+    return filtered;
+  }, [jobcards, searchName, searchMobile, searchPlace, filterDate]);
+
+  const hasActiveSearchFilters =
+    Boolean(searchName.trim()) ||
+    Boolean(searchMobile.trim()) ||
+    Boolean(searchPlace.trim()) ||
+    Boolean(filterDate);
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -433,6 +480,180 @@ export default function AllJobcards() {
         </div>
       </div>
 
+      {jobcards.length > 0 && (
+        <div
+          style={{
+            marginBottom: "1.5rem",
+            padding: "1rem",
+            backgroundColor: "#f9fafb",
+            borderRadius: "0.5rem",
+            border: "1px solid #e5e7eb",
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: "1rem",
+              alignItems: "end",
+            }}
+          >
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  color: "#374151",
+                }}
+              >
+                Search by Customer Name
+              </label>
+              <input
+                type="text"
+                value={searchName}
+                onChange={(e) => setSearchName(e.target.value)}
+                placeholder="Enter customer name..."
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  fontSize: "0.875rem",
+                  borderRadius: "0.375rem",
+                  border: "1px solid #d1d5db",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  color: "#374151",
+                }}
+              >
+                Search by Mobile
+              </label>
+              <input
+                type="text"
+                value={searchMobile}
+                onChange={(e) => setSearchMobile(e.target.value)}
+                placeholder="Enter mobile number..."
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  fontSize: "0.875rem",
+                  borderRadius: "0.375rem",
+                  border: "1px solid #d1d5db",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  color: "#374151",
+                }}
+              >
+                Search by Place
+              </label>
+              <input
+                type="text"
+                value={searchPlace}
+                onChange={(e) => setSearchPlace(e.target.value)}
+                placeholder="Enter place..."
+                style={{
+                  width: "100%",
+                  padding: "0.5rem",
+                  fontSize: "0.875rem",
+                  borderRadius: "0.375rem",
+                  border: "1px solid #d1d5db",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "0.5rem",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  color: "#374151",
+                }}
+              >
+                Filter by Date
+              </label>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <DatePicker
+                    value={filterDate}
+                    onChange={(date) => setFilterDate(date)}
+                    placeholder="Select date..."
+                    style={{ width: "100%" }}
+                  />
+                </div>
+                {filterDate && (
+                  <button
+                    type="button"
+                    onClick={() => setFilterDate("")}
+                    style={{
+                      padding: "0.5rem",
+                      fontSize: "0.75rem",
+                      fontWeight: 500,
+                      borderRadius: "0.375rem",
+                      border: "1px solid #d1d5db",
+                      backgroundColor: "#ffffff",
+                      color: "#374151",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                    title="Clear date filter"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+          {hasActiveSearchFilters && (
+            <div style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchName("");
+                  setSearchMobile("");
+                  setSearchPlace("");
+                  setFilterDate("");
+                }}
+                style={{
+                  padding: "0.5rem 1rem",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                  borderRadius: "0.375rem",
+                  border: "1px solid #d1d5db",
+                  backgroundColor: "#ffffff",
+                  color: "#374151",
+                  cursor: "pointer",
+                }}
+              >
+                Clear Filters
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {jobcards.length === 0 ? (
         <div
           style={{
@@ -447,9 +668,23 @@ export default function AllJobcards() {
             No finalized jobcards found{filterType !== "all" ? ` for ${filterType}` : ""}.
           </p>
         </div>
+      ) : filteredJobcards.length === 0 ? (
+        <div
+          style={{
+            padding: "3rem",
+            textAlign: "center",
+            backgroundColor: "#f9fafb",
+            borderRadius: "0.5rem",
+            border: "1px solid #e5e7eb",
+          }}
+        >
+          <p style={{ color: "#6b7280", fontSize: "1rem" }}>
+            No jobcards match the current filters.
+          </p>
+        </div>
       ) : (
         <div style={{ display: "grid", gap: "1rem" }}>
-          {jobcards.map((jobcard) => (
+          {filteredJobcards.map((jobcard) => (
             <div
               key={jobcard._id}
               style={{

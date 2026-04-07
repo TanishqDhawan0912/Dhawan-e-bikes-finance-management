@@ -6,7 +6,7 @@ const menuItems = [
   { path: "all", label: "All Jobcards", icon: "📋" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen = false, onClose }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -19,6 +19,7 @@ export default function Sidebar() {
       segments[0] === "jobcards" ? "/jobcards" : `/${segments[0]}/jobcards`;
     // Navigate to the clean path
     navigate(`${basePath}/${path}`, { replace: true });
+    if (typeof onClose === "function") onClose();
   };
 
   // Check if the current path matches the menu item's path
@@ -33,7 +34,7 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${isOpen ? "open" : ""}`}>
       <div className="sidebar-header">
         <h3>Jobcards</h3>
       </div>

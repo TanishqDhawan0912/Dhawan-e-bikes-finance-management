@@ -5,7 +5,7 @@ import {
   Navigate,
   useNavigate,
 } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import ScrapSidebar from "../components/ScrapSidebar";
 import AddScrap from "./scrap/AddScrap";
 import EditScrap from "./scrap/EditScrap";
@@ -14,6 +14,7 @@ import AllScrap from "./scrap/AllScrap";
 export default function Scrap() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Clean up any malformed URLs on mount and route changes
   useEffect(() => {
@@ -53,11 +54,26 @@ export default function Scrap() {
 
   return (
     <div className="spares-layout">
-      <ScrapSidebar />
+      <ScrapSidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+      />
+      <div
+        className={`overlay ${isSidebarOpen ? "show" : ""}`}
+        onClick={() => setIsSidebarOpen(false)}
+      />
       <main className="spares-content">
         <header className="content-header">
           <div className="header-content">
             <div className="header-left">
+              <button
+                className="menu-toggle"
+                type="button"
+                onClick={() => setIsSidebarOpen((v) => !v)}
+                aria-label="Open menu"
+              >
+                ☰
+              </button>
               <h1>{getPageTitle()}</h1>
               <p>Manage your scrap inventory efficiently</p>
             </div>

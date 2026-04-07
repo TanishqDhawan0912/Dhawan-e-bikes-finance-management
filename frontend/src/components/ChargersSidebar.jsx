@@ -7,7 +7,7 @@ const menuItems = [
   { path: "old-chargers", label: "Old Chargers", icon: "🔌" },
 ];
 
-export default function ChargersSidebar() {
+export default function ChargersSidebar({ isOpen = false, onClose }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -20,6 +20,7 @@ export default function ChargersSidebar() {
       segments[0] === "chargers" ? "/chargers" : `/${segments[0]}/chargers`;
     // Navigate to the clean path
     navigate(`${basePath}/${path}`, { replace: true });
+    if (typeof onClose === "function") onClose();
   };
 
   // Check if the current path matches the menu item's path
@@ -39,7 +40,7 @@ export default function ChargersSidebar() {
   };
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${isOpen ? "open" : ""}`}>
       <div className="sidebar-header">
         <h3>Chargers</h3>
       </div>

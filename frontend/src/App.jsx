@@ -102,27 +102,29 @@ function AppLayout() {
   }, [pathname]);
 
   return (
-    <div className={classNames.root}>
-      <main className={classNames.main}>
-        <Suspense fallback={<PageLoader />}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/loans" element={<Loans />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/payments" element={<Payments />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/jobcards/*" element={<Jobcards />} />
-          <Route path="/spares/*" element={<Spares />} />
-          <Route path="/models/*" element={<Models />} />
-          <Route path="/admin-login" element={<AdminLogin />} />
-          <Route path="/admin" element={<Admin />} />
-            <Route path="/batteries/*" element={<Batteries />} />
-            <Route path="/chargers/*" element={<Chargers />} />
-            <Route path="/bills/*" element={<Bills />} />
-        </Routes>
-        </Suspense>
-      </main>
+    <div className="app-container">
+      <div className={classNames.root}>
+        <main className={classNames.main}>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/loans" element={<Loans />} />
+              <Route path="/customers" element={<Customers />} />
+              <Route path="/payments" element={<Payments />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/jobcards/*" element={<Jobcards />} />
+              <Route path="/spares/*" element={<Spares />} />
+              <Route path="/models/*" element={<Models />} />
+              <Route path="/admin-login" element={<AdminLogin />} />
+              <Route path="/admin" element={<Admin />} />
+              <Route path="/batteries/*" element={<Batteries />} />
+              <Route path="/chargers/*" element={<Chargers />} />
+              <Route path="/bills/*" element={<Bills />} />
+            </Routes>
+          </Suspense>
+        </main>
+      </div>
     </div>
   );
 }

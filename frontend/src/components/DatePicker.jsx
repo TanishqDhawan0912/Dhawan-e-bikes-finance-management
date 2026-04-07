@@ -67,19 +67,50 @@ export default function DatePicker({
     }
   }, [value]);
 
-  // Close picker when clicking outside
+  // Close picker when clicking outside / scrolling / Escape (global)
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (pickerRef.current && !pickerRef.current.contains(event.target) && 
-          inputRef.current && !inputRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
+    if (!isOpen) return;
+
+    const isEventInside = (target) => {
+      const pickerEl = pickerRef.current;
+      const inputEl = inputRef.current;
+      return Boolean(
+        (pickerEl && pickerEl.contains(target)) || (inputEl && inputEl.contains(target))
+      );
     };
 
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
+    const close = () => setIsOpen(false);
+
+    const handlePointerDown = (event) => {
+      if (!isEventInside(event.target)) close();
+    };
+
+    const handleFocusIn = (event) => {
+      if (!isEventInside(event.target)) close();
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") close();
+    };
+
+    // Capture-phase scroll so any scroll container closes it.
+    const handleAnyScroll = () => close();
+
+    document.addEventListener("mousedown", handlePointerDown, true);
+    document.addEventListener("touchstart", handlePointerDown, true);
+    document.addEventListener("focusin", handleFocusIn, true);
+    window.addEventListener("scroll", handleAnyScroll, true);
+    window.addEventListener("resize", handleAnyScroll, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown, true);
+      document.removeEventListener("touchstart", handlePointerDown, true);
+      document.removeEventListener("focusin", handleFocusIn, true);
+      window.removeEventListener("scroll", handleAnyScroll, true);
+      window.removeEventListener("resize", handleAnyScroll, true);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
   }, [isOpen]);
 
   const handleInputChange = (e) => {

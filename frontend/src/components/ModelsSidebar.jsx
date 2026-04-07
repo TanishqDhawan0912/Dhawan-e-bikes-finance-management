@@ -1,11 +1,11 @@
 import { NavLink, useNavigate } from "react-router-dom";
 
-export default function ModelsSidebar({ showBottomHome }) {
+export default function ModelsSidebar({ showBottomHome, isOpen = false, onClose }) {
   const navigate = useNavigate();
 
   return (
     <div
-      className="sidebar"
+      className={`sidebar ${isOpen ? "open" : ""}`}
       style={{ display: "flex", flexDirection: "column", height: "100%" }}
     >
       <div className="sidebar-header">
@@ -15,6 +15,7 @@ export default function ModelsSidebar({ showBottomHome }) {
         <NavLink
           to="/models/add"
           className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+          onClick={() => (typeof onClose === "function" ? onClose() : undefined)}
         >
           <span className="icon">➕</span>
           Add Model
@@ -22,6 +23,7 @@ export default function ModelsSidebar({ showBottomHome }) {
         <NavLink
           to="/models/edit"
           className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+          onClick={() => (typeof onClose === "function" ? onClose() : undefined)}
         >
           <span className="icon">✏️</span>
           Edit Model
@@ -29,6 +31,7 @@ export default function ModelsSidebar({ showBottomHome }) {
         <NavLink
           to="/models/all"
           className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+          onClick={() => (typeof onClose === "function" ? onClose() : undefined)}
         >
           <span className="icon">📋</span>
           All Models
@@ -36,6 +39,7 @@ export default function ModelsSidebar({ showBottomHome }) {
         <NavLink
           to="/models/old-scooties"
           className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+          onClick={() => (typeof onClose === "function" ? onClose() : undefined)}
         >
           <span className="icon">🛵</span>
           Old Scooties

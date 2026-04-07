@@ -212,17 +212,10 @@ export default function AllChargers() {
 
   return (
     <div className="page-content">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "2rem",
-        }}
-      >
-        <h2>All chargers</h2>
+      <div className="page-header-row">
+        <h2 style={{ margin: 0 }}>All chargers</h2>
         <button
-          className="btn btn-primary"
+          className="btn btn-primary page-header-action"
           onClick={() => navigate("/chargers/add")}
         >
           + Add Charger

@@ -231,11 +231,14 @@ export default function SparePartsSearch({ onSelectPart }) {
       style={{ position: "relative", width: "100%" }}
     >
       <div
+        className="spare-parts-search-fields"
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
           gap: "0.75rem",
           marginBottom: "0.5rem",
+          width: "100%",
+          maxWidth: "100%",
         }}
       >
         <div className="search-box" style={{ position: "relative" }}>

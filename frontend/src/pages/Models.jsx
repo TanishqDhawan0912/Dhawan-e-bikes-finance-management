@@ -31,6 +31,7 @@ export default function Models() {
   const navigate = useNavigate();
   const headerHomeRef = useRef(null);
   const [isHeaderHomeVisible, setIsHeaderHomeVisible] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Clean up any malformed URLs on mount and route changes
   useEffect(() => {
@@ -100,11 +101,25 @@ export default function Models() {
         showBottomHome={
           !isHeaderHomeVisible && location.pathname === "/models/all"
         }
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+      />
+      <div
+        className={`overlay ${isSidebarOpen ? "show" : ""}`}
+        onClick={() => setIsSidebarOpen(false)}
       />
       <main className="models-content">
         <header className="content-header">
           <div className="header-content">
             <div className="header-left">
+              <button
+                className="menu-toggle"
+                type="button"
+                onClick={() => setIsSidebarOpen((v) => !v)}
+                aria-label="Open menu"
+              >
+                ☰
+              </button>
               <h1>{getPageTitle()}</h1>
               <p>Manage your e-bike models and specifications efficiently</p>
             </div>

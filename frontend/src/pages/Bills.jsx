@@ -5,7 +5,7 @@ import {
   Navigate,
   useNavigate,
 } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import BillsSidebar from "../components/BillsSidebar";
 import NewBill from "./bills/NewBill";
 import EditBill from "./bills/EditBill";
@@ -14,6 +14,7 @@ import AllBills from "./bills/AllBills";
 export default function Bills() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     const path = location.pathname;
@@ -48,11 +49,26 @@ export default function Bills() {
 
   return (
     <div className="bills-layout">
-      <BillsSidebar />
+      <BillsSidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+      />
+      <div
+        className={`overlay ${isSidebarOpen ? "show" : ""}`}
+        onClick={() => setIsSidebarOpen(false)}
+      />
       <main className="bills-content">
         <header className="content-header">
           <div className="header-content">
             <div className="header-left">
+              <button
+                className="menu-toggle"
+                type="button"
+                onClick={() => setIsSidebarOpen((v) => !v)}
+                aria-label="Open menu"
+              >
+                ☰
+              </button>
               <h1>{getPageTitle()}</h1>
               <p>
                 {getPageTitle() === "All Bills"

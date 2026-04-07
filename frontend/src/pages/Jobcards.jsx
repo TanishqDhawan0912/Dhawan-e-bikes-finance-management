@@ -5,7 +5,7 @@ import {
   Navigate,
   useNavigate,
 } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import NewJobcard from "./jobcards/NewJobcard";
 import PendingJobcard from "./jobcards/PendingJobcard";
@@ -26,6 +26,7 @@ const WelcomeMessage = () => (
 export default function Jobcards() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Clean up any malformed URLs on mount and route changes
   useEffect(() => {
@@ -63,11 +64,23 @@ export default function Jobcards() {
 
   return (
     <div className="jobcards-layout">
-      <Sidebar />
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <div
+        className={`overlay ${isSidebarOpen ? "show" : ""}`}
+        onClick={() => setIsSidebarOpen(false)}
+      />
       <main className="jobcards-content">
         <header className="content-header">
           <div className="header-content">
             <div className="header-left">
+              <button
+                className="menu-toggle"
+                type="button"
+                onClick={() => setIsSidebarOpen((v) => !v)}
+                aria-label="Open menu"
+              >
+                ☰
+              </button>
               <h1>{getPageTitle()}</h1>
               <p>Manage your service and repair jobcards efficiently</p>
             </div>

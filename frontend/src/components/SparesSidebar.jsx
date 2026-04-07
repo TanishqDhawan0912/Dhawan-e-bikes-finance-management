@@ -6,7 +6,7 @@ const menuItems = [
   { path: "all", label: "All Spares", icon: "📋" },
 ];
 
-export default function SparesSidebar() {
+export default function SparesSidebar({ isOpen = false, onClose }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -19,6 +19,7 @@ export default function SparesSidebar() {
       segments[0] === "spares" ? "/spares" : `/${segments[0]}/spares`;
     // Navigate to the clean path
     navigate(`${basePath}/${path}`, { replace: true });
+    if (typeof onClose === "function") onClose();
   };
 
   // Check if the current path matches the menu item's path
@@ -32,7 +33,7 @@ export default function SparesSidebar() {
   };
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${isOpen ? "open" : ""}`}>
       <div className="sidebar-header">
         <h3>Spares</h3>
       </div>

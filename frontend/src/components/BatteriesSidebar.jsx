@@ -7,7 +7,7 @@ const menuItems = [
   { path: "scraps", label: "Scraps", icon: "🗑️" },
 ];
 
-export default function BatteriesSidebar() {
+export default function BatteriesSidebar({ isOpen = false, onClose }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -20,6 +20,7 @@ export default function BatteriesSidebar() {
       segments[0] === "batteries" ? "/batteries" : `/${segments[0]}/batteries`;
     // Navigate to the clean path
     navigate(`${basePath}/${path}`, { replace: true });
+    if (typeof onClose === "function") onClose();
   };
 
   // Check if the current path matches the menu item's path
@@ -39,7 +40,7 @@ export default function BatteriesSidebar() {
   };
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${isOpen ? "open" : ""}`}>
       <div className="sidebar-header">
         <h3>Batteries</h3>
       </div>

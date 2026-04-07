@@ -57,7 +57,7 @@ const validateDateFormat = (dateString) => {
 };
 
 const style = {
-  padding: "2rem",
+  padding: "1rem",
   backgroundColor: "#f9fafb",
   minHeight: "100vh",
   position: "relative",
@@ -2052,7 +2052,7 @@ function AddMoreStock() {
   }
 
   return (
-    <div style={style}>
+    <div className="add-more-stock-page" style={style}>
       <style>
         {`
           @keyframes pulse {
@@ -2090,9 +2090,10 @@ function AddMoreStock() {
         Back to Spares →
       </button>
       <div
+        className="add-more-stock-card"
         style={{
           backgroundColor: "white",
-          padding: "2rem",
+          padding: "1.25rem",
           borderRadius: "0.5rem",
           boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
         }}
@@ -2132,6 +2133,7 @@ function AddMoreStock() {
                   border: "1px solid #d1d5db",
                   borderRadius: "0.375rem",
                   backgroundColor: "#f9fafb",
+                  fontSize: "0.875rem",
                 }}
               />
             </div>
@@ -2155,6 +2157,7 @@ function AddMoreStock() {
                   border: "1px solid #d1d5db",
                   borderRadius: "0.375rem",
                   backgroundColor: "#f9fafb",
+                  fontSize: "0.875rem",
                 }}
               />
             </div>
@@ -2186,6 +2189,7 @@ function AddMoreStock() {
                   border: "1px solid #d1d5db",
                   borderRadius: "0.375rem",
                   backgroundColor: "#f9fafb",
+                  fontSize: "0.875rem",
                 }}
               />
             </div>
@@ -2219,6 +2223,7 @@ function AddMoreStock() {
                   backgroundColor: "#f9fafb",
                   color: spare?.sellingPrice && parseFloat(spare.sellingPrice) > 0 ? "#1f2937" : "#9ca3af",
                   fontStyle: spare?.sellingPrice && parseFloat(spare.sellingPrice) > 0 ? "normal" : "italic",
+                  fontSize: "0.875rem",
                 }}
               />
             </div>
@@ -4703,7 +4708,8 @@ function AddMoreStock() {
                   background: "white",
                   border: "1px solid #e2e8f0",
                   borderRadius: "0.75rem",
-                  overflow: "hidden",
+                  overflowX: "auto",
+                  overflowY: "hidden",
                 }}
               >
                 <div style={{ padding: "1rem" }}>
@@ -4812,9 +4818,12 @@ function AddMoreStock() {
                               backgroundColor: "#f8fafc",
                               border: "1px solid #e2e8f0",
                               borderRadius: "0.5rem",
-                              overflow: "hidden",
+                              overflowX: "auto",
+                              overflowY: "hidden",
                               padding: "0.25rem",
                               gap: "0.25rem",
+                              flexWrap: "nowrap",
+                              WebkitOverflowScrolling: "touch",
                             }}
                           >
                             {group.colors.map((colorQty, i) => {
@@ -4870,7 +4879,8 @@ function AddMoreStock() {
                                     }))
                                   }
                                   style={{
-                                    flex: 1,
+                                    flex: "0 0 auto",
+                                    minWidth: "9.5rem",
                                     padding: "0.75rem 1rem",
                                     backgroundColor: selected
                                       ? "#3b82f6"

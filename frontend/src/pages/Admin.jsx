@@ -77,6 +77,7 @@ export default function Admin() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [activeSection, setActiveSection] = useState("spares");
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [spares, setSpares] = useState([]);
   const [sparesLoading, setSparesLoading] = useState(false);
   const [sparesError, setSparesError] = useState("");
@@ -4670,6 +4671,7 @@ export default function Admin() {
                     gap: "1rem",
                     flexWrap: "wrap",
                   }}
+                  className="finance-jobcards-profit-header"
                 >
                   <div>
                     <div style={{ fontWeight: 600, color: "#333", fontSize: "1.05rem" }}>
@@ -4680,7 +4682,7 @@ export default function Admin() {
                       paid amount minus spare purchase cost
                     </div>
                   </div>
-                  <div style={{ textAlign: "right" }}>
+                  <div className="finance-profit-summary" style={{ textAlign: "right" }}>
                     <div style={{ fontSize: "0.8rem", color: "#666" }}>Profit</div>
                     <div
                       className="card-number"
@@ -4824,13 +4826,13 @@ export default function Admin() {
                         style={{
                           backgroundColor: "#fff",
                           borderRadius: "0.75rem",
-                          maxWidth: "720px",
-                          width: "100%",
+                          width: "min(720px, calc(100vw - 2rem))",
                           maxHeight: "min(90vh, 900px)",
                           overflowY: "auto",
+                          overflowX: "hidden",
                           boxShadow:
                             "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
-                          padding: "1.25rem 1.5rem",
+                          padding: "1rem",
                         }}
                       >
                         <div
@@ -5137,7 +5139,8 @@ export default function Admin() {
                           <div
                             style={{
                               display: "grid",
-                              gridTemplateColumns: "1fr 80px 120px 120px",
+                              gridTemplateColumns:
+                                "minmax(0, 1fr) 64px 92px 92px",
                               gap: "0.35rem 0.75rem",
                               fontSize: "0.9rem",
                               alignItems: "center",
@@ -5238,7 +5241,14 @@ export default function Admin() {
                                         key={`${j.id}-modal-l-${sec.id}-${idx}`}
                                         style={{ display: "contents" }}
                                       >
-                                        <div style={{ color: "#111827" }}>
+                                        <div
+                                          style={{
+                                            color: "#111827",
+                                            minWidth: 0,
+                                            overflowWrap: "anywhere",
+                                            wordBreak: "break-word",
+                                          }}
+                                        >
                                           {l.name}
                                           <span
                                             style={{
@@ -5568,6 +5578,15 @@ export default function Admin() {
       <header className="admin-header">
         <div className="admin-header-content">
           <div className="admin-header-left">
+            <button
+              type="button"
+              className="admin-menu-btn"
+              aria-label="Open menu"
+              title="Menu"
+              onClick={() => setIsMobileSidebarOpen(true)}
+            >
+              ☰
+            </button>
             <h1>Admin Dashboard</h1>
             <p>Dhawan E-Bikes Management System</p>
           </div>
@@ -5592,9 +5611,27 @@ export default function Admin() {
 
       <div className="admin-layout">
         {/* Left Sidebar */}
-        <aside className="admin-sidebar">
+        <div
+          className={`admin-sidebar-backdrop ${
+            isMobileSidebarOpen ? "open" : ""
+          }`}
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+        <aside
+          className={`admin-sidebar ${isMobileSidebarOpen ? "open" : ""}`}
+          aria-label="Admin navigation"
+        >
           <div className="sidebar-header">
             <h3>Management</h3>
+            <button
+              type="button"
+              className="admin-sidebar-close"
+              aria-label="Close menu"
+              title="Close"
+              onClick={() => setIsMobileSidebarOpen(false)}
+            >
+              ×
+            </button>
           </div>
           <nav className="sidebar-nav">
             {sidebarItems.map((item) => {
@@ -5605,7 +5642,10 @@ export default function Admin() {
                   className={`sidebar-item ${
                     activeSection === item.id ? "active" : ""
                   }`}
-                  onClick={() => setActiveSection(item.id)}
+                  onClick={() => {
+                    setActiveSection(item.id);
+                    setIsMobileSidebarOpen(false);
+                  }}
                   style={{ borderLeftColor: item.color }}
                 >
                   <Icon
@@ -5668,6 +5708,21 @@ export default function Admin() {
           min-height: calc(100vh - 80px);
         }
 
+        .admin-menu-btn {
+          display: none;
+          align-items: center;
+          justify-content: center;
+          width: 44px;
+          height: 40px;
+          border-radius: 10px;
+          border: 1px solid #e5e7eb;
+          background: #ffffff;
+          color: #111827;
+          cursor: pointer;
+          font-size: 1.25rem;
+          line-height: 1;
+        }
+
         .admin-sidebar {
           width: 250px;
           background: white;
@@ -5678,12 +5733,34 @@ export default function Admin() {
         .sidebar-header {
           padding: 1.5rem 1rem;
           border-bottom: 1px solid #dee2e6;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
         }
 
         .sidebar-header h3 {
           margin: 0;
           color: #333;
           font-size: 1.1rem;
+        }
+
+        .admin-sidebar-close {
+          display: none;
+          align-items: center;
+          justify-content: center;
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          border: 1px solid #e5e7eb;
+          background: #ffffff;
+          color: #111827;
+          cursor: pointer;
+          font-size: 1.25rem;
+          line-height: 1;
+        }
+
+        .admin-sidebar-backdrop {
+          display: none;
         }
 
         .sidebar-nav {
@@ -5721,6 +5798,90 @@ export default function Admin() {
           padding: 2rem;
           overflow-y: auto;
           max-height: calc(100vh - 80px);
+        }
+
+        /* Mobile: turn sidebar into a drawer */
+        @media (max-width: 768px) {
+          .admin-header-content {
+            padding: 0 1rem;
+          }
+
+          .admin-header-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-width: 0;
+          }
+
+          .admin-header-left h1 {
+            font-size: 1.2rem;
+          }
+
+          .admin-header-left p {
+            display: none;
+          }
+
+          .admin-menu-btn {
+            display: inline-flex;
+          }
+
+          .admin-layout {
+            display: block;
+            min-height: auto;
+          }
+
+          .admin-sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: min(78vw, 280px);
+            transform: translateX(-110%);
+            transition: transform 0.25s ease;
+            z-index: 10020;
+          }
+
+          .admin-sidebar.open {
+            transform: translateX(0);
+          }
+
+          .admin-sidebar-close {
+            display: inline-flex;
+          }
+
+          .admin-sidebar-backdrop {
+            display: block;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            z-index: 10010;
+          }
+
+          .admin-sidebar-backdrop.open {
+            opacity: 1;
+            pointer-events: auto;
+          }
+
+          .admin-main {
+            padding: 1rem;
+            max-height: none;
+            overflow: visible;
+          }
+
+          /* Finance: keep total profit aligned left on mobile */
+          .finance-jobcards-profit-header {
+            flex-direction: row;
+            align-items: flex-start;
+          }
+
+          .finance-profit-summary {
+            width: auto;
+            margin-left: auto;
+            text-align: right !important;
+          }
         }
 
         .admin-content h2 {

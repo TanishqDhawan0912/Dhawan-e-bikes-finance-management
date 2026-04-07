@@ -6,7 +6,7 @@ const menuItems = [
   { path: "all", label: "All Bills", icon: "📋" },
 ];
 
-export default function BillsSidebar() {
+export default function BillsSidebar({ isOpen = false, onClose }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -16,6 +16,7 @@ export default function BillsSidebar() {
     const basePath =
       segments[0] === "bills" ? "/bills" : `/${segments[0]}/bills`;
     navigate(`${basePath}/${path}`, { replace: true });
+    if (typeof onClose === "function") onClose();
   };
 
   const isActive = (path) => {
@@ -28,7 +29,7 @@ export default function BillsSidebar() {
   };
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${isOpen ? "open" : ""}`}>
       <div className="sidebar-header">
         <h3>Bills</h3>
       </div>
