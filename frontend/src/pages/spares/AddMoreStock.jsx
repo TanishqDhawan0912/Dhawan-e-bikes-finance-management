@@ -600,11 +600,8 @@ function AddMoreStock() {
       return;
     }
 
-    if (
-      parseInt(newEditColorQuantity) <= 0 ||
-      parseInt(newEditColorMinStockLevel) < 0
-    ) {
-      setFormError("Quantity must be greater than 0. Min stock level must be 0 or greater.");
+    if (parseInt(newEditColorQuantity) < 0 || parseInt(newEditColorMinStockLevel) < 0) {
+      setFormError("Quantity must be 0 or greater. Min stock level must be 0 or greater.");
       return;
     }
 
@@ -976,7 +973,7 @@ function AddMoreStock() {
             if (newCq.purchasePrice !== undefined) {
               updatedColorQuantity[existingIndex].purchasePrice = newCq.purchasePrice || 0;
             }
-          } else if (newCq.quantity > 0) {
+          } else if (newCq.quantity >= 0) {
             // Create a new color entry for this purchase date
             // Even if the color exists for a different date, create a separate entry
             updatedColorQuantity.push({
@@ -1313,9 +1310,10 @@ function AddMoreStock() {
     const lastEntry = newStockEntry.colorQuantities[newStockEntry.colorQuantities.length - 1];
     if (
       !lastEntry.color ||
-      !lastEntry.quantity ||
       lastEntry.quantity === "" ||
-      parseInt(lastEntry.quantity) <= 0 ||
+      lastEntry.quantity === null ||
+      lastEntry.quantity === undefined ||
+      parseInt(lastEntry.quantity) < 0 ||
       !lastEntry.minStockLevel ||
       lastEntry.minStockLevel === "" ||
       parseInt(lastEntry.minStockLevel) < 0
@@ -1775,8 +1773,8 @@ function AddMoreStock() {
         return;
       }
 
-      if (parseFloat(newStockEntry.quantity) <= 0) {
-        setFormError("Quantity must be greater than 0");
+      if (parseFloat(newStockEntry.quantity) < 0) {
+        setFormError("Quantity must be 0 or greater");
         return;
       }
 
@@ -1802,23 +1800,29 @@ function AddMoreStock() {
     }
 
       // Validate each color-quantity pair
-      const invalidPairs = newStockEntry.colorQuantities.filter(
-        (cq) =>
+      const invalidPairs = newStockEntry.colorQuantities.filter((cq) => {
+        const qRaw = cq.quantity;
+        const minRaw = cq.minStockLevel;
+        return (
           !cq.color ||
-          !cq.quantity ||
-          parseInt(cq.quantity) <= 0 ||
-          !cq.minStockLevel ||
-          cq.minStockLevel === "" ||
-          parseInt(cq.minStockLevel) < 0 ||
+          qRaw === "" ||
+          qRaw === null ||
+          qRaw === undefined ||
+          parseInt(qRaw) < 0 ||
+          minRaw === "" ||
+          minRaw === null ||
+          minRaw === undefined ||
+          parseInt(minRaw) < 0 ||
           (cq.color === "other" && !cq.customColor?.trim())
-      );
+        );
+      });
 
       if (invalidPairs.length > 0) {
-      setFormError(
-          "Please fill all color, quantity, and min stock level fields. Quantity must be greater than 0. Min stock level must be 0 or greater. Custom color name is required when 'Other' is selected."
-      );
-      return;
-    }
+        setFormError(
+          "Please fill all color, quantity, and min stock level fields. Quantity must be 0 or greater. Min stock level must be 0 or greater. Custom color name is required when 'Other' is selected."
+        );
+        return;
+      }
 
       // If user entered a purchase price, it must be > 0
       if (
@@ -1918,7 +1922,14 @@ function AddMoreStock() {
       if (isColorTrackingEnabled) {
         // Create a color entry for each color-quantity pair
         const newColorEntries = newStockEntry.colorQuantities
-          .filter((cq) => cq.color && cq.quantity && parseInt(cq.quantity) > 0)
+          .filter(
+            (cq) =>
+              cq.color &&
+              cq.quantity !== "" &&
+              cq.quantity !== null &&
+              cq.quantity !== undefined &&
+              parseInt(cq.quantity) >= 0
+          )
           .map((cq) => {
             const qCol = parseInt(cq.quantity, 10);
             return {
@@ -4204,19 +4215,21 @@ function AddMoreStock() {
                           onClick={addEditEntryColor}
                           disabled={
                             !newEditColor.trim() ||
-                            !newEditColorQuantity.trim() ||
-                              !newEditColorMinStockLevel.trim() ||
-                              parseInt(newEditColorQuantity) <= 0 ||
-                              parseInt(newEditColorMinStockLevel) < 0 ||
-                              (newEditColor === "other" && !newEditColorCustom.trim())
+                            newEditColorQuantity === "" ||
+                            newEditColorQuantity === null ||
+                            newEditColorQuantity === undefined ||
+                            !newEditColorMinStockLevel.trim() ||
+                            parseInt(newEditColorQuantity) < 0 ||
+                            parseInt(newEditColorMinStockLevel) < 0 ||
+                            (newEditColor === "other" && !newEditColorCustom.trim())
                           }
                           style={{
                             padding: "0.5rem 1rem",
                             backgroundColor:
                               newEditColor.trim() &&
-                              newEditColorQuantity.trim() &&
+                              (newEditColorQuantity || "").toString().trim() &&
                                 newEditColorMinStockLevel.trim() &&
-                                parseInt(newEditColorQuantity) > 0 &&
+                                parseInt(newEditColorQuantity) >= 0 &&
                                 parseInt(newEditColorMinStockLevel) >= 0 &&
                                 (newEditColor !== "other" || newEditColorCustom.trim())
                                 ? "#10b981"
@@ -4226,9 +4239,9 @@ function AddMoreStock() {
                             borderRadius: "0.375rem",
                             cursor:
                               newEditColor.trim() &&
-                              newEditColorQuantity.trim() &&
+                              (newEditColorQuantity || "").toString().trim() &&
                                 newEditColorMinStockLevel.trim() &&
-                                parseInt(newEditColorQuantity) > 0 &&
+                                parseInt(newEditColorQuantity) >= 0 &&
                                 parseInt(newEditColorMinStockLevel) >= 0 &&
                                 (newEditColor !== "other" || newEditColorCustom.trim())
                                 ? "pointer"
