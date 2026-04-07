@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { useEffect, useState } from "react";
 import BatteriesSidebar from "../components/BatteriesSidebar";
+import MobileMenuToggleBar from "../components/MobileMenuToggleBar";
 import AddBattery from "./batteries/AddBattery";
 import EditBattery from "./batteries/EditBattery";
 import AllBatteries from "./batteries/AllBatteries";
@@ -66,17 +67,13 @@ export default function Batteries() {
         onClick={() => setIsSidebarOpen(false)}
       />
       <main className="spares-content">
+        <MobileMenuToggleBar
+          isHidden={isSidebarOpen}
+          onClick={() => setIsSidebarOpen((v) => !v)}
+        />
         <header className="content-header">
           <div className="header-content">
             <div className="header-left">
-              <button
-                className="menu-toggle"
-                type="button"
-                onClick={() => setIsSidebarOpen((v) => !v)}
-                aria-label="Open menu"
-              >
-                ☰
-              </button>
               <h1>{getPageTitle()}</h1>
               <p>Manage your battery and scrap inventory efficiently</p>
             </div>

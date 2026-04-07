@@ -2973,13 +2973,7 @@ export default function NewJobcard() {
           <div className="form-row">
             <div className="form-group full-width">
               <label>Click on a category to add items</label>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "1rem",
-                  marginTop: "0.5rem",
-                }}
-              >
+              <div className="jobcard-add-items-row">
                 <button
                   type="button"
                   onClick={() => handleTypeClick("service")}

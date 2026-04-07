@@ -1,4 +1,7 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+
+const PREVIEW_BASE_W = 1122;
+const PREVIEW_BASE_H = 794;
 
 /**
  * Print-friendly jobcard layout matching the physical E-BIKE JOB CARD format.
@@ -6,6 +9,15 @@ import { useRef } from "react";
  */
 export default function JobcardPrintView({ jobcard, onClose, onPrint }) {
   const printRef = useRef(null);
+  const previewRef = useRef(null);
+  const [previewScale, setPreviewScale] = useState(() => {
+    if (typeof window === "undefined") return 1;
+    const w = Math.min(1180, window.innerWidth - 48);
+    const h = Math.max(240, window.innerHeight * 0.82 - 120);
+    const pad = 8;
+    const s = Math.min(1, (w - pad) / PREVIEW_BASE_W, (h - pad) / PREVIEW_BASE_H);
+    return Math.max(0.15, Math.min(1, s));
+  });
 
   // Same wording as jobcard creation form (Warranty Type dropdown)
   const getWarrantyTypeLabel = (value) => {
@@ -292,8 +304,78 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
     }
   };
 
+  useLayoutEffect(() => {
+    const el = previewRef.current;
+    if (!el) return;
+
+    const compute = () => {
+      const rect = el.getBoundingClientRect();
+      let w = rect.width || el.clientWidth;
+      let h = rect.height || el.clientHeight;
+
+      // Flex parents with only max-height can leave this host at ~0 before layout settles;
+      // derive space from the modal shell so scale stays readable.
+      const modalInner = el.closest(".jobcard-print-modal-inner");
+      if (modalInner) {
+        const ir = modalInner.getBoundingClientRect();
+        const actionsEl = modalInner.querySelector(".jobcard-print-actions");
+        const actionsH = actionsEl?.getBoundingClientRect().height ?? 52;
+
+        // Always prefer viewport-based available height so the preview stays big even when
+        // the modal is content-wrapped (height:auto).
+        const viewportH = typeof window !== "undefined" ? window.innerHeight : 800;
+        // env(safe-area-*) doesn't resolve via getComputedStyle consistently across browsers;
+        // keep a conservative 0 here since we already cap to 90% viewport height.
+        const safeTop = 0;
+        const safeBottom = 0;
+
+        const padX = 24; // modal padding + breathing room
+        const padY = 20; // modal padding + breathing room
+        const availableW = Math.max(240, ir.width - padX);
+        const availableH = Math.max(
+          220,
+          Math.min(viewportH * 0.9, viewportH - safeTop - safeBottom) - actionsH - padY
+        );
+
+        w = Math.max(w, availableW);
+        h = Math.max(h, availableH);
+      }
+
+      if (!w) w = window.innerWidth - 32;
+      if (!h) h = Math.max(200, window.innerHeight * 0.65 - 100);
+      const pad = 8;
+      const s = Math.min(1, (w - pad) / PREVIEW_BASE_W, (h - pad) / PREVIEW_BASE_H);
+      setPreviewScale(Math.max(0.15, Math.min(1, s)));
+    };
+
+    compute();
+    const raf =
+      typeof requestAnimationFrame !== "undefined" ? requestAnimationFrame(() => compute()) : 0;
+    const ro = new ResizeObserver(() => compute());
+    ro.observe(el);
+    window.addEventListener("resize", compute);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener("resize", compute);
+    };
+  }, []);
+
   return (
-    <div className="jobcard-print-container">
+    <div
+      className="jobcard-print-container"
+      style={{
+        maxWidth: "100%",
+        minWidth: 0,
+        minHeight: 0,
+        boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
       <style>{`
         @media print {
           @page {
@@ -321,7 +403,16 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
             overflow: hidden !important;
           }
           .jobcard-print-actions { display: none !important; }
+          .jobcard-print-preview-outer {
+            width: auto !important;
+            height: auto !important;
+            max-width: none !important;
+            max-height: none !important;
+            overflow: visible !important;
+            margin: 0 !important;
+          }
           .jobcard-print-sheet {
+            transform: none !important;
             width: 297mm !important;
             height: 210mm !important;
             min-width: 297mm !important;
@@ -335,7 +426,17 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
         }
       `}</style>
 
-      <div className="jobcard-print-actions" style={{ marginBottom: "1rem", display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+      <div
+        className="jobcard-print-actions"
+        style={{
+          marginBottom: "0.5rem",
+          display: "flex",
+          gap: "0.5rem",
+          justifyContent: "flex-end",
+          flexWrap: "wrap",
+          flexShrink: 0,
+        }}
+      >
         {onClose && (
           <button
             type="button"
@@ -370,25 +471,54 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
       </div>
 
       <div
-        ref={printRef}
-        className="jobcard-print-sheet"
+        ref={previewRef}
+        className="jobcard-print-preview-host"
         style={{
-          position: "relative",
-          width: "297mm",
-          height: "210mm",
-          minWidth: "297mm",
-          minHeight: "210mm",
-          padding: "8mm",
-          backgroundColor: "white",
-          border: "1px solid #000",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-          fontFamily: "Arial, sans-serif",
-          fontSize: "11pt",
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
+          flex: "1 1 auto",
+          minHeight: 0,
+          maxHeight: "100%",
+          overflow: "hidden",
           display: "flex",
-          flexDirection: "column",
-          boxSizing: "border-box",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
+        {/* Wrapper fixes layout: transform:scale does not shrink flow size — without this, mobile gets 1122px horizontal overflow. */}
+        <div
+          className="jobcard-print-preview-outer"
+          style={{
+            width: PREVIEW_BASE_W * previewScale,
+            height: PREVIEW_BASE_H * previewScale,
+            overflow: "hidden",
+            flexShrink: 0,
+            margin: "0 auto",
+          }}
+        >
+          <div
+            ref={printRef}
+            className="jobcard-print-sheet"
+            style={{
+              position: "relative",
+              width: `${PREVIEW_BASE_W}px`,
+              height: `${PREVIEW_BASE_H}px`,
+              minWidth: `${PREVIEW_BASE_W}px`,
+              minHeight: `${PREVIEW_BASE_H}px`,
+              padding: "20px",
+              backgroundColor: "white",
+              border: "1px solid #000",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+              fontFamily: "Arial, sans-serif",
+              fontSize: "11pt",
+              display: "flex",
+              flexDirection: "column",
+              boxSizing: "border-box",
+              transform: `scale(${previewScale})`,
+              transformOrigin: "top left",
+            }}
+          >
         {/* ESTIMATE - simple rectangular badge, top-left */}
         <span
           style={{
@@ -589,6 +719,8 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
           </tbody>
         </table>
 
+          </div>
+        </div>
       </div>
     </div>
   );

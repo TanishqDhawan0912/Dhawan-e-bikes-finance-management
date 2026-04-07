@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { useEffect, useState } from "react";
 import SparesSidebar from "../components/SparesSidebar";
+import MobileMenuToggleBar from "../components/MobileMenuToggleBar";
 import AddSpare from "./spares/AddSpare";
 import EditSpare from "./spares/EditSpare";
 import AllSpares from "./spares/AllSpares";
@@ -94,17 +95,13 @@ export default function Spares() {
         onClick={() => setIsSidebarOpen(false)}
       />
       <main className="spares-content">
+        <MobileMenuToggleBar
+          isHidden={isSidebarOpen}
+          onClick={() => setIsSidebarOpen((v) => !v)}
+        />
         <header className="content-header">
           <div className="header-content">
             <div className="header-left">
-              <button
-                className="menu-toggle"
-                type="button"
-                onClick={() => setIsSidebarOpen((v) => !v)}
-                aria-label="Open menu"
-              >
-                ☰
-              </button>
               <h1>{getPageTitle()}</h1>
               <p>Manage your spare parts inventory efficiently</p>
             </div>

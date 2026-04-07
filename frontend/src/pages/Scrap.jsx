@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { useEffect, useState } from "react";
 import ScrapSidebar from "../components/ScrapSidebar";
+import MobileMenuToggleBar from "../components/MobileMenuToggleBar";
 import AddScrap from "./scrap/AddScrap";
 import EditScrap from "./scrap/EditScrap";
 import AllScrap from "./scrap/AllScrap";
@@ -63,17 +64,13 @@ export default function Scrap() {
         onClick={() => setIsSidebarOpen(false)}
       />
       <main className="spares-content">
+        <MobileMenuToggleBar
+          isHidden={isSidebarOpen}
+          onClick={() => setIsSidebarOpen((v) => !v)}
+        />
         <header className="content-header">
           <div className="header-content">
             <div className="header-left">
-              <button
-                className="menu-toggle"
-                type="button"
-                onClick={() => setIsSidebarOpen((v) => !v)}
-                aria-label="Open menu"
-              >
-                ☰
-              </button>
               <h1>{getPageTitle()}</h1>
               <p>Manage your scrap inventory efficiently</p>
             </div>

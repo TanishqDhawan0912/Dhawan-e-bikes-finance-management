@@ -1037,23 +1037,33 @@ export default function PendingJobcard() {
             position: "fixed",
             inset: 0,
             backgroundColor: "rgba(0,0,0,0.5)",
-            zIndex: 1000,
+            zIndex: 1400,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             padding: "1rem",
             overflow: "auto",
+            boxSizing: "border-box",
           }}
           onClick={(e) => e.target === e.currentTarget && setPrintingJobcard(null)}
         >
           <div
+            className="jobcard-print-modal-inner"
             style={{
               backgroundColor: "white",
               borderRadius: "0.5rem",
-              maxWidth: "95vw",
-              maxHeight: "95vh",
-              overflow: "auto",
+              width: "100%",
+              minWidth: 0,
+              maxWidth: "100%",
+              height: "min(95dvh, 95vh)",
+              maxHeight: "min(95dvh, 95vh)",
+              display: "flex",
+              flexDirection: "column",
+              minHeight: 0,
+              overflow: "hidden",
               padding: "1rem",
+              boxSizing: "border-box",
+              alignSelf: "center",
             }}
             onClick={(e) => e.stopPropagation()}
           >

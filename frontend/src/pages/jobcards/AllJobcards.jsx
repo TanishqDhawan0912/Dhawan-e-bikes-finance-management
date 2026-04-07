@@ -991,7 +991,7 @@ export default function AllJobcards() {
                 </div>
               )}
 
-              <div style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+              <div className="jobcards-card-actions">
                 <button
                   onClick={() => setPrintingJobcard(jobcard)}
                   style={{
@@ -1212,6 +1212,7 @@ export default function AllJobcards() {
       {/* View Details Modal */}
       {showDetailsModal && selectedJobcard && (
         <div
+          className="jobcards-details-modal-overlay"
           style={{
             position: "fixed",
             top: 0,
@@ -1232,6 +1233,7 @@ export default function AllJobcards() {
           }}
         >
           <div
+            className="jobcards-details-modal"
             style={{
               backgroundColor: "white",
               padding: "2rem",
@@ -1244,7 +1246,7 @@ export default function AllJobcards() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+            <div className="jobcards-details-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
               <h2 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 600 }}>
                 Jobcard Details: {selectedJobcard.jobcardNumber}
               </h2>
@@ -1270,8 +1272,8 @@ export default function AllJobcards() {
             {selectedJobcard.parts && selectedJobcard.parts.length > 0 && (
               <div style={{ marginBottom: "1.5rem" }}>
                 <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.125rem", fontWeight: 600 }}>Spare Parts</h3>
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: "0.5rem", overflow: "hidden" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <div className="jobcards-details-table-wrap" style={{ border: "1px solid #e5e7eb", borderRadius: "0.5rem", overflow: "hidden" }}>
+                  <table className="jobcards-details-table" style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                       <tr style={{ backgroundColor: "#f9fafb" }}>
                         <th style={{ padding: "0.75rem", textAlign: "left", fontSize: "0.875rem", fontWeight: 600, borderBottom: "1px solid #e5e7eb" }}>Part Name</th>
@@ -1519,8 +1521,8 @@ export default function AllJobcards() {
             <div style={{ marginBottom: "1.5rem" }}>
               <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.125rem", fontWeight: 600 }}>Payment History</h3>
               {getAllPayments(selectedJobcard).length > 0 ? (
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: "0.5rem", overflow: "hidden" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <div className="jobcards-details-table-wrap" style={{ border: "1px solid #e5e7eb", borderRadius: "0.5rem", overflow: "hidden" }}>
+                  <table className="jobcards-details-table" style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                       <tr style={{ backgroundColor: "#f9fafb" }}>
                         <th style={{ padding: "0.75rem", textAlign: "left", fontSize: "0.875rem", fontWeight: 600, borderBottom: "1px solid #e5e7eb" }}>Date</th>
@@ -1587,23 +1589,33 @@ export default function AllJobcards() {
             position: "fixed",
             inset: 0,
             backgroundColor: "rgba(0,0,0,0.5)",
-            zIndex: 1000,
+            zIndex: 1400,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             padding: "1rem",
             overflow: "auto",
+            boxSizing: "border-box",
           }}
           onClick={(e) => e.target === e.currentTarget && setPrintingJobcard(null)}
         >
           <div
+            className="jobcard-print-modal-inner"
             style={{
               backgroundColor: "white",
               borderRadius: "0.5rem",
-              maxWidth: "95vw",
-              maxHeight: "95vh",
-              overflow: "auto",
+              width: "100%",
+              minWidth: 0,
+              maxWidth: "100%",
+              height: "min(95dvh, 95vh)",
+              maxHeight: "min(95dvh, 95vh)",
+              display: "flex",
+              flexDirection: "column",
+              minHeight: 0,
+              overflow: "hidden",
               padding: "1rem",
+              boxSizing: "border-box",
+              alignSelf: "center",
             }}
             onClick={(e) => e.stopPropagation()}
           >

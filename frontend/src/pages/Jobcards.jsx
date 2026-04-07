@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
+import MobileMenuToggleBar from "../components/MobileMenuToggleBar";
 import NewJobcard from "./jobcards/NewJobcard";
 import PendingJobcard from "./jobcards/PendingJobcard";
 import AllJobcards from "./jobcards/AllJobcards";
@@ -70,17 +71,13 @@ export default function Jobcards() {
         onClick={() => setIsSidebarOpen(false)}
       />
       <main className="jobcards-content">
+        <MobileMenuToggleBar
+          isHidden={isSidebarOpen}
+          onClick={() => setIsSidebarOpen((v) => !v)}
+        />
         <header className="content-header">
           <div className="header-content">
             <div className="header-left">
-              <button
-                className="menu-toggle"
-                type="button"
-                onClick={() => setIsSidebarOpen((v) => !v)}
-                aria-label="Open menu"
-              >
-                ☰
-              </button>
               <h1>{getPageTitle()}</h1>
               <p>Manage your service and repair jobcards efficiently</p>
             </div>

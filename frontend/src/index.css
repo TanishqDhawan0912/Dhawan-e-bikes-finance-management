@@ -2398,6 +2398,123 @@ button.admin-finance-tile:focus-visible {
   color: #374151;
 }
 
+/* Jobcards: Add Items to Jobcard (Service/Replacement/Sales) */
+.jobcard-add-items-row {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.jobcard-add-items-row > button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+@media (max-width: 430px) {
+  .jobcard-add-items-row {
+    gap: 0.75rem;
+  }
+
+  .jobcard-add-items-row > button {
+    padding: 0.85rem 0.75rem !important;
+    font-size: 0.9rem !important;
+  }
+}
+
+/* All Jobcards: action buttons (Print / View Details / Delete) */
+.jobcards-card-actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* All Jobcards: View Details modal (mobile) */
+@media (max-width: 430px) {
+  .jobcards-details-modal-overlay {
+    padding: 0.75rem !important;
+    align-items: flex-start !important;
+  }
+
+  .jobcards-details-modal {
+    padding: 1rem !important;
+    min-width: 0 !important;
+    width: calc(100vw - 1.5rem) !important;
+    max-width: 100% !important;
+    max-height: calc(100vh - 1.5rem) !important;
+  }
+
+  .jobcards-details-modal-header h2 {
+    font-size: 1.05rem !important;
+    line-height: 1.2;
+  }
+
+  .jobcards-details-table-wrap {
+    overflow-x: hidden !important;
+  }
+
+  .jobcards-details-table {
+    table-layout: fixed;
+  }
+
+  .jobcards-details-table th,
+  .jobcards-details-table td {
+    padding: 0.5rem !important;
+    font-size: 0.78rem !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  /* Above .mobile-menu-toggle-bar (1250) so Close/Print stay visible */
+  .jobcard-print-modal-overlay {
+    z-index: 1400 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: max(0.25rem, env(safe-area-inset-top, 0px)) 0.5rem
+      max(0.25rem, env(safe-area-inset-bottom, 0px)) 0.5rem !important;
+  }
+
+  .jobcard-print-modal-inner {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: min(92dvh, 92vh) !important;
+    max-height: min(92dvh, 92vh) !important;
+    padding: 0.4rem 0.55rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .jobcard-print-modal-inner .jobcard-print-actions {
+    margin-bottom: 0.35rem !important;
+  }
+
+  .jobcard-print-preview-host {
+    align-items: flex-start !important;
+    justify-content: center !important;
+    padding-top: 0.25rem !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .jobcards-card-actions {
+    justify-content: stretch;
+    gap: 0.5rem;
+  }
+
+  .jobcards-card-actions > button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+}
+
 .form-group input[type="text"],
 .form-group input[type="tel"],
 .form-group input[type="email"],
@@ -4024,6 +4141,26 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Print modal above mobile hamburger (1250) and drawer (1300) */
+.jobcard-print-modal-overlay {
+  z-index: 1400 !important;
+}
+
+/* Jobcard print preview: definite height so flex:1 preview area gets real pixels for scale math */
+@media (min-width: 768px) {
+  .jobcard-print-modal-inner {
+    width: min(1220px, calc(100vw - 2rem)) !important;
+    max-width: min(1220px, calc(100vw - 2rem)) !important;
+    height: min(96dvh, 96vh) !important;
+    max-height: min(96dvh, 96vh) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+}
+
 /* Jobcard print modal - full landscape print output */
 @media print {
   body * {
@@ -4103,7 +4240,7 @@ body {
     top: 0;
     left: 0;
     height: 100%;
-    z-index: 1000;
+    z-index: 1300;
     transform: translateX(-100%);
   }
 
@@ -4120,6 +4257,16 @@ body {
     width: 100%;
     max-width: 100%;
     padding: 10px;
+  }
+
+  /* Room for fixed mobile menu bar (see .mobile-menu-toggle-bar) */
+  main.jobcards-content,
+  main.spares-content,
+  main.models-content,
+  main.bills-content {
+    padding-top: calc(
+      10px + env(safe-area-inset-top, 0px) + 42px
+    );
   }
 }
 
@@ -4144,9 +4291,72 @@ body {
   flex: 0 0 auto;
 }
 
+/* Fixed top strip: grey → blue on scroll; hamburger lives inside (mobile only) */
+.mobile-menu-toggle-bar {
+  display: none;
+}
+
 @media (max-width: 430px) {
+  .mobile-menu-toggle-bar {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1250;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    box-sizing: border-box;
+    min-height: calc(env(safe-area-inset-top, 0px) + 40px);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 4px);
+    padding-right: max(0.5rem, env(safe-area-inset-right, 0px));
+    padding-bottom: 4px;
+    padding-left: max(0.5rem, env(safe-area-inset-left, 0px));
+    transition: box-shadow 0.2s ease;
+  }
+
+  .mobile-menu-toggle-bar.is-hidden {
+    display: none !important;
+  }
+
   .menu-toggle {
     display: inline-flex;
+    position: relative;
+    top: auto;
+    left: auto;
+    z-index: 1;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    margin-right: 0;
+    font-size: 1rem;
+    line-height: 1;
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.06),
+      0 1px 4px rgba(15, 23, 42, 0.08);
+  }
+
+  /* Compact light chip on dark sidebar-colored bar */
+  .mobile-menu-toggle-bar--filled .menu-toggle {
+    background: rgba(255, 255, 255, 0.98);
+    border-color: rgba(255, 255, 255, 0.35);
+    color: #1a365d;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.12),
+      0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  .content-header {
+    padding-top: 0;
+  }
+
+  .header-left {
+    padding-left: 0;
+  }
+
+  .menu-toggle.is-hidden {
+    display: none !important;
   }
 }
 
@@ -4157,7 +4367,7 @@ body {
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.3);
-  z-index: 999;
+  z-index: 1200;
   display: none;
 }
 

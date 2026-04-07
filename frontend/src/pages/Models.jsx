@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import ModelsSidebar from "../components/ModelsSidebar";
+import MobileMenuToggleBar from "../components/MobileMenuToggleBar";
 import AddModel from "./models/AddModel";
 import EditModel from "./models/EditModel";
 import EditColor from "./models/EditColor";
@@ -109,17 +110,13 @@ export default function Models() {
         onClick={() => setIsSidebarOpen(false)}
       />
       <main className="models-content">
+        <MobileMenuToggleBar
+          isHidden={isSidebarOpen}
+          onClick={() => setIsSidebarOpen((v) => !v)}
+        />
         <header className="content-header">
           <div className="header-content">
             <div className="header-left">
-              <button
-                className="menu-toggle"
-                type="button"
-                onClick={() => setIsSidebarOpen((v) => !v)}
-                aria-label="Open menu"
-              >
-                ☰
-              </button>
               <h1>{getPageTitle()}</h1>
               <p>Manage your e-bike models and specifications efficiently</p>
             </div>

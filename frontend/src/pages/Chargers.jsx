@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { useEffect, useState } from "react";
 import ChargersSidebar from "../components/ChargersSidebar";
+import MobileMenuToggleBar from "../components/MobileMenuToggleBar";
 import AddCharger from "./chargers/AddCharger";
 import EditCharger from "./chargers/EditCharger";
 import AllChargers from "./chargers/AllChargers";
@@ -66,17 +67,13 @@ export default function Chargers() {
         onClick={() => setIsSidebarOpen(false)}
       />
       <main className="spares-content">
+        <MobileMenuToggleBar
+          isHidden={isSidebarOpen}
+          onClick={() => setIsSidebarOpen((v) => !v)}
+        />
         <header className="content-header">
           <div className="header-content">
             <div className="header-left">
-              <button
-                className="menu-toggle"
-                type="button"
-                onClick={() => setIsSidebarOpen((v) => !v)}
-                aria-label="Open menu"
-              >
-                ☰
-              </button>
               <h1>{getPageTitle()}</h1>
               <p>Manage your charger inventory efficiently</p>
             </div>

@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { useEffect, useState } from "react";
 import BillsSidebar from "../components/BillsSidebar";
+import MobileMenuToggleBar from "../components/MobileMenuToggleBar";
 import NewBill from "./bills/NewBill";
 import EditBill from "./bills/EditBill";
 import AllBills from "./bills/AllBills";
@@ -58,17 +59,13 @@ export default function Bills() {
         onClick={() => setIsSidebarOpen(false)}
       />
       <main className="bills-content">
+        <MobileMenuToggleBar
+          isHidden={isSidebarOpen}
+          onClick={() => setIsSidebarOpen((v) => !v)}
+        />
         <header className="content-header">
           <div className="header-content">
             <div className="header-left">
-              <button
-                className="menu-toggle"
-                type="button"
-                onClick={() => setIsSidebarOpen((v) => !v)}
-                aria-label="Open menu"
-              >
-                ☰
-              </button>
               <h1>{getPageTitle()}</h1>
               <p>
                 {getPageTitle() === "All Bills"
