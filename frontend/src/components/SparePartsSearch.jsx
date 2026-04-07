@@ -9,9 +9,40 @@ export default function SparePartsSearch({ onSelectPart }) {
   const [allSpares, setAllSpares] = useState([]);
   const [selectedPart, setSelectedPart] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const rootRef = useRef(null);
   const inputRef = useRef(null);
   const modelInputRef = useRef(null);
   const resultsListRef = useRef(null);
+
+  // Dismiss suggestions on outside click/focus and on scroll (whole app)
+  useEffect(() => {
+    const dismiss = () => {
+      setSearchResults([]);
+      setSelectedIndex(-1);
+    };
+
+    const dismissIfOutside = (target) => {
+      if (rootRef.current && !rootRef.current.contains(target)) {
+        dismiss();
+      }
+    };
+
+    const onMouseDown = (e) => dismissIfOutside(e.target);
+    const onTouchStart = (e) => dismissIfOutside(e.target);
+    const onFocusIn = (e) => dismissIfOutside(e.target);
+    const onScroll = () => dismiss();
+
+    document.addEventListener("mousedown", onMouseDown, true);
+    document.addEventListener("touchstart", onTouchStart, true);
+    document.addEventListener("focusin", onFocusIn, true);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown, true);
+      document.removeEventListener("touchstart", onTouchStart, true);
+      document.removeEventListener("focusin", onFocusIn, true);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, []);
 
   // Fetch all spares from API
   useEffect(() => {
@@ -194,7 +225,11 @@ export default function SparePartsSearch({ onSelectPart }) {
   };
 
   return (
-    <div className="spare-parts-search" style={{ position: "relative", width: "100%" }}>
+    <div
+      ref={rootRef}
+      className="spare-parts-search"
+      style={{ position: "relative", width: "100%" }}
+    >
       <div
         style={{
           display: "grid",

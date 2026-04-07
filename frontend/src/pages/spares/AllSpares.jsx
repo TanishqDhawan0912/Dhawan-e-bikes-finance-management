@@ -59,7 +59,7 @@ function SuggestionsPortal({
   };
 
   return (
-    <div style={style}>
+    <div style={style} data-suggestions-portal="true" data-suggestions-input={inputName || ""}>
       {suggestions.map((suggestion, idx) => (
         <div
           key={`${inputName}-${
@@ -248,6 +248,51 @@ function AllSpares() {
   const nameTimeoutRef = useRef(null);
   const modelTimeoutRef = useRef(null);
   const supplierTimeoutRef = useRef(null);
+
+  // Dismiss suggestions on scroll / outside click / focus change
+  useEffect(() => {
+    const closeAll = () => {
+      setShowNameSuggestions(false);
+      setShowModelSuggestions(false);
+      setShowSupplierSuggestions(false);
+      setNameSuggestions([]);
+      setModelSuggestions([]);
+      setSupplierSuggestions([]);
+      setSelectedNameIndex(-1);
+      setSelectedModelIndex(-1);
+      setSelectedSupplierIndex(-1);
+    };
+
+    const isInSuggestionsUI = (target) => {
+      if (!target) return false;
+      if (nameInputRef.current && nameInputRef.current.contains(target)) return true;
+      if (modelInputRef.current && modelInputRef.current.contains(target)) return true;
+      if (supplierInputRef.current && supplierInputRef.current.contains(target)) return true;
+      return !!target.closest?.('[data-suggestions-portal="true"]');
+    };
+
+    const onMouseDown = (e) => {
+      if (!isInSuggestionsUI(e.target)) closeAll();
+    };
+    const onTouchStart = (e) => {
+      if (!isInSuggestionsUI(e.target)) closeAll();
+    };
+    const onFocusIn = (e) => {
+      if (!isInSuggestionsUI(e.target)) closeAll();
+    };
+    const onScroll = () => closeAll();
+
+    document.addEventListener("mousedown", onMouseDown, true);
+    document.addEventListener("touchstart", onTouchStart, true);
+    document.addEventListener("focusin", onFocusIn, true);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown, true);
+      document.removeEventListener("touchstart", onTouchStart, true);
+      document.removeEventListener("focusin", onFocusIn, true);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, []);
 
   const fetchSpares = useCallback(async () => {
     try {

@@ -99,16 +99,29 @@ export default function SparesSearch({ onSelectSpare }) {
     }
   }, [searchResults, showResults]);
 
-  // Handle click outside to close results
+  // Close results on outside click/focus and on scroll
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
+    const dismissIfOutside = (target) => {
+      if (searchRef.current && !searchRef.current.contains(target)) {
         setShowResults(false);
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    const onMouseDown = (e) => dismissIfOutside(e.target);
+    const onTouchStart = (e) => dismissIfOutside(e.target);
+    const onFocusIn = (e) => dismissIfOutside(e.target);
+    const onScroll = () => setShowResults(false);
+
+    document.addEventListener("mousedown", onMouseDown, true);
+    document.addEventListener("touchstart", onTouchStart, true);
+    document.addEventListener("focusin", onFocusIn, true);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown, true);
+      document.removeEventListener("touchstart", onTouchStart, true);
+      document.removeEventListener("focusin", onFocusIn, true);
+      window.removeEventListener("scroll", onScroll, true);
+    };
   }, []);
 
   const handleSpareClick = (spare) => {
