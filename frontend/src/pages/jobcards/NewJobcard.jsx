@@ -2970,32 +2970,34 @@ export default function NewJobcard() {
         {/* Jobcard Type Selection */}
         <div className="form-section">
           <h3>Add Items to Jobcard</h3>
-          <div className="form-row">
-            <div className="form-group full-width">
+          <div className="form-row jobcard-category-form-row">
+            <div className="form-group full-width jobcard-category-picker">
               <label>Click on a category to add items</label>
               <div className="jobcard-add-items-row">
                 <button
                   type="button"
                   onClick={() => handleTypeClick("service")}
                   onMouseEnter={(e) => {
+                    const btn = e.currentTarget;
                     if (activeTab !== "service") {
                       if (hasParts("service")) {
-                        e.target.style.backgroundColor = "#a7f3d0";
-                        e.target.style.borderColor = "#059669";
+                        btn.style.backgroundColor = "#a7f3d0";
+                        btn.style.borderColor = "#059669";
                       } else {
-                        e.target.style.backgroundColor = "#f3f4f6";
-                        e.target.style.borderColor = "#9ca3af";
+                        btn.style.backgroundColor = "#f3f4f6";
+                        btn.style.borderColor = "#9ca3af";
                       }
                     }
                   }}
                   onMouseLeave={(e) => {
+                    const btn = e.currentTarget;
                     if (activeTab !== "service") {
                       if (hasParts("service")) {
-                        e.target.style.backgroundColor = "#d1fae5";
-                        e.target.style.borderColor = "#10b981";
+                        btn.style.backgroundColor = "#d1fae5";
+                        btn.style.borderColor = "#10b981";
                       } else {
-                        e.target.style.backgroundColor = "#ffffff";
-                        e.target.style.borderColor = "#d1d5db";
+                        btn.style.backgroundColor = "#ffffff";
+                        btn.style.borderColor = "#d1d5db";
                       }
                     }
                   }}
@@ -3027,35 +3029,44 @@ export default function NewJobcard() {
                     transition: "all 0.2s ease",
                     textTransform: "capitalize",
                     position: "relative",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.35rem",
+                    textAlign: "center",
                   }}
                 >
-                  🔧 Service {hasParts("service") && "✓"}
+                  <span aria-hidden="true">🔧</span>
+                  <span>Service</span>
+                  {hasParts("service") && <span aria-hidden="true">✓</span>}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleTypeClick("replacement")}
                   disabled={formData.warrantyType === "none"}
                   onMouseEnter={(e) => {
+                    const btn = e.currentTarget;
                     if (formData.warrantyType === "none") return;
                     if (activeTab !== "replacement") {
                       if (hasParts("replacement")) {
-                        e.target.style.backgroundColor = "#a7f3d0";
-                        e.target.style.borderColor = "#059669";
+                        btn.style.backgroundColor = "#a7f3d0";
+                        btn.style.borderColor = "#059669";
                       } else {
-                        e.target.style.backgroundColor = "#f3f4f6";
-                        e.target.style.borderColor = "#9ca3af";
+                        btn.style.backgroundColor = "#f3f4f6";
+                        btn.style.borderColor = "#9ca3af";
                       }
                     }
                   }}
                   onMouseLeave={(e) => {
+                    const btn = e.currentTarget;
                     if (formData.warrantyType === "none") return;
                     if (activeTab !== "replacement") {
                       if (hasParts("replacement")) {
-                        e.target.style.backgroundColor = "#d1fae5";
-                        e.target.style.borderColor = "#10b981";
+                        btn.style.backgroundColor = "#d1fae5";
+                        btn.style.borderColor = "#10b981";
                       } else {
-                        e.target.style.backgroundColor = "#ffffff";
-                        e.target.style.borderColor = "#d1d5db";
+                        btn.style.backgroundColor = "#ffffff";
+                        btn.style.borderColor = "#d1d5db";
                       }
                     }
                   }}
@@ -3096,6 +3107,11 @@ export default function NewJobcard() {
                     transition: "all 0.2s ease",
                     textTransform: "capitalize",
                     opacity: formData.warrantyType === "none" ? 0.7 : 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.35rem",
+                    textAlign: "center",
                   }}
                   title={
                     formData.warrantyType === "none"
@@ -3103,30 +3119,34 @@ export default function NewJobcard() {
                       : ""
                   }
                 >
-                  🔄 Replacement {hasParts("replacement") && "✓"}
+                  <span aria-hidden="true">🔄</span>
+                  <span>Replacement</span>
+                  {hasParts("replacement") && <span aria-hidden="true">✓</span>}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleTypeClick("sales")}
                   onMouseEnter={(e) => {
+                    const btn = e.currentTarget;
                     if (activeTab !== "sales") {
                       if (hasParts("sales")) {
-                        e.target.style.backgroundColor = "#a7f3d0";
-                        e.target.style.borderColor = "#059669";
+                        btn.style.backgroundColor = "#a7f3d0";
+                        btn.style.borderColor = "#059669";
                       } else {
-                        e.target.style.backgroundColor = "#f3f4f6";
-                        e.target.style.borderColor = "#9ca3af";
+                        btn.style.backgroundColor = "#f3f4f6";
+                        btn.style.borderColor = "#9ca3af";
                       }
                     }
                   }}
                   onMouseLeave={(e) => {
+                    const btn = e.currentTarget;
                     if (activeTab !== "sales") {
                       if (hasParts("sales")) {
-                        e.target.style.backgroundColor = "#d1fae5";
-                        e.target.style.borderColor = "#10b981";
+                        btn.style.backgroundColor = "#d1fae5";
+                        btn.style.borderColor = "#10b981";
                       } else {
-                        e.target.style.backgroundColor = "#ffffff";
-                        e.target.style.borderColor = "#d1d5db";
+                        btn.style.backgroundColor = "#ffffff";
+                        btn.style.borderColor = "#d1d5db";
                       }
                     }
                   }}
@@ -3157,9 +3177,16 @@ export default function NewJobcard() {
                     cursor: "pointer",
                     transition: "all 0.2s ease",
                     textTransform: "capitalize",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.35rem",
+                    textAlign: "center",
                   }}
                 >
-                  💰 Sales {hasParts("sales") && "✓"}
+                  <span aria-hidden="true">💰</span>
+                  <span>Sales</span>
+                  {hasParts("sales") && <span aria-hidden="true">✓</span>}
                 </button>
               </div>
             </div>
