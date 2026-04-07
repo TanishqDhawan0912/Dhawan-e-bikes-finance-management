@@ -28,6 +28,22 @@ export default function Spares() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // When switching between sections inside Spares, always reset scroll to top.
+  // Scroll happens inside `.spares-content` (not window) due to the app shell.
+  useEffect(() => {
+    // Wait a frame so route content has mounted.
+    requestAnimationFrame(() => {
+      const el = document.querySelector(".spares-content");
+      if (el && typeof el.scrollTo === "function") {
+        el.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      } else if (el) {
+        el.scrollTop = 0;
+      } else {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      }
+    });
+  }, [location.pathname]);
+
   // Clean up any malformed URLs on mount and route changes
   useEffect(() => {
     const path = location.pathname;

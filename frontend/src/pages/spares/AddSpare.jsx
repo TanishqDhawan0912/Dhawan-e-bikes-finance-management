@@ -310,6 +310,63 @@ function AddSpare() {
   const modelTimeoutRef = useRef(null);
   const dupCheckTimeoutRef = useRef(null);
 
+  const closeAllSuggestionPopovers = useCallback(() => {
+    setShowNameSuggestions(false);
+    setNameSuggestions([]);
+    setSelectedNameIndex(-1);
+    setNamePosition(null);
+
+    setShowSupplierSuggestions(false);
+    setSupplierSuggestions([]);
+    setSelectedSupplierIndex(-1);
+    setSupplierPosition(null);
+
+    setShowSuggestions(false);
+    setModelSuggestions([]);
+    setSelectedSuggestionIndex(-1);
+    setSuggestionPosition(null);
+  }, []);
+
+  // Close suggestion popovers when user scrolls or changes focus.
+  // These popovers are rendered in a portal (fixed positioning) so they won't
+  // automatically disappear when the form scrolls.
+  useEffect(() => {
+    const onScroll = () => {
+      closeAllSuggestionPopovers();
+    };
+
+    const onFocusIn = (e) => {
+      const t = e?.target;
+      // Keep suggestions open only for the currently focused input.
+      if (t !== nameInputRef.current) {
+        setShowNameSuggestions(false);
+        setNameSuggestions([]);
+        setSelectedNameIndex(-1);
+        setNamePosition(null);
+      }
+      if (t !== supplierInputRef.current) {
+        setShowSupplierSuggestions(false);
+        setSupplierSuggestions([]);
+        setSelectedSupplierIndex(-1);
+        setSupplierPosition(null);
+      }
+      if (t !== modelInputRef.current) {
+        setShowSuggestions(false);
+        setModelSuggestions([]);
+        setSelectedSuggestionIndex(-1);
+        setSuggestionPosition(null);
+      }
+    };
+
+    // Capture scroll events from nested containers too.
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("focusin", onFocusIn);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("focusin", onFocusIn);
+    };
+  }, [closeAllSuggestionPopovers]);
+
   // Multi-model selection state
   const [modelSearch, setModelSearch] = useState("");
   const [selectedModels, setSelectedModels] = useState([]);

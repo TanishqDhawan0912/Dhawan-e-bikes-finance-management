@@ -292,8 +292,8 @@ export default function EditSpare() {
       // Mark form as submitted to prevent state reset
       setFormSubmitted(true);
 
-      // After updating a spare, send user to Add More Stock for quick inventory update
-      navigate(`/spares/add-more/${id}`);
+      // After updating a spare, go back to All Spares
+      navigate("/spares/all");
     } catch (err) {
       console.error("Error updating spare:", err);
       setError(err.message || "Error updating spare. Please try again.");
@@ -331,7 +331,7 @@ export default function EditSpare() {
         throw new Error(errorData.message || "Error updating spare");
       }
       setShowEntriesConfirm(false);
-      navigate(`/spares/add-more/${id}`);
+      navigate("/spares/all");
     } catch (err) {
       setError(err.message || "Error updating spare. Please try again.");
       setShowEntriesConfirm(false);
