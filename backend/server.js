@@ -24,8 +24,6 @@ if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
 }
 
-const PORT = Number(process.env.PORT) || 5000;
-
 // Middleware
 app.use(cors(buildCorsOptions()));
 app.options("*", cors(buildCorsOptions()));
@@ -39,32 +37,7 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
-/* 🔥 OPTIMIZED DB MIDDLEWARE (FINAL FIX) */
-app.use(async (req, res, next) => {
-  // ✅ Skip if already connected
-  if (mongoose.connection.readyState === 1) {
-    return next();
-  }
-
-  let attempts = 2;
-
-  while (attempts--) {
-    try {
-      console.warn("⚠️ DB reconnect attempt...");
-      await connectDatabase();
-      return next();
-    } catch (err) {
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-  }
-
-  return res.status(500).json({
-    success: false,
-    message: "Database temporarily unavailable",
-  });
-});
-
-// Health routes
+// Health routes MUST be before DB middleware so Render / Cloudflare probes never wait on MongoDB
 app.get("/", (req, res) => {
   res.type("text/plain").send("API Running");
 });
@@ -75,11 +48,35 @@ app.get("/health", (req, res) => {
     service: "dhawan-e-bikes-finance-api",
     uptime: process.uptime(),
     env: process.env.NODE_ENV || "development",
+    dbReady: mongoose.connection.readyState === 1,
   });
 });
 
 app.get("/test", (req, res) => {
   res.type("text/plain").send("Backend working");
+});
+
+/* DB gate: API routes wait for Mongo; health routes above skip this */
+app.use(async (req, res, next) => {
+  if (mongoose.connection.readyState === 1) {
+    return next();
+  }
+
+  let attempts = 2;
+  while (attempts--) {
+    try {
+      console.warn("⚠️ DB reconnect attempt...");
+      await connectDatabase();
+      return next();
+    } catch (err) {
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+
+  return res.status(503).json({
+    success: false,
+    message: "Database temporarily unavailable",
+  });
 });
 
 // DB test route
@@ -177,53 +174,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 🚀 START SERVER WITH DB RETRY
-(async function startServer() {
-  if (process.env.NODE_ENV === "production") {
-    const secret = process.env.JWT_SECRET?.trim();
-    if (!secret) {
-      console.error("JWT_SECRET is required in production");
-      process.exit(1);
-    }
-  }
+const PORT = process.env.PORT || 5000;
 
-  let retries = 5;
-  while (retries) {
-    try {
-      await connectDatabase();
-      console.log("✅ MongoDB connected");
-      break;
-    } catch (err) {
-      console.error("❌ MongoDB connection failed. Retrying...");
-      retries -= 1;
-      await new Promise((res) => setTimeout(res, 5000));
-    }
-  }
-
-  if (!retries) {
-    console.error("❌ Could not connect to MongoDB after retries.");
-  }
-
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    const publicUrl = process.env.RENDER_EXTERNAL_URL;
-    console.log(
-      publicUrl
-        ? `🚀 Server running at ${publicUrl}`
-        : `🚀 Server running on port ${PORT}`
-    );
-  });
-
-  server.on("error", (err) => {
-    console.error("Server error:", err);
-  });
-
-  const shutdown = () => {
-    console.log("Shutting down server...");
-    server.close(() => {
-      closeDatabase().catch(() => {});
-    });
-  };
-
-  process.on("SIGTERM", shutdown);
-  process.on("SIGINT", shutdown);
-})();
+app.listen(PORT, () => {
+  console.log(`🚀 Server listening on port ${PORT}`);
+});
