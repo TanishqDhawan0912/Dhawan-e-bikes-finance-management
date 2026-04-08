@@ -2252,11 +2252,15 @@ export default function NewJobcard() {
     }
 
     const cid = `custom-${Date.now()}`;
+    const totalEntered = parseFloat(customSpareData.price);
+    const unitPrice =
+      qtyNumber > 0 ? totalEntered / qtyNumber : totalEntered;
     const customPart = {
       id: cid,
       lineId: cid,
       name: customSpareData.name.trim(),
-      price: parseFloat(customSpareData.price),
+      // Store unit price so totals stay correct when quantity changes later
+      price: unitPrice,
       selectedQuantity: qtyNumber,
       hasColors: false,
       selectedColor: customSpareData.color.trim() || null,
@@ -8432,7 +8436,9 @@ export default function NewJobcard() {
                             fontWeight: 500,
                           }}
                         >
-                          Price for 1 Quantity (₹){" "}
+                          Price for{" "}
+                          {Math.max(1, Number(customSpareData.quantity) || 1)}{" "}
+                          Quantity (₹){" "}
                           <span style={{ color: "#ef4444" }}>*</span>
                         </label>
                         <input
@@ -8574,6 +8580,7 @@ export default function NewJobcard() {
                       {selectedParts[activeTab].map((part) => (
                         <div
                           key={getPartLineKey(part)}
+                          className="jobcard-part-row"
                           style={{
                             padding: "1.5rem",
                             marginBottom: "1rem",
@@ -9628,7 +9635,7 @@ export default function NewJobcard() {
                                       part.salesType === "charger" ? (
                                       <>₹{getPartTotal(part).toFixed(2)}</>
                                     ) : (
-                                      <>₹{part.price.toFixed(2)}</>
+                                      <>₹{getPartTotal(part).toFixed(2)}</>
                                     )}
                                   </span>
                                   <button
@@ -9661,6 +9668,7 @@ export default function NewJobcard() {
                             </div>
                           </div>
                           <div
+                            className="jobcard-part-controls"
                             style={{
                               display: "flex",
                               flexDirection: "column",
@@ -9672,6 +9680,7 @@ export default function NewJobcard() {
                           >
                             {part.salesType !== "oldScooty" && (
                               <div
+                                className="jobcard-part-stepper"
                                 style={{
                                   display: "flex",
                                   alignItems: "center",
@@ -9852,6 +9861,7 @@ export default function NewJobcard() {
                               </div>
                             )}
                             <button
+                              className="jobcard-part-remove"
                               type="button"
                               onClick={() => removePart(getPartLineKey(part), activeTab)}
                               style={{
@@ -10181,6 +10191,7 @@ export default function NewJobcard() {
                               </div>
                             </div>
                             <div
+                              className="jobcard-part-actions"
                               style={{
                                 display: "flex",
                                 alignItems: "center",
@@ -10190,6 +10201,7 @@ export default function NewJobcard() {
                             >
                               {part.salesType !== "oldScooty" && (
                                 <div
+                                  className="jobcard-part-stepper"
                                   style={{
                                     display: "flex",
                                     alignItems: "center",
@@ -10290,6 +10302,7 @@ export default function NewJobcard() {
                                 </div>
                               )}
                               <button
+                                className="jobcard-part-remove"
                                 type="button"
                                 onClick={() => removePart(getPartLineKey(part), cat)}
                                 style={{
@@ -10631,6 +10644,7 @@ export default function NewJobcard() {
                               </div>
                             </div>
                             <div
+                              className="jobcard-part-actions"
                               style={{
                                 display: "flex",
                                 alignItems: "center",
@@ -10640,6 +10654,7 @@ export default function NewJobcard() {
                             >
                               {part.salesType !== "oldScooty" && (
                                 <div
+                                  className="jobcard-part-stepper"
                                   style={{
                                     display: "flex",
                                     alignItems: "center",

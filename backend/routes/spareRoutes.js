@@ -5,6 +5,7 @@ const {
   getSpareById,
   updateSpare,
   updateSpareStock,
+  setSparePurchasePrice,
   deleteSpare,
   getStockAnalytics,
   getSpareNameSuggestions,
@@ -36,5 +37,7 @@ router.get("/check-duplicate", checkDuplicateSpare);
 router.route("/:id").get(getSpareById).put(updateSpare).delete(deleteSpare);
 
 router.route("/:id/stock").put(updateSpareStock);
+
+router.route("/:id/purchase-price").patch(setSparePurchasePrice);
 
 module.exports = router;

@@ -8,9 +8,12 @@ const LOCAL_DEV_ORIGIN = "http://localhost:5000";
 const DEPLOYED_API_ORIGIN =
   "https://dhawan-e-bikes-finance-management.onrender.com";
 
+// In local dev, prefer the local backend so new routes work immediately.
+// (You can still point to a remote API by setting VITE_API_URL to localhost/127.0.0.1 explicitly.)
 const origin = (
-  envUrl ||
-  (import.meta.env.DEV ? LOCAL_DEV_ORIGIN : DEPLOYED_API_ORIGIN)
+  import.meta.env.DEV
+    ? LOCAL_DEV_ORIGIN
+    : (envUrl || DEPLOYED_API_ORIGIN)
 ).replace(/\/$/, "");
 
 if (import.meta.env.PROD && !envUrl) {

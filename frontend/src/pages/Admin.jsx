@@ -481,7 +481,11 @@ export default function Admin() {
     const grouped = {};
 
     filteredModels.forEach((model) => {
-      const key = `${model.modelName}-${model.company}`;
+      // IMPORTANT: Grouping MUST include warranty (matches Models page grouping),
+      // otherwise buckets merge and color/qty totals won't match.
+      const key = `${model.modelName}-${model.company}-${
+        model.purchasedInWarranty ? "w" : "nw"
+      }`;
 
       if (!grouped[key]) {
         grouped[key] = {
@@ -489,7 +493,6 @@ export default function Admin() {
           company: model.company,
           // Use earliest purchase date within the group for display
           purchaseDate: model.purchaseDate || model.createdAt || null,
-          // True if any entry in the group was purchased in warranty
           purchasedInWarranty: !!model.purchasedInWarranty,
           colours: [],
           // Map of description label -> { [colour]: quantity }
@@ -515,9 +518,7 @@ export default function Admin() {
           }
         }
 
-        if (model.purchasedInWarranty) {
-          grouped[key].purchasedInWarranty = true;
-        }
+        // key includes warranty; no cross-warranty merge needed
       }
 
       // Store selling price from model (first non-null)
@@ -535,136 +536,73 @@ export default function Admin() {
         }
       }
 
-      // Aggregate colors from stockEntries if available
-      let hasColorsFromStockEntries = false;
-      if (
-        model.stockEntries &&
-        Array.isArray(model.stockEntries) &&
-        model.stockEntries.length > 0
-      ) {
-        model.stockEntries.forEach((entry) => {
-          if (
-            entry.colorQuantities &&
-            Array.isArray(entry.colorQuantities) &&
-            entry.colorQuantities.length > 0
-          ) {
-            hasColorsFromStockEntries = true;
-            entry.colorQuantities.forEach((cq) => {
-              if (cq.color && cq.color.trim() !== "") {
-                const existingColor = grouped[key].colours.find(
-                  (c) => c.colour === cq.color
-                );
-                const quantityToAdd = parseInt(cq.quantity) || 0;
-                if (existingColor) {
-                  existingColor.quantity += quantityToAdd;
-                } else {
-                  grouped[key].colours.push({
-                    colour: cq.color,
-                    quantity: quantityToAdd,
-                  });
-                }
-                grouped[key].totalQuantity += quantityToAdd;
+      // Build per-model color totals with a single source of truth (matches Models page):
+      // Prefer stockEntries (live layer data), else model.colorQuantities, else legacy (colour + quantity).
+      const perModelColorTotals = new Map();
+      const hasStockEntries =
+        Array.isArray(model.stockEntries) && model.stockEntries.length > 0;
 
-                // Also aggregate by combined description tags for this stock entry.
-                // All description tags entered together for this entry are treated as ONE label.
-                const descParts = Array.isArray(entry.description)
-                  ? entry.description
-                  : entry.description
-                  ? [entry.description]
-                  : [];
-                const combinedLabel = descParts
-                  .map((d) => (d || "").toString().trim())
-                  .filter(Boolean)
-                  .join(", ");
-                if (combinedLabel) {
-                  if (!grouped[key].descriptionColorMap[combinedLabel]) {
-                    grouped[key].descriptionColorMap[combinedLabel] = {};
-                  }
-                  const mapForDesc =
-                    grouped[key].descriptionColorMap[combinedLabel];
-                  const colorKey = cq.color;
-                  mapForDesc[colorKey] =
-                    (mapForDesc[colorKey] || 0) + quantityToAdd;
+      if (hasStockEntries) {
+        model.stockEntries.forEach((entry) => {
+          const descParts = Array.isArray(entry?.description)
+            ? entry.description
+            : entry?.description
+            ? [entry.description]
+            : [];
+          const combinedLabel = descParts
+            .map((d) => (d || "").toString().trim())
+            .filter(Boolean)
+            .join(", ");
+
+          if (Array.isArray(entry?.colorQuantities)) {
+            entry.colorQuantities.forEach((cq) => {
+              const c = (cq?.color || "").toString().trim();
+              if (!c) return;
+              const qty = parseInt(cq?.quantity) || 0;
+              perModelColorTotals.set(c, (perModelColorTotals.get(c) || 0) + qty);
+
+              if (combinedLabel) {
+                if (!grouped[key].descriptionColorMap[combinedLabel]) {
+                  grouped[key].descriptionColorMap[combinedLabel] = {};
                 }
+                const mapForDesc = grouped[key].descriptionColorMap[combinedLabel];
+                mapForDesc[c] = (mapForDesc[c] || 0) + qty;
               }
             });
           }
         });
-      }
-
-      // Also check model.colorQuantities directly (aggregated from stockEntries)
-      if (
-        model.colorQuantities &&
+      } else if (
         Array.isArray(model.colorQuantities) &&
         model.colorQuantities.length > 0
       ) {
-        model.colorQuantities.forEach((cq) => {
-          if (cq.color && cq.color.trim() !== "") {
-            const existingColor = grouped[key].colours.find(
-              (c) => c.colour === cq.color
-            );
-            const quantityToAdd = parseInt(cq.quantity) || 0;
-            if (existingColor) {
-              // Only update if the quantity from colorQuantities is greater (more recent/accurate)
-              if (quantityToAdd > existingColor.quantity) {
-                grouped[key].totalQuantity -= existingColor.quantity;
-                existingColor.quantity = quantityToAdd;
-                grouped[key].totalQuantity += quantityToAdd;
-              }
-            } else {
-              grouped[key].colours.push({
-                colour: cq.color,
-                quantity: quantityToAdd,
-              });
-              grouped[key].totalQuantity += quantityToAdd;
-            }
+        const descParts = Array.isArray(model.description)
+          ? model.description
+          : model.description
+          ? [model.description]
+          : [];
+        const combinedLabel = descParts
+          .map((d) => (d || "").toString().trim())
+          .filter(Boolean)
+          .join(", ");
 
-            // Also aggregate by combined model-level description tags if present
-            const descParts = Array.isArray(model.description)
-              ? model.description
-              : model.description
-              ? [model.description]
-              : [];
-            const combinedLabel = descParts
-              .map((d) => (d || "").toString().trim())
-              .filter(Boolean)
-              .join(", ");
-            if (combinedLabel) {
-              if (!grouped[key].descriptionColorMap[combinedLabel]) {
-                grouped[key].descriptionColorMap[combinedLabel] = {};
-              }
-              const mapForDesc =
-                grouped[key].descriptionColorMap[combinedLabel];
-              const colorKey = cq.color;
-              mapForDesc[colorKey] =
-                (mapForDesc[colorKey] || 0) + quantityToAdd;
+        model.colorQuantities.forEach((cq) => {
+          const c = (cq?.color || "").toString().trim();
+          if (!c) return;
+          const qty = parseInt(cq?.quantity) || 0;
+          perModelColorTotals.set(c, qty);
+
+          if (combinedLabel) {
+            if (!grouped[key].descriptionColorMap[combinedLabel]) {
+              grouped[key].descriptionColorMap[combinedLabel] = {};
             }
+            const mapForDesc = grouped[key].descriptionColorMap[combinedLabel];
+            mapForDesc[c] = (mapForDesc[c] || 0) + qty;
           }
         });
-      }
+      } else if (model.colour && model.colour.trim() !== "") {
+        const qty = model.quantity || 0;
+        perModelColorTotals.set(model.colour, qty);
 
-      // Fallback: use old single colour/quantity fields if no colorQuantities found
-      if (
-        !hasColorsFromStockEntries &&
-        (!model.colorQuantities || model.colorQuantities.length === 0) &&
-        model.colour &&
-        model.colour.trim() !== ""
-      ) {
-        const modelQuantity = model.quantity || 0;
-        const existingColor = grouped[key].colours.find(
-          (c) => c.colour === model.colour
-        );
-        if (existingColor) {
-          existingColor.quantity += modelQuantity;
-        } else {
-          grouped[key].colours.push({
-            colour: model.colour,
-            quantity: modelQuantity,
-          });
-        }
-        grouped[key].totalQuantity += modelQuantity;
-
-        // Also aggregate fallback colour by combined model-level description tags if present
         const descParts = Array.isArray(model.description)
           ? model.description
           : model.description
@@ -678,13 +616,24 @@ export default function Admin() {
           if (!grouped[key].descriptionColorMap[combinedLabel]) {
             grouped[key].descriptionColorMap[combinedLabel] = {};
           }
-          const mapForDesc =
-            grouped[key].descriptionColorMap[combinedLabel];
-          const colorKey = model.colour;
-          mapForDesc[colorKey] =
-            (mapForDesc[colorKey] || 0) + modelQuantity;
+          const mapForDesc = grouped[key].descriptionColorMap[combinedLabel];
+          mapForDesc[model.colour] = (mapForDesc[model.colour] || 0) + qty;
         }
       }
+
+      // Apply per-model totals into the group aggregate.
+      perModelColorTotals.forEach((qty, colour) => {
+        const existingColor = grouped[key].colours.find(
+          (c) => c.colour === colour
+        );
+        const quantityToAdd = parseInt(qty) || 0;
+        if (existingColor) {
+          existingColor.quantity += quantityToAdd;
+        } else {
+          grouped[key].colours.push({ colour, quantity: quantityToAdd });
+        }
+        grouped[key].totalQuantity += quantityToAdd;
+      });
 
       // Inventory value: sum purchasePrice × quantity per stock entry (like Models/AddMoreStock).
       // Also mark groups that have missing purchase prices.
@@ -955,6 +904,31 @@ export default function Admin() {
 
       return sum;
     }, 0);
+  }, [spares]);
+
+  // Any in-stock spare layer with missing purchase price?
+  const sparesHasMissingPurchasePrice = useMemo(() => {
+    if (!Array.isArray(spares) || spares.length === 0) return false;
+    return spares.some((spare) => {
+      if (!spare) return false;
+      // Color-tracked spares
+      if (isColorTrackingEnabled(spare) && Array.isArray(spare.colorQuantity)) {
+        return spare.colorQuantity.some((cq) => {
+          const qty = Math.max(0, Number(cq?.quantity) || 0);
+          const price = Math.max(0, Number(cq?.purchasePrice) || 0);
+          return qty > 0 && price <= 0;
+        });
+      }
+      // Non-color spares
+      if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
+        return spare.stockEntries.some((e) => {
+          const qty = Math.max(0, Number(e?.quantity) || 0);
+          const price = Math.max(0, Number(e?.purchasePrice) || 0);
+          return qty > 0 && price <= 0;
+        });
+      }
+      return false;
+    });
   }, [spares]);
 
   // Compute low-stock info for each spare
@@ -1604,7 +1578,16 @@ export default function Admin() {
     };
 
     const isProfitSpareLine = (p) => {
-      if (!p || p.isCustom === true || !p.spareId) return false;
+      if (!p || !p.spareId) return false;
+      const pt = String(p.partType || "").toLowerCase();
+      const st = String(p.salesType || "").toLowerCase();
+      if (pt === "service") return true;
+      if (pt === "sales" && st === "spare") return true;
+      return false;
+    };
+
+    const isProfitCustomSpareLine = (p) => {
+      if (!p || p.isCustom !== true) return false;
       const pt = String(p.partType || "").toLowerCase();
       const st = String(p.salesType || "").toLowerCase();
       if (pt === "service") return true;
@@ -1744,6 +1727,7 @@ export default function Admin() {
     const profitParts = parts.filter(
       (p) =>
         isProfitSpareLine(p) ||
+        isProfitCustomSpareLine(p) ||
         isProfitBatteryLine(p) ||
         isProfitOldBatterySaleLine(p) ||
         isProfitNewChargerSaleLine(p) ||
@@ -1777,6 +1761,27 @@ export default function Admin() {
             quantity: qty,
             unitCost: qty > 0 ? lineCost / qty : lineCost,
             lineCost,
+          };
+        }
+        if (isProfitCustomSpareLine(p)) {
+          const qty = Number(p.quantity) || 0;
+          const manualUnit = Math.max(0, Number(p.manualUnitPurchaseCost) || 0);
+          const baseName = String(p.spareName || "").trim() || "Custom Part";
+          const color = String(p.selectedColor || "").trim();
+          const name = color ? `${baseName} (${color})` : baseName;
+          const unitCost = manualUnit > 0 ? manualUnit : null;
+          const lineCost = unitCost != null ? qty * unitCost : null;
+          return {
+            name,
+            kind: "custom",
+            kindDisplay: "custom",
+            quantity: qty,
+            unitCost,
+            lineCost,
+            spareId: null,
+            selectedColor: color || null,
+            jobcardPartId: p?._id ? String(p._id) : null,
+            isCustom: true,
           };
         }
         if (isProfitOldBatterySaleLine(p)) {
@@ -1859,11 +1864,15 @@ export default function Admin() {
             ) || 0;
           const battId = resolveBatteryInventoryIdFromJobcardPart(p);
           const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
+          const manualUnit = Math.max(0, Number(p.manualUnitPurchaseCost) || 0);
           let unitCost;
           let lineCost;
           if (storedFifo > 0) {
             lineCost = storedFifo;
             unitCost = qty > 0 ? storedFifo / qty : 0;
+          } else if (manualUnit > 0) {
+            unitCost = manualUnit;
+            lineCost = qty * manualUnit;
           } else {
             unitCost = getBatteryUnitCost(battId);
             lineCost = qty * unitCost;
@@ -1882,17 +1891,23 @@ export default function Admin() {
             quantity: qty,
             unitCost,
             lineCost,
+            jobcardPartId: p?._id ? String(p._id) : null,
+            isCustom: Boolean(p?.isCustom),
           };
         }
 
         const qty = Number(p.quantity) || 0;
         const spareId = p.spareId?._id || p.spareId;
         const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
+        const manualUnit = Math.max(0, Number(p.manualUnitPurchaseCost) || 0);
         let unitCost;
         let lineCost;
         if (storedFifo > 0) {
           lineCost = storedFifo;
           unitCost = qty > 0 ? storedFifo / qty : 0;
+        } else if (manualUnit > 0) {
+          unitCost = manualUnit;
+          lineCost = qty * manualUnit;
         } else {
           unitCost = getSpareUnitCost(spareId);
           lineCost = qty * unitCost;
@@ -1910,6 +1925,10 @@ export default function Admin() {
           quantity: qty,
           unitCost,
           lineCost,
+          spareId: spareId ? String(spareId) : null,
+          selectedColor: color || null,
+          jobcardPartId: p?._id ? String(p._id) : null,
+          isCustom: Boolean(p?.isCustom),
         };
       })
       .filter((l) => l.quantity > 0);
@@ -1931,7 +1950,10 @@ export default function Admin() {
     );
     const salesThingSummaries = aggregateThingQtyByLabel(thingBuckets.sales);
 
-    const totalCost = lines.reduce((sum, l) => sum + (l.lineCost || 0), 0);
+    const totalCost = lines.reduce(
+      (sum, l) => sum + (Number.isFinite(l.lineCost) ? l.lineCost : 0),
+      0
+    );
     const serviceSpareCost = lines
       .filter((l) => l.kind === "service")
       .reduce((sum, l) => sum + (l.lineCost || 0), 0);
@@ -1968,20 +1990,18 @@ export default function Admin() {
       customerScrapCreditTotal +
       oldBatteryScrapCreditTotal;
 
-    /** Lines included in profit math but with ₹0 cost (no FIFO on part + no unit cost from stock). */
-    const missingPurchaseCostLabels = lines
-      .filter(
-        (l) =>
-          l.quantity > 0 &&
-          (Number(l.lineCost) || 0) <= 0 &&
-          l.kind !== "battery-old-sale" &&
-          l.kind !== "charger-old-sale"
-      )
-      .map((l) =>
-        l.quantity > 1
-          ? `${l.name} (${l.kindDisplay}, ×${l.quantity})`
-          : `${l.name} (${l.kindDisplay})`
-      );
+    /** Lines included in profit math but missing purchase cost (unknown or ₹0). */
+    const missingPurchaseCostItems = lines.filter((l) => {
+      if (!(l.quantity > 0)) return false;
+      if (l.kind === "battery-old-sale" || l.kind === "charger-old-sale") return false;
+      if (l.lineCost == null) return true;
+      return (Number(l.lineCost) || 0) <= 0;
+    });
+    const missingPurchaseCostLabels = missingPurchaseCostItems.map((l) =>
+      l.quantity > 1
+        ? `${l.name} (${l.kindDisplay}, ×${l.quantity})`
+        : `${l.name} (${l.kindDisplay})`
+    );
 
     return {
       id: jc?._id,
@@ -1998,6 +2018,7 @@ export default function Admin() {
       oldBatteryScrapCreditTotal,
       profit,
       missingPurchaseCostLabels,
+      missingPurchaseCostItems,
       serviceThingSummaries,
       replacementThingSummaries,
       salesThingSummaries,
@@ -2279,6 +2300,12 @@ export default function Admin() {
                 <p className="card-number">
                   ₹{sparesLoading ? "…" : totalSparesValue.toLocaleString()}
                 </p>
+                {sparesHasMissingPurchasePrice && !sparesLoading && (
+                  <small style={{ color: "#f59e0b" }}>
+                    ⚠️ Some stock entries are missing purchase price. Enter prices
+                    for best accuracy.
+                  </small>
+                )}
                 <small>Quantity × purchase price</small>
               </div>
             </div>
@@ -4740,14 +4767,43 @@ export default function Admin() {
                             }}
                             aria-label={`${j.jobcardNumber}, profit ₹${(j.profit || 0).toLocaleString("en-IN")}, open breakdown`}
                           >
-                            <span
-                              style={{
-                                fontWeight: 700,
-                                color: "#111827",
-                                fontSize: "0.95rem",
-                              }}
-                            >
-                              {j.jobcardNumber}
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+                              <span
+                                style={{
+                                  fontWeight: 700,
+                                  color: "#111827",
+                                  fontSize: "0.95rem",
+                                  minWidth: 0,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {j.jobcardNumber}
+                              </span>
+                              {Array.isArray(j.missingPurchaseCostLabels) &&
+                                j.missingPurchaseCostLabels.length > 0 && (
+                                  <span
+                                    title="Some parts have ₹0 purchase cost"
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      width: "18px",
+                                      height: "18px",
+                                      borderRadius: "999px",
+                                      backgroundColor: "#fee2e2",
+                                      border: "1px solid #fecaca",
+                                      color: "#b91c1c",
+                                      fontWeight: 900,
+                                      fontSize: "0.8rem",
+                                      lineHeight: 1,
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    !
+                                  </span>
+                                )}
                             </span>
                             <span
                               style={{
@@ -5266,10 +5322,10 @@ export default function Admin() {
                                           {l.quantity}
                                         </div>
                                         <div style={{ textAlign: "right" }}>
-                                          ₹{(l.unitCost || 0).toFixed(2)}
+                                          {l.unitCost == null ? "—" : `₹${Number(l.unitCost || 0).toFixed(2)}`}
                                         </div>
                                         <div style={{ textAlign: "right" }}>
-                                          ₹{(l.lineCost || 0).toFixed(2)}
+                                          {l.lineCost == null ? "—" : `₹${Number(l.lineCost || 0).toFixed(2)}`}
                                         </div>
                                       </div>
                                     ))}
@@ -5277,8 +5333,8 @@ export default function Admin() {
                                 ))
                             )}
 
-                            {Array.isArray(j.missingPurchaseCostLabels) &&
-                              j.missingPurchaseCostLabels.length > 0 && (
+                            {Array.isArray(j.missingPurchaseCostItems) &&
+                              j.missingPurchaseCostItems.length > 0 && (
                                 <div
                                   style={{
                                     gridColumn: "1 / -1",
@@ -5306,9 +5362,83 @@ export default function Admin() {
                                       gap: "0.35rem",
                                     }}
                                   >
-                                    {j.missingPurchaseCostLabels.map((label, mi) => (
-                                      <span
-                                        key={`${j.id}-modal-miss-${mi}`}
+                                    {j.missingPurchaseCostItems.map((item, mi) => {
+                                      const label =
+                                        item.quantity > 1
+                                          ? `${item.name} (${item.kindDisplay}, ×${item.quantity})`
+                                          : `${item.name} (${item.kindDisplay})`;
+                                      return (
+                                        <button
+                                          type="button"
+                                          key={`${j.id}-modal-miss-${mi}`}
+                                          onClick={async () => {
+                                            try {
+                                              const looksObjectId = (v) =>
+                                                /^[0-9a-fA-F]{24}$/.test(String(v || "").trim());
+
+                                              // Inventory spare: redirect to Add More Stock (user updates purchase price there)
+                                              if (looksObjectId(item.spareId)) {
+                                                setFinanceJobcardProfitModalJobcard(null);
+                                                navigate(`/spares/add-more/${item.spareId}`);
+                                                return;
+                                              }
+
+                                              // Custom / non-inventory line: ask for manual unit cost
+                                              if (looksObjectId(item.jobcardPartId)) {
+                                                const raw = window.prompt(
+                                                  `Enter purchase price per unit for ${item.name} (₹)`,
+                                                  "0"
+                                                );
+                                                if (raw == null) return;
+                                                const next = Math.max(
+                                                  0,
+                                                  Number(String(raw).trim()) || 0
+                                                );
+                                                if (!(next > 0)) {
+                                                  alert(
+                                                    "Enter a valid purchase price (> 0)."
+                                                  );
+                                                  return;
+                                                }
+
+                                                // Custom or non-inventory line: store manual unit cost on jobcard part
+                                                const url = `${API_BASE}/jobcards/${j.id}/parts/${item.jobcardPartId}/manual-unit-cost`;
+                                                const resp = await fetch(url, {
+                                                  method: "PATCH",
+                                                  headers: { "Content-Type": "application/json" },
+                                                  body: JSON.stringify({
+                                                    manualUnitPurchaseCost: next,
+                                                  }),
+                                                });
+                                                const text = await resp.text();
+                                                let data = null;
+                                                try {
+                                                  data = text ? JSON.parse(text) : null;
+                                                } catch {
+                                                  data = null;
+                                                }
+                                                if (!resp.ok) {
+                                                  const msg =
+                                                    data?.message ||
+                                                    (text ? String(text).slice(0, 200) : "") ||
+                                                    "Failed to save manual purchase cost";
+                                                  throw new Error(`${msg} (URL: ${url})`);
+                                                }
+                                              } else {
+                                                alert(
+                                                  "This line cannot be edited (missing spareId / partId). Please refresh and try again."
+                                                );
+                                                return;
+                                              }
+
+                                              // Refresh jobcards so profit recalculates
+                                              await fetchJobcardsForAdmin();
+                                              // Close modal so the user sees updated profit immediately in the list.
+                                              setFinanceJobcardProfitModalJobcard(null);
+                                            } catch (e) {
+                                              alert(e?.message || "Failed to update purchase price");
+                                            }
+                                          }}
                                         style={{
                                           fontSize: "0.82rem",
                                           fontWeight: 800,
@@ -5318,11 +5448,13 @@ export default function Admin() {
                                           borderRadius: "0.35rem",
                                           padding: "0.3rem 0.65rem",
                                           lineHeight: 1.25,
+                                          cursor: "pointer",
                                         }}
                                       >
                                         {label}
-                                      </span>
-                                    ))}
+                                        </button>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               )}

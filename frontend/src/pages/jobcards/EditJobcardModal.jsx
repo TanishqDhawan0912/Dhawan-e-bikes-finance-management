@@ -454,10 +454,14 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
       return;
     }
 
+    const totalEntered = parseFloat(customSpareData.price);
+    const unitPrice =
+      qtyNumber > 0 ? totalEntered / qtyNumber : totalEntered;
     const customPart = {
       id: `custom-${Date.now()}`,
       name: customSpareData.name.trim(),
-      price: parseFloat(customSpareData.price),
+      // Store unit price so totals stay correct when quantity changes later
+      price: unitPrice,
       selectedQuantity: qtyNumber,
       hasColors: false,
       selectedColor: customSpareData.color.trim() || null,
@@ -1130,7 +1134,9 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
                         fontWeight: 500,
                       }}
                     >
-                      Price for 1 Quantity (₹) <span style={{ color: "#ef4444" }}>*</span>
+                      Price for{" "}
+                      {Math.max(1, Number(customSpareData.quantity) || 1)}{" "}
+                      Quantity (₹) <span style={{ color: "#ef4444" }}>*</span>
                     </label>
                     <input
                       type="number"
@@ -1283,6 +1289,7 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
                 return (
                 <div
                   key={uniqueKey}
+                  className="jobcard-part-row"
                   style={{
                     padding: "1.5rem",
                     marginBottom: "1rem",
@@ -1628,12 +1635,13 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
                         // For sales charger: show total (charger may have scrap deduction)
                         <>₹{getPartTotal(part).toFixed(2)}</>
                       ) : (
-                        // For other parts, show unit price
-                        <>₹{part.price.toFixed(2)}</>
+                        // For other parts, show total (unit × qty)
+                        <>₹{getPartTotal(part).toFixed(2)}</>
                       )}
                     </div>
                   </div>
                   <div
+                    className="jobcard-part-controls"
                     style={{
                       display: "flex",
                       flexDirection: "column",
@@ -1645,6 +1653,7 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
                   >
                     {part.salesType !== "oldScooty" && (
                       <div
+                        className="jobcard-part-stepper"
                         style={{
                           display: "flex",
                           alignItems: "center",
@@ -1804,6 +1813,7 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
                       </div>
                     )}
                     <button
+                      className="jobcard-part-remove"
                       type="button"
                       onClick={() => removePart(part.id, part.partType || "service")}
                       style={{

@@ -1796,6 +1796,39 @@ const markJobcardSynced = async (req, res) => {
   }
 };
 
+// @desc    Set manual unit purchase cost for a specific jobcard part
+// @route   PATCH /api/jobcards/:id/parts/:partId/manual-unit-cost
+// @access  Public (admin UI only; add auth later)
+const setJobcardPartManualUnitCost = async (req, res) => {
+  try {
+    const jobcardId = req.params.id;
+    const partId = req.params.partId;
+    const nextCostRaw = req.body?.manualUnitPurchaseCost;
+    const nextCost = Math.max(0, Number(nextCostRaw) || 0);
+
+    const jobcard = await Jobcard.findById(jobcardId);
+    if (!jobcard) {
+      return res.status(404).json({ message: "Jobcard not found" });
+    }
+
+    const part = Array.isArray(jobcard.parts)
+      ? jobcard.parts.id(partId)
+      : null;
+    if (!part) {
+      return res.status(404).json({ message: "Jobcard part not found" });
+    }
+
+    part.manualUnitPurchaseCost = nextCost;
+    jobcard.markModified("parts");
+    await jobcard.save();
+
+    res.json({ success: true, jobcardId, partId, manualUnitPurchaseCost: nextCost });
+  } catch (error) {
+    console.error("Error setting manual unit purchase cost:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 module.exports = {
   createJobcard,
   getJobcards,
@@ -1805,4 +1838,5 @@ module.exports = {
   settleJobcard,
   deleteJobcard,
   markJobcardSynced,
+  setJobcardPartManualUnitCost,
 };

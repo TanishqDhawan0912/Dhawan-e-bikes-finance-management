@@ -4354,6 +4354,48 @@ body {
       10px + env(safe-area-inset-top, 0px) + 42px
     );
   }
+
+  /* Jobcard (New/Edit): keep layout as-is, just shrink +/- stepper on mobile */
+  .selected-parts,
+  .selected-parts .parts-list {
+    max-width: 100%;
+  }
+
+  /* In consolidated "Things added to jobcard", stack Remove under +/- stepper */
+  .jobcard-part-actions {
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    gap: 0.5rem !important;
+  }
+
+  /* Allow content to shrink/wrap instead of forcing width */
+  .jobcard-part-row > div:first-child {
+    min-width: 0;
+  }
+
+  .jobcard-part-stepper {
+    width: 96px !important;
+  }
+
+  .jobcard-part-stepper button {
+    width: 28px !important;
+    height: 28px !important;
+    flex: 0 0 28px !important;
+    font-size: 0.95rem !important;
+    line-height: 1 !important;
+  }
+
+  .jobcard-part-stepper > div {
+    width: 40px !important;
+    height: 28px !important;
+    flex: 0 0 40px !important;
+    font-size: 0.85rem !important;
+  }
+
+  .jobcard-part-remove {
+    width: 96px !important;
+    text-align: center;
+  }
 }
 
 @media (min-width: 431px) {

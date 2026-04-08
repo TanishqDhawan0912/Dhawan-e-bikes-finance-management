@@ -8,6 +8,7 @@ const {
   settleJobcard,
   deleteJobcard,
   markJobcardSynced,
+  setJobcardPartManualUnitCost,
 } = require("../controllers/jobcardController");
 // const { protect } = require("../middleware/authMiddleware");
 
@@ -27,6 +28,11 @@ router.route("/:id/settle").put(settleJobcard);
 
 // Jobcard sync: sets lastSyncedAt on the Jobcard document (collection jobcards)
 router.route("/:id/synced").patch(markJobcardSynced);
+
+// Manual unit purchase cost override for a jobcard part (profit calc)
+router
+  .route("/:id/parts/:partId/manual-unit-cost")
+  .patch(setJobcardPartManualUnitCost);
 
 module.exports = router;
 

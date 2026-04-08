@@ -214,6 +214,12 @@ const jobcardPartSchema = new mongoose.Schema({
     default: 0,
     min: 0,
   },
+  /** Manual unit purchase cost override (used for custom lines or when stock cost is unknown) */
+  manualUnitPurchaseCost: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
 });
 
 const jobcardSchema = new mongoose.Schema(

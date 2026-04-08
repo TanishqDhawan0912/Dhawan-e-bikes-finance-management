@@ -407,6 +407,84 @@ const updateSpareStock = async (req, res) => {
   }
 };
 
+// @desc    Set purchase price for all in-stock layers that are currently 0
+// @route   PATCH /api/spares/:id/purchase-price
+// @access  Private-ish (uses securityKey like updateSpare)
+const setSparePurchasePrice = async (req, res) => {
+  try {
+    const { purchasePrice, color, securityKey } = req.body || {};
+    const next = Math.max(0, Number(purchasePrice) || 0);
+    if (!(next > 0)) {
+      return res.status(400).json({ message: "purchasePrice must be > 0" });
+    }
+
+    if (
+      !securityKey ||
+      securityKey !== process.env.ADMIN_SECURITY_KEY
+    ) {
+      return res.status(401).json({
+        message: "Admin authentication required to set purchase price",
+        requiresAuth: true,
+      });
+    }
+
+    const spare = await Spare.findById(req.params.id);
+    if (!spare) {
+      return res.status(404).json({ message: "Spare not found" });
+    }
+
+    const colorKey = String(color || "").trim().toLowerCase();
+    let touched = 0;
+
+    if (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0) {
+      spare.colorQuantity.forEach((cq) => {
+        if (!cq) return;
+        if (colorKey && String(cq.color || "").trim().toLowerCase() !== colorKey) {
+          return;
+        }
+        const q = Math.max(0, Number(cq.quantity) || 0);
+        const p = Math.max(0, Number(cq.purchasePrice) || 0);
+        if (q > 0 && p <= 0) {
+          cq.purchasePrice = next;
+          touched += 1;
+        }
+      });
+      spare.markModified("colorQuantity");
+    } else if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
+      spare.stockEntries.forEach((e) => {
+        if (!e) return;
+        const q = Math.max(0, Number(e.quantity) || 0);
+        const p = Math.max(0, Number(e.purchasePrice) || 0);
+        if (q > 0 && p <= 0) {
+          e.purchasePrice = next;
+          touched += 1;
+        }
+      });
+      spare.markModified("stockEntries");
+    } else {
+      // No layers; nothing to update. Return a helpful response.
+      return res.status(400).json({ message: "Spare has no stock layers to update" });
+    }
+
+    const updated = await spare.save();
+
+    // Backfill stored costs on bills/jobcards that were 0
+    try {
+      const bf = await backfillZeroStoredCostsForSpare(updated._id, updated);
+      if (bf.billLines > 0 || bf.jobcardLines > 0) {
+        console.log("[spare] Backfilled zero line costs after purchase price set:", bf);
+      }
+    } catch (bfErr) {
+      console.error("[spare] Backfill after purchase price set failed:", bfErr.message);
+    }
+
+    res.json({ success: true, touchedLayers: touched, spare: updated });
+  } catch (error) {
+    console.error("Error setting spare purchase price:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 // @desc    Delete spare
 // @route   DELETE /api/spares/:id
 // @access  Private
@@ -748,6 +826,7 @@ module.exports = {
   getSpareById,
   updateSpare,
   updateSpareStock,
+  setSparePurchasePrice,
   deleteSpare,
   getStockAnalytics,
   getSpareNameSuggestions,
