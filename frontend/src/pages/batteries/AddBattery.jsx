@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getTodayForInput } from "../../utils/dateUtils";
 import DatePicker from "../../components/DatePicker";
 
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 export default function AddBattery() {
   const navigate = useNavigate();
 
@@ -56,8 +56,8 @@ export default function AddBattery() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/batteries/suggestions/name?q=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/batteries/suggestions/name?q=${encodeURIComponent(
           query
         )}`
       );
@@ -78,8 +78,8 @@ export default function AddBattery() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/batteries/suggestions/supplier?q=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/batteries/suggestions/supplier?q=${encodeURIComponent(
           query
         )}`
       );
@@ -102,8 +102,8 @@ export default function AddBattery() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/batteries/suggestions/ampere?q=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/batteries/suggestions/ampere?q=${encodeURIComponent(
           numericQuery
         )}`
       );
@@ -356,14 +356,14 @@ export default function AddBattery() {
     console.log("Checking duplicate for:", { name, ampereValue, supplierName });
     setIsCheckingDuplicate(true);
     try {
-      const url = `${API_BASE}/batteries/check-duplicate?name=${encodeURIComponent(
+      const url = `/batteries/check-duplicate?name=${encodeURIComponent(
         name
       )}&ampereValue=${encodeURIComponent(
         ampereValue
       )}&supplierName=${encodeURIComponent(supplierName)}`;
 
       console.log("Duplicate check URL:", url);
-      const response = await fetch(url);
+      const response = await fetchWithRetry(url);
       console.log("Response status:", response.status, response.statusText);
 
       if (response.ok) {
@@ -423,13 +423,13 @@ export default function AddBattery() {
     if (name && ampereValue && supplierName) {
       // Force a synchronous duplicate check before allowing submission
       try {
-        const url = `${API_BASE}/batteries/check-duplicate?name=${encodeURIComponent(
+        const url = `/batteries/check-duplicate?name=${encodeURIComponent(
           name
         )}&ampereValue=${encodeURIComponent(
           ampereValue
         )}&supplierName=${encodeURIComponent(supplierName)}`;
 
-        const response = await fetch(url);
+        const response = await fetchWithRetry(url);
         if (response.ok) {
           const data = await response.json();
           if (
@@ -486,7 +486,7 @@ export default function AddBattery() {
         purchaseDate: formData.purchaseDate || null,
       };
 
-      const response = await fetch(`${API_BASE}/batteries`, {
+      const response = await fetchWithRetry(`/batteries`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

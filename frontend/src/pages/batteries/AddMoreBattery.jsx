@@ -5,7 +5,7 @@ import {
   formatDate,
   formatDateForInput,
 } from "../../utils/dateUtils";
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 
 /** Units bought in this batch (fixed); null if unknown — never use quantity as purchased. */
 function batteryLayerPurchasedQty(row) {
@@ -105,7 +105,7 @@ export default function AddMoreBattery() {
   const fetchBattery = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/batteries/${id}`);
+      const res = await fetchWithRetry(`/batteries/${id}`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.message || "Error fetching battery");
@@ -141,7 +141,7 @@ export default function AddMoreBattery() {
       if (totalQuantity <= 0) return;
 
       try {
-        const res = await fetch(`${API_BASE}/batteries/${id}`, {
+        const res = await fetchWithRetry(`/batteries/${id}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
@@ -334,7 +334,7 @@ export default function AddMoreBattery() {
     setPasswordError("");
 
     try {
-      const response = await fetch(`${API_BASE}/admin/auth`, {
+      const response = await fetchWithRetry(`/admin/auth`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -509,7 +509,7 @@ export default function AddMoreBattery() {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/batteries/${id}`, {
+      const res = await fetchWithRetry(`/batteries/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -659,7 +659,7 @@ export default function AddMoreBattery() {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/batteries/${id}`, {
+      const res = await fetchWithRetry(`/batteries/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

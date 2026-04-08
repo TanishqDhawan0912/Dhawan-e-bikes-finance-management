@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getTodayFormatted } from "../../utils/dateUtils";
 
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 export default function EditColor() {
   const navigate = useNavigate();
   const { id } = useParams(); // Get model ID from URL (reference model)
@@ -49,7 +49,7 @@ export default function EditColor() {
     const fetchModel = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${API_BASE}/models/${id}`);
+        const response = await fetchWithRetry(`/models/${id}`);
 
         if (!response.ok) {
           throw new Error("Model not found");
@@ -169,7 +169,7 @@ export default function EditColor() {
 
       // First test if backend is accessible
       try {
-        const testResponse = await fetch(`${API_BASE}/models`);
+        const testResponse = await fetchWithRetry(`/models`);
         console.log("Backend connectivity test - status:", testResponse.status);
         if (testResponse.status !== 200) {
           throw new Error("Backend not responding correctly");
@@ -179,7 +179,7 @@ export default function EditColor() {
         return { exists: false }; // Allow creation if check fails
       }
 
-      const checkUrl = `${API_BASE}/models/check-duplicate?modelName=${encodeURIComponent(
+      const checkUrl = `/models/check-duplicate?modelName=${encodeURIComponent(
         formData.modelName || ""
       )}&company=${encodeURIComponent(
         formData.company || ""
@@ -191,7 +191,7 @@ export default function EditColor() {
 
       console.log("Making duplicate check request to:", checkUrl);
 
-      const response = await fetch(checkUrl);
+      const response = await fetchWithRetry(checkUrl);
 
       console.log("Duplicate check response status:", response.status);
 
@@ -266,7 +266,7 @@ export default function EditColor() {
 
     try {
       // Create new model entry with same details but different color
-      const response = await fetch(`${API_BASE}/models`, {
+      const response = await fetchWithRetry(`/models`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

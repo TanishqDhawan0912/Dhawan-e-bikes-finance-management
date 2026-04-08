@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getTodayForInput } from "../../utils/dateUtils";
 import DatePicker from "../../components/DatePicker";
 
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 export default function AddCharger() {
   const navigate = useNavigate();
 
@@ -55,8 +55,8 @@ export default function AddCharger() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/chargers/suggestions/name?q=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/chargers/suggestions/name?q=${encodeURIComponent(
           query
         )}`
       );
@@ -77,8 +77,8 @@ export default function AddCharger() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/chargers/suggestions/supplier?q=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/chargers/suggestions/supplier?q=${encodeURIComponent(
           query
         )}`
       );
@@ -99,8 +99,8 @@ export default function AddCharger() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/chargers/suggestions/batteryType?q=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/chargers/suggestions/batteryType?q=${encodeURIComponent(
           query
         )}`
       );
@@ -121,8 +121,8 @@ export default function AddCharger() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/chargers/suggestions/voltage?q=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/chargers/suggestions/voltage?q=${encodeURIComponent(
           query
         )}`
       );
@@ -351,7 +351,7 @@ export default function AddCharger() {
 
     setIsCheckingDuplicate(true);
     try {
-      let url = `${API_BASE}/chargers/check-duplicate?name=${encodeURIComponent(
+      let url = `/chargers/check-duplicate?name=${encodeURIComponent(
         name
       )}&supplierName=${encodeURIComponent(supplierName)}`;
       if (batteryType) {
@@ -362,7 +362,7 @@ export default function AddCharger() {
       }
       
       console.log("Duplicate check URL:", url);
-      const response = await fetch(url);
+      const response = await fetchWithRetry(url);
       console.log("Response status:", response.status, response.statusText);
 
       if (response.ok) {
@@ -418,7 +418,7 @@ export default function AddCharger() {
     if (name && supplierName) {
       // Force a synchronous duplicate check before allowing submission
       try {
-        let url = `${API_BASE}/chargers/check-duplicate?name=${encodeURIComponent(
+        let url = `/chargers/check-duplicate?name=${encodeURIComponent(
           name
         )}&supplierName=${encodeURIComponent(supplierName)}`;
         if (batteryType) {
@@ -428,7 +428,7 @@ export default function AddCharger() {
           url += `&voltage=${encodeURIComponent(voltage)}`;
         }
         
-        const response = await fetch(url);
+        const response = await fetchWithRetry(url);
         if (response.ok) {
           const data = await response.json();
           if (data.exists === true || data.exists === "true" || (data.success && data.exists)) {
@@ -468,7 +468,7 @@ export default function AddCharger() {
         minStockLevel: parseFloat(formData.minStockLevel) || 0,
       };
 
-      const response = await fetch(`${API_BASE}/chargers`, {
+      const response = await fetchWithRetry(`/chargers`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

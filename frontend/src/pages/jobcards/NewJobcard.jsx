@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import SparePartsSearch from "../../components/SparePartsSearch";
 import DatePicker from "../../components/DatePicker";
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 import { getTodayForInput } from "../../utils/dateUtils";
 
 // Helper function to check if a value is a valid MongoDB ObjectId
@@ -532,7 +532,7 @@ export default function NewJobcard() {
   useEffect(() => {
     const fetchSparesForControllerMotor = async () => {
       try {
-        const response = await fetch(`${API_BASE}/spares`);
+        const response = await fetchWithRetry(`/spares`);
         if (!response.ok) throw new Error("Failed to fetch spares");
         const data = await response.json();
         setAllSparesForControllerMotor(Array.isArray(data) ? data : []);
@@ -884,7 +884,7 @@ export default function NewJobcard() {
   const fetchBatteries = async () => {
     setLoadingBatteries(true);
     try {
-      const response = await fetch(`${API_BASE}/batteries`);
+      const response = await fetchWithRetry(`/batteries`);
       const data = await response.json();
       if (response.ok) {
         const batteriesList = Array.isArray(data) ? data : data.data || [];
@@ -908,8 +908,8 @@ export default function NewJobcard() {
       };
       try {
         const [entriesRes, summaryRes] = await Promise.all([
-          fetch(`${API_BASE}/old-chargers`, { headers }),
-          fetch(`${API_BASE}/old-chargers/summary`, { headers }),
+          fetchWithRetry(`/old-chargers`, { headers }),
+          fetchWithRetry(`/old-chargers/summary`, { headers }),
         ]);
         const entriesJson = entriesRes.ok ? await entriesRes.json() : [];
         const entries = Array.isArray(entriesJson) ? entriesJson : [];
@@ -1088,7 +1088,7 @@ export default function NewJobcard() {
   const fetchChargers = async () => {
     setLoadingChargers(true);
     try {
-      const response = await fetch(`${API_BASE}/chargers`);
+      const response = await fetchWithRetry(`/chargers`);
       const data = await response.json();
       if (response.ok) {
         setChargers(Array.isArray(data) ? data : data.data || []);
@@ -1747,7 +1747,7 @@ export default function NewJobcard() {
     setOldScootyPmcLookupError("");
     setOldScootyPmcLookupLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/old-scooties`);
+      const res = await fetchWithRetry(`/old-scooties`);
       if (!res.ok) throw new Error("Failed to fetch old scooties");
       const list = await res.json();
       const match = (Array.isArray(list) ? list : []).find((item) => {
@@ -2017,7 +2017,7 @@ export default function NewJobcard() {
     if (activeTab !== "sales" || selectedSalesType !== "oldScooty") return;
     const fetchSpares = async () => {
       try {
-        const response = await fetch(`${API_BASE}/spares`);
+        const response = await fetchWithRetry(`/spares`);
         if (!response.ok) throw new Error("Failed to fetch spares");
         const data = await response.json();
         setAllSparesForOldScooty(Array.isArray(data) ? data : []);
@@ -2035,7 +2035,7 @@ export default function NewJobcard() {
     const loadBatteries = async () => {
       setOldScootyLoadingBatteries(true);
       try {
-        const res = await fetch(`${API_BASE}/batteries`);
+        const res = await fetchWithRetry(`/batteries`);
         const data = await res.json();
         if (res.ok)
           setOldScootyBatteries(Array.isArray(data) ? data : data.data || []);
@@ -2049,7 +2049,7 @@ export default function NewJobcard() {
     const loadChargers = async () => {
       setOldScootyLoadingChargers(true);
       try {
-        const res = await fetch(`${API_BASE}/chargers`);
+        const res = await fetchWithRetry(`/chargers`);
         const data = await res.json();
         if (res.ok)
           setOldScootyChargers(Array.isArray(data) ? data : data.data || []);
@@ -2499,11 +2499,11 @@ export default function NewJobcard() {
       };
 
       const endpoint = isEditMode
-        ? `${API_BASE}/jobcards/${editJobcard._id}`
-        : `${API_BASE}/jobcards`;
+        ? `/jobcards/${editJobcard._id}`
+        : `/jobcards`;
       const method = isEditMode ? "PUT" : "POST";
 
-      const response = await fetch(endpoint, {
+      const response = await fetchWithRetry(endpoint, {
         method,
         headers: {
           "Content-Type": "application/json",

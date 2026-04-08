@@ -24,3 +24,21 @@ if (import.meta.env.PROD && !envUrl) {
 
 /** Base URL for all `/api/...` routes. */
 export const API_BASE = `${origin}/api`;
+
+export async function fetchWithRetry(endpoint, options = {}, retries = 2) {
+  const url = endpoint.startsWith("http")
+    ? endpoint
+    : `${API_BASE}${endpoint}`;
+
+  try {
+    const res = await fetch(url, options);
+    if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+    return res;
+  } catch (err) {
+    if (retries > 0) {
+      await new Promise((r) => setTimeout(r, 3000));
+      return fetchWithRetry(endpoint, options, retries - 1);
+    }
+    throw err;
+  }
+}

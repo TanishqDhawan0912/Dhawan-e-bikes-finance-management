@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatDate } from "../../utils/dateUtils";
 
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 import { getFetchErrorMessage } from "../../utils/apiError";
 /** Left = sum of remaining pieces in layers; aligns with FIFO stockEntries.quantity. */
 function batteryStockAggregates(battery) {
@@ -34,8 +34,8 @@ export default function AllBatteries() {
 
       // Add cache-busting parameter to ensure fresh data
       const timestamp = Date.now();
-      const response = await fetch(
-        `${API_BASE}/batteries?t=${timestamp}`
+      const response = await fetchWithRetry(
+        `/batteries?t=${timestamp}`
       );
 
       if (!response.ok) {
@@ -164,8 +164,8 @@ export default function AllBatteries() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/batteries/${batteryId}`,
+      const response = await fetchWithRetry(
+        `/batteries/${batteryId}`,
         {
           method: "DELETE",
         }

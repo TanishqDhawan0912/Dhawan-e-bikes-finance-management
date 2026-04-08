@@ -5,7 +5,7 @@ import SettleJobcardModal from "./SettleJobcardModal";
 import JobcardPrintView from "../../components/JobcardPrintView";
 import DatePicker from "../../components/DatePicker";
 
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 import { getFetchErrorMessage } from "../../utils/apiError";
 export default function PendingJobcard() {
   const navigate = useNavigate();
@@ -114,7 +114,7 @@ export default function PendingJobcard() {
   const fetchPendingJobcards = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/jobcards?status=pending`);
+      const response = await fetchWithRetry(`/jobcards?status=pending`);
       if (!response.ok) {
         throw new Error("Failed to fetch pending jobcards");
       }
@@ -183,7 +183,7 @@ export default function PendingJobcard() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/jobcards/${jobcard._id}/finalize`, {
+      const response = await fetchWithRetry(`/jobcards/${jobcard._id}/finalize`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -227,7 +227,7 @@ export default function PendingJobcard() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/jobcards/${jobcardId}`, {
+      const response = await fetchWithRetry(`/jobcards/${jobcardId}`, {
         method: "DELETE",
       });
 

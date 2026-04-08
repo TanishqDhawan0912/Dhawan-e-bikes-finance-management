@@ -1,4 +1,4 @@
-// 🔥 CRASH PROTECTION (VERY IMPORTANT) — keep process alive for logs
+// 🔥 CRASH PROTECTION (keep process alive for logs)
 process.on("uncaughtException", (err) => {
   console.error("🔥 UNCAUGHT EXCEPTION:", err);
 });
@@ -8,13 +8,13 @@ process.on("unhandledRejection", (err) => {
 });
 
 require("dotenv").config();
-
-// 🔥 IMPORTANT: Catch async errors globally
 require("express-async-errors");
 
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
+const mongoose = require("mongoose");
+
 const { connectDatabase, closeDatabase } = require("./config/database");
 const { buildCorsOptions } = require("./config/corsOptions");
 
@@ -30,28 +30,41 @@ const HOST = process.env.HOST || "0.0.0.0";
 // Middleware
 app.use(cors(buildCorsOptions()));
 
-// Lightweight request logger (method + URL)
+// Lightweight request logger
 app.use((req, res, next) => {
   console.log(`[REQ] ${req.method} ${req.originalUrl}`);
-  next();
-});
-
-// Global request timeout guard (10s). If a request hangs, respond 503.
-app.use((req, res, next) => {
-  res.setTimeout(10_000, () => {
-    if (res.headersSent) return;
-    res.status(503).json({
-      success: false,
-      message: "Request timed out",
-    });
-  });
   next();
 });
 
 app.use(express.json());
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
-// Health check
+/* 🔥 OPTIMIZED DB MIDDLEWARE (FINAL FIX) */
+app.use(async (req, res, next) => {
+  // ✅ Skip if already connected
+  if (mongoose.connection.readyState === 1) {
+    return next();
+  }
+
+  let attempts = 2;
+
+  while (attempts--) {
+    try {
+      console.warn("⚠️ DB reconnect attempt...");
+      await connectDatabase();
+      return next();
+    } catch (err) {
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+
+  return res.status(500).json({
+    success: false,
+    message: "Database temporarily unavailable",
+  });
+});
+
+// Health routes
 app.get("/", (req, res) => {
   res.type("text/plain").send("API Running");
 });
@@ -74,7 +87,7 @@ app.get("/db-test", async (req, res) => {
   const User = require("./models/User");
 
   try {
-    const userCount = await User.countDocuments().maxTimeMS(8000);
+    const userCount = await User.countDocuments().maxTimeMS(15000);
 
     const payload = {
       success: true,
@@ -87,7 +100,7 @@ app.get("/db-test", async (req, res) => {
         .select("-password")
         .limit(5)
         .lean()
-        .maxTimeMS(8000);
+        .maxTimeMS(15000);
 
       payload.sampleCount = users.length;
       payload.users = users.map((u) => ({
@@ -126,7 +139,7 @@ app.use("/api/jobcards", require("./routes/jobcardRoutes"));
 app.use("/api/bills", require("./routes/billRoutes"));
 app.use(require("./routes/restoreRoutes"));
 
-// 404 handler
+// 404 handlers
 app.use("/api", (req, res) => {
   res.status(404).json({
     success: false,
@@ -136,7 +149,6 @@ app.use("/api", (req, res) => {
   });
 });
 
-// Fallback handler for any other unhandled route
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -150,9 +162,7 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error("[Express Error]", err);
 
-  if (res.headersSent) {
-    return next(err);
-  }
+  if (res.headersSent) return next(err);
 
   if (err.name === "CastError") {
     return res.status(400).json({
@@ -161,9 +171,7 @@ app.use((err, req, res, next) => {
     });
   }
 
-  const status = Number(err.statusCode || err.status) || 500;
-
-  res.status(status).json({
+  res.status(err.statusCode || 500).json({
     success: false,
     message: err.message || "Something broke!",
   });
@@ -179,7 +187,6 @@ app.use((err, req, res, next) => {
     }
   }
 
-  // 🔥 RETRY DB CONNECTION (NO CRASH LOOP)
   let retries = 5;
   while (retries) {
     try {
@@ -213,9 +220,7 @@ app.use((err, req, res, next) => {
   const shutdown = () => {
     console.log("Shutting down server...");
     server.close(() => {
-      closeDatabase()
-        .catch(() => {})
-        .finally(() => {});
+      closeDatabase().catch(() => {});
     });
   };
 

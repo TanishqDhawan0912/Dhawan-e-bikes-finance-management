@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import DatePicker from "../../components/DatePicker";
 import { getTodayForInput } from "../../utils/dateUtils";
 
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 export default function SettleJobcardModal({ jobcard, onClose, onSuccess }) {
   const today = getTodayForInput();
   const [formData, setFormData] = useState({
@@ -122,7 +122,7 @@ export default function SettleJobcardModal({ jobcard, onClose, onSuccess }) {
         return;
       }
 
-      const response = await fetch(`${API_BASE}/jobcards/${jobcard._id}/settle`, {
+      const response = await fetchWithRetry(`/jobcards/${jobcard._id}/settle`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -180,7 +180,7 @@ export default function SettleJobcardModal({ jobcard, onClose, onSuccess }) {
   const handleFinalize = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/jobcards/${jobcard._id}/finalize`, {
+      const response = await fetchWithRetry(`/jobcards/${jobcard._id}/finalize`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

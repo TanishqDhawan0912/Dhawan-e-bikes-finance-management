@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-import { API_BASE } from "../config/api";
+import { fetchWithRetry } from "../config/api";
 export default function SparePartsSearch({ onSelectPart }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [modelSearchTerm, setModelSearchTerm] = useState("");
@@ -50,8 +50,8 @@ export default function SparePartsSearch({ onSelectPart }) {
       try {
         setIsLoading(true);
         const timestamp = Date.now();
-        const response = await fetch(
-          `${API_BASE}/spares?t=${timestamp}`
+        const response = await fetchWithRetry(
+          `/spares?t=${timestamp}`
         );
 
         if (!response.ok) {

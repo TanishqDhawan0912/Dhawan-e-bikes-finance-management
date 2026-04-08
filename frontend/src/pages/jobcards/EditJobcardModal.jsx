@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import SparePartsSearch from "../../components/SparePartsSearch";
 
 // Helper function to check if a value is a valid MongoDB ObjectId
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 const isValidObjectId = (id) => {
   if (!id) return false;
   // If it's already an ObjectId object, it's valid
@@ -93,7 +93,7 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
               };
             }
             try {
-              const response = await fetch(`${API_BASE}/spares/${part.spareId}`);
+              const response = await fetchWithRetry(`/spares/${part.spareId}`);
               if (response.ok) {
                 const spare = await response.json();
                 const hasColors = spare.hasColors || (spare.colorQuantity && spare.colorQuantity.length > 0);
@@ -623,7 +623,7 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
         status: "pending", // Keep as pending
       };
 
-      const response = await fetch(`${API_BASE}/jobcards/${jobcard._id}`, {
+      const response = await fetchWithRetry(`/jobcards/${jobcard._id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

@@ -30,7 +30,7 @@ function AddMoreStock() {
 
   const fetchSpareDetails = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/spares/${id}`);
+      const response = await fetch(`/spares/${id}`);
       const data = await response.json();
 
       console.log("API Response:", data);
@@ -88,7 +88,7 @@ function AddMoreStock() {
 
     try {
       const response = await fetch(
-        `${API_BASE}/spares/${id}/add-stock`,
+        `/spares/${id}/add-stock`,
         {
           method: "POST",
           headers: {

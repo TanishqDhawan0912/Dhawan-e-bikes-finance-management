@@ -7,7 +7,7 @@ import {
 } from "../../utils/dateUtils";
 import DatePicker from "../../components/DatePicker";
 
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 export default function OldChargers() {
   useSessionTimeout();
 
@@ -166,7 +166,7 @@ export default function OldChargers() {
       setError("");
 
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/old-chargers`, {
+      const res = await fetchWithRetry(`/old-chargers`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: token ? `Bearer ${token}` : "",
@@ -197,7 +197,7 @@ export default function OldChargers() {
     const list = await fetchOldChargers({ silent: true });
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(`${API_BASE}/old-chargers/summary`, {
+      const res = await fetchWithRetry(`/old-chargers/summary`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: token ? `Bearer ${token}` : "",
@@ -213,7 +213,7 @@ export default function OldChargers() {
   const saveSummary = async (stats) => {
     try {
       const token = localStorage.getItem("token");
-      await fetch(`${API_BASE}/old-chargers/summary`, {
+      await fetchWithRetry(`/old-chargers/summary`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -234,7 +234,7 @@ export default function OldChargers() {
   useEffect(() => {
     if (loading) return;
     const token = localStorage.getItem("token");
-    fetch(`${API_BASE}/old-chargers/summary`, {
+    fetchWithRetry(`/old-chargers/summary`, {
       headers: {
         "Content-Type": "application/json",
         Authorization: token ? `Bearer ${token}` : "",
@@ -322,10 +322,10 @@ export default function OldChargers() {
       };
 
       const isEdit = Boolean(editingChargerId);
-      const res = await fetch(
+      const res = await fetchWithRetry(
         isEdit
-          ? `${API_BASE}/old-chargers/${editingChargerId}`
-          : `${API_BASE}/old-chargers`,
+          ? `/old-chargers/${editingChargerId}`
+          : `/old-chargers`,
         {
           method: isEdit ? "PUT" : "POST",
           headers: {
@@ -383,7 +383,7 @@ export default function OldChargers() {
       setDeletingId(charger._id);
       setError("");
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/old-chargers/${charger._id}`, {
+      const res = await fetchWithRetry(`/old-chargers/${charger._id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

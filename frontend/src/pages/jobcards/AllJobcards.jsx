@@ -5,7 +5,7 @@ import DatePicker from "../../components/DatePicker";
 import { getTodayForInput } from "../../utils/dateUtils";
 import { getFetchErrorMessage } from "../../utils/apiError";
 
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 export default function AllJobcards() {
   const navigate = useNavigate();
   const [jobcards, setJobcards] = useState([]);
@@ -33,7 +33,7 @@ export default function AllJobcards() {
     try {
       setLoading(true);
       const filter = filterType === "all" ? "status=finalized" : `status=finalized&jobcardType=${filterType}`;
-      const response = await fetch(`${API_BASE}/jobcards?${filter}`);
+      const response = await fetchWithRetry(`/jobcards?${filter}`);
       if (!response.ok) {
         throw new Error("Failed to fetch finalized jobcards");
       }
@@ -340,7 +340,7 @@ export default function AllJobcards() {
 
     try {
       // Validate password against backend admin security key
-      const response = await fetch(`${API_BASE}/admin/auth`, {
+      const response = await fetchWithRetry(`/admin/auth`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -368,7 +368,7 @@ export default function AllJobcards() {
 
   const deleteJobcard = async (jobcardId) => {
     try {
-      const response = await fetch(`${API_BASE}/jobcards/${jobcardId}`, {
+      const response = await fetchWithRetry(`/jobcards/${jobcardId}`, {
         method: "DELETE",
       });
 

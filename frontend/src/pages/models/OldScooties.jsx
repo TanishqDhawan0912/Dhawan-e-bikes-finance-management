@@ -6,9 +6,9 @@ import {
   getTodayForInput,
 } from "../../utils/dateUtils";
 import DatePicker from "../../components/DatePicker";
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 
-const OLD_SCOOTIES_API = `${API_BASE}/old-scooties`;
+const OLD_SCOOTIES_API = "/old-scooties";
 
 /** Spare id from API may be an ObjectId string or a populated `{ _id }` ref. */
 const normalizeOldScootySpareId = (raw) => {
@@ -86,7 +86,7 @@ export default function OldScooties() {
     try {
       setLoading(true);
       setError("");
-      const res = await fetch(OLD_SCOOTIES_API, {
+      const res = await fetchWithRetry(OLD_SCOOTIES_API, {
         headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) {
@@ -111,7 +111,7 @@ export default function OldScooties() {
   useEffect(() => {
     const fetchSpares = async () => {
       try {
-        const response = await fetch(`${API_BASE}/spares`);
+        const response = await fetchWithRetry(`/spares`);
         if (!response.ok) throw new Error("Failed to fetch spares");
         const data = await response.json();
         setAllSparesForOldScooty(Array.isArray(data) ? data : []);
@@ -230,7 +230,7 @@ export default function OldScooties() {
         : OLD_SCOOTIES_API;
       const method = editingId ? "PUT" : "POST";
 
-      const res = await fetch(url, {
+      const res = await fetchWithRetry(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -340,7 +340,7 @@ export default function OldScooties() {
     if (!confirmed) return;
     try {
       setDeletingId(id);
-      const res = await fetch(`${OLD_SCOOTIES_API}/${id}`, {
+      const res = await fetchWithRetry(`${OLD_SCOOTIES_API}/${id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
       });

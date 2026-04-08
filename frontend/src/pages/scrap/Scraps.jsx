@@ -3,7 +3,7 @@ import { useSessionTimeout } from "../../hooks/useSessionTimeout";
 import { formatDate, getTodayForInput } from "../../utils/dateUtils";
 import DatePicker from "../../components/DatePicker";
 
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 export default function Scraps() {
   useSessionTimeout();
 
@@ -34,7 +34,7 @@ export default function Scraps() {
       setError("");
 
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/battery-scraps`, {
+      const res = await fetchWithRetry(`/battery-scraps`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: token ? `Bearer ${token}` : "",
@@ -78,7 +78,7 @@ export default function Scraps() {
       setError("");
 
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/battery-scraps`, {
+      const res = await fetchWithRetry(`/battery-scraps`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -138,7 +138,7 @@ export default function Scraps() {
       setSavingEdit(true);
       setError("");
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/battery-scraps/${scrapId}`, {
+      const res = await fetchWithRetry(`/battery-scraps/${scrapId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -171,7 +171,7 @@ export default function Scraps() {
       setDeletingId(scrap._id);
       setError("");
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE}/battery-scraps/${scrap._id}`, {
+      const res = await fetchWithRetry(`/battery-scraps/${scrap._id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

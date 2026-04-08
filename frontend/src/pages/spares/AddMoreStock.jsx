@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { formatDate } from "../../utils/dateUtils";
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 
 // Helper function to display dd/mm/yyyy dates without parsing
 const displayDate = (dateString) => {
@@ -245,7 +245,7 @@ function AddMoreStock() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/admin/auth`, {
+      const response = await fetchWithRetry(`/admin/auth`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1020,7 +1020,7 @@ function AddMoreStock() {
         securityKey: securityKey || null, // Always include, backend will validate
       };
 
-      const response = await fetch(`${API_BASE}/spares/${id}`, {
+      const response = await fetchWithRetry(`/spares/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -1097,7 +1097,7 @@ function AddMoreStock() {
 
   const fetchSpareDetails = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/spares/${id}`);
+      const response = await fetchWithRetry(`/spares/${id}`);
       const data = await response.json();
 
       console.log("API Response:", data);
@@ -1167,8 +1167,8 @@ function AddMoreStock() {
           Array.isArray(spare?.[stockField]) &&
           spare[stockField].length > 0
         ) {
-          const response = await fetch(
-            `${API_BASE}/spares/${id}`,
+          const response = await fetchWithRetry(
+            `/spares/${id}`,
             {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
@@ -1467,7 +1467,7 @@ function AddMoreStock() {
       );
 
       // Update the spare with the filtered stock entries
-      const response = await fetch(`${API_BASE}/spares/${id}`, {
+      const response = await fetchWithRetry(`/spares/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -1573,7 +1573,7 @@ function AddMoreStock() {
         }
       }
 
-      const response = await fetch(`${API_BASE}/spares/${id}`, {
+      const response = await fetchWithRetry(`/spares/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -1716,7 +1716,7 @@ function AddMoreStock() {
         body.securityKey = sessionStorage.getItem("adminSecurityKey");
       }
 
-      const response = await fetch(`${API_BASE}/spares/${id}`, {
+      const response = await fetchWithRetry(`/spares/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -1974,7 +1974,7 @@ function AddMoreStock() {
         ? { ...baseBody, securityKey }
         : baseBody;
 
-      const response = await fetch(`${API_BASE}/spares/${id}`, {
+      const response = await fetchWithRetry(`/spares/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

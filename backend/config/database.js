@@ -1,9 +1,19 @@
 const mongoose = require("mongoose");
 
-/** Redact user:password in mongodb:// or mongodb+srv:// URIs for logs */
+/** Mask Mongo URI for logs */
 function maskMongoUri(uri) {
   if (!uri || typeof uri !== "string") return "(not set)";
   return uri.replace(/\/\/([^:]+):([^@]+)@/, "//***:***@");
+}
+
+/** 🔥 GLOBAL CACHE (CRITICAL FOR RENDER) */
+let cached = global.mongoose;
+
+if (!cached) {
+  cached = global.mongoose = {
+    conn: null,
+    promise: null,
+  };
 }
 
 let listenersAttached = false;
@@ -12,7 +22,6 @@ function attachConnectionListeners() {
   listenersAttached = true;
 
   mongoose.connection.on("error", (err) => {
-    // Do not throw here; keep the process alive and let the app handle DB outages.
     console.error("[MongoDB] Connection error event:", err);
   });
 
@@ -20,53 +29,68 @@ function attachConnectionListeners() {
     console.warn("[MongoDB] Disconnected");
   });
 
-  // Fires when Mongoose successfully reconnects after being disconnected
   mongoose.connection.on("reconnected", () => {
     console.log("[MongoDB] Reconnected");
   });
 }
 
-/**
- * Single database connection (MongoDB Atlas or any URI).
- * Uses mongoose.connect(process.env.MONGO_URI).
- */
 async function connectDatabase() {
   const uri = process.env.MONGO_URI?.trim();
+
   if (!uri) {
     const msg = "MONGO_URI is not set";
-    console.error("[MongoDB] Connection FAILED —", msg);
+    console.error("[MongoDB] FAILED —", msg);
     throw new Error(msg);
   }
 
-  try {
+  /** ✅ RETURN EXISTING CONNECTION */
+  if (cached.conn) {
+    return cached.conn;
+  }
+
+  /** ✅ CREATE PROMISE ONLY ONCE */
+  if (!cached.promise) {
     attachConnectionListeners();
-    await mongoose.connect(uri, {
+
+    cached.promise = mongoose.connect(uri, {
       maxPoolSize: 10,
-      serverSelectionTimeoutMS: 10_000,
-      socketTimeoutMS: 45_000,
+      serverSelectionTimeoutMS: 15000,
+      socketTimeoutMS: 45000,
+      bufferCommands: false,
     });
+  }
+
+  try {
+    cached.conn = await cached.promise;
+
     console.log(
-      "[MongoDB] Connected successfully —",
+      "[MongoDB] Connected —",
       maskMongoUri(uri),
       "| db:",
       mongoose.connection.name
     );
+
+    return cached.conn;
   } catch (err) {
-    console.error("[MongoDB] Initial connection FAILED —", err?.message || err);
-    if (err?.name) console.error("[MongoDB] Error name:", err.name);
-    console.error("[MongoDB] URI (masked):", maskMongoUri(uri));
+    cached.promise = null;
+
+    console.error("[MongoDB] Connection FAILED —", err?.message || err);
+    console.error("[MongoDB] URI:", maskMongoUri(uri));
+
     throw err;
   }
 }
 
 async function closeDatabase() {
-  if (mongoose.connection.readyState === 0) return;
-  try {
-    await mongoose.connection.close();
-    console.log("[MongoDB] Connection closed");
-  } catch (err) {
-    // Never crash during shutdown
-    console.error("[MongoDB] Error while closing connection:", err);
+  if (cached.conn) {
+    try {
+      await mongoose.connection.close();
+      cached.conn = null;
+      cached.promise = null;
+      console.log("[MongoDB] Connection closed");
+    } catch (err) {
+      console.error("[MongoDB] Error while closing:", err);
+    }
   }
 }
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatDate } from "../../utils/dateUtils";
 
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 import { getFetchErrorMessage } from "../../utils/apiError";
 export default function AllChargers() {
   const navigate = useNavigate();
@@ -18,8 +18,8 @@ export default function AllChargers() {
 
       // Add cache-busting parameter to ensure fresh data
       const timestamp = Date.now();
-      const response = await fetch(
-        `${API_BASE}/chargers?t=${timestamp}`
+      const response = await fetchWithRetry(
+        `/chargers?t=${timestamp}`
       );
 
       if (!response.ok) {
@@ -168,8 +168,8 @@ export default function AllChargers() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/chargers/${ChargerId}`,
+      const response = await fetchWithRetry(
+        `/chargers/${ChargerId}`,
         {
           method: "DELETE",
         }

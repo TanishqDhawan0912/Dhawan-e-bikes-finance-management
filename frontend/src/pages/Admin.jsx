@@ -2,7 +2,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { formatDate, getTodayForInput } from "../utils/dateUtils";
 
-import { API_BASE } from "../config/api";
+import { fetchWithRetry } from "../config/api";
 import { getFetchErrorMessage } from "../utils/apiError";
 /** Parse yyyy-mm-dd to local Date (noon) for stable calendar math */
 function ymdToLocalDate(ymd) {
@@ -159,8 +159,8 @@ export default function Admin() {
       setModelsError("");
       // Add cache-busting timestamp so latest model changes always reflect
       const timestamp = Date.now();
-      const response = await fetch(
-        `${API_BASE}/models?limit=1000&admin=1&t=${timestamp}`
+      const response = await fetchWithRetry(
+        `/models?limit=1000&admin=1&t=${timestamp}`
       );
       const data = await response.json();
 
@@ -201,8 +201,8 @@ export default function Admin() {
 
       // Add cache-busting parameter to ensure fresh data
       const timestamp = Date.now();
-      const response = await fetch(
-        `${API_BASE}/spares?t=${timestamp}`
+      const response = await fetchWithRetry(
+        `/spares?t=${timestamp}`
       );
 
       const data = await response.json();
@@ -233,8 +233,8 @@ export default function Admin() {
       setBatteriesError("");
 
       const timestamp = Date.now();
-      const response = await fetch(
-        `${API_BASE}/batteries?t=${timestamp}`
+      const response = await fetchWithRetry(
+        `/batteries?t=${timestamp}`
       );
       const data = await response.json();
 
@@ -264,8 +264,8 @@ export default function Admin() {
       setChargersLoading(true);
       setChargersError("");
       const timestamp = Date.now();
-      const response = await fetch(
-        `${API_BASE}/chargers?t=${timestamp}`
+      const response = await fetchWithRetry(
+        `/chargers?t=${timestamp}`
       );
       const data = await response.json();
       if (!response.ok) {
@@ -287,8 +287,8 @@ export default function Admin() {
       setBillsLoading(true);
       setBillsError("");
       const timestamp = Date.now();
-      const response = await fetch(
-        `${API_BASE}/bills?t=${timestamp}`
+      const response = await fetchWithRetry(
+        `/bills?t=${timestamp}`
       );
       const data = await response.json();
       if (!response.ok) {
@@ -308,8 +308,8 @@ export default function Admin() {
       setJobcardsLoading(true);
       setJobcardsError("");
       const timestamp = Date.now();
-      const response = await fetch(
-        `${API_BASE}/jobcards?status=finalized&t=${timestamp}`
+      const response = await fetchWithRetry(
+        `/jobcards?status=finalized&t=${timestamp}`
       );
       const data = await response.json();
       if (!response.ok) {
@@ -329,8 +329,8 @@ export default function Admin() {
   const fetchOldScootiesForAdmin = async () => {
     try {
       const timestamp = Date.now();
-      const response = await fetch(
-        `${API_BASE}/old-scooties?t=${timestamp}`
+      const response = await fetchWithRetry(
+        `/old-scooties?t=${timestamp}`
       );
       const data = await response.json();
       if (!response.ok) {
@@ -725,8 +725,8 @@ export default function Admin() {
   // Function to update model price in database
   const updateModelPrice = async (modelId, newPrice) => {
     try {
-      const response = await fetch(
-        `${API_BASE}/models/${modelId}`,
+      const response = await fetchWithRetry(
+        `/models/${modelId}`,
         {
           method: "PUT",
           headers: {
@@ -3778,8 +3778,8 @@ export default function Admin() {
                                         let deletedCount = 0;
                                         let lastError = "";
                                         for (const model of group.models) {
-                                          const response = await fetch(
-                                            `${API_BASE}/models/${model._id}`,
+                                          const response = await fetchWithRetry(
+                                            `/models/${model._id}`,
                                             {
                                               method: "DELETE",
                                             }
@@ -5402,8 +5402,8 @@ export default function Admin() {
                                                 }
 
                                                 // Custom or non-inventory line: store manual unit cost on jobcard part
-                                                const url = `${API_BASE}/jobcards/${j.id}/parts/${item.jobcardPartId}/manual-unit-cost`;
-                                                const resp = await fetch(url, {
+                                                const url = `/jobcards/${j.id}/parts/${item.jobcardPartId}/manual-unit-cost`;
+                                                const resp = await fetchWithRetry(url, {
                                                   method: "PATCH",
                                                   headers: { "Content-Type": "application/json" },
                                                   body: JSON.stringify({

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-import { API_BASE } from "../config/api";
+import { fetchWithRetry } from "../config/api";
 export default function CompanySearch({ onSelectCompany }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -24,13 +24,13 @@ export default function CompanySearch({ onSelectCompany }) {
       setIsLoading(true);
       try {
         // Use the existing models API endpoint to search for companies
-        const apiUrl = `${API_BASE}/models?search=${encodeURIComponent(
+        const apiUrl = `/models?search=${encodeURIComponent(
           searchTerm.trim()
         )}&limit=50`;
 
         console.log("Making API call to:", apiUrl);
 
-        const response = await fetch(apiUrl);
+        const response = await fetchWithRetry(apiUrl);
 
         console.log("Response status:", response.status);
 

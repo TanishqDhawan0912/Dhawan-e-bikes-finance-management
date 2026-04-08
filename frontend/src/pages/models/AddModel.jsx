@@ -6,7 +6,7 @@ import { useSessionTimeout } from "../../hooks/useSessionTimeout";
 
 // Separate component for portal suggestions to avoid Babel parser issues
 // Separate component for portal suggestions to avoid Babel parser issues
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 function SuggestionsPortal({
   suggestions,
   selectedIndex,
@@ -254,7 +254,7 @@ export default function AddModel() {
     }
 
     try {
-      const checkUrl = `${API_BASE}/models/check-purchase-price?modelName=${encodeURIComponent(
+      const checkUrl = `/models/check-purchase-price?modelName=${encodeURIComponent(
         currentFormData.modelName
       )}&company=${encodeURIComponent(
         currentFormData.company
@@ -264,7 +264,7 @@ export default function AddModel() {
         currentFormData.purchasedInWarranty
       )}`;
 
-      const response = await fetch(checkUrl);
+      const response = await fetchWithRetry(checkUrl);
 
       if (!response.ok) {
         console.error("Failed to check purchase price");
@@ -304,8 +304,8 @@ export default function AddModel() {
       setIsAddingColorVariant(true);
       const fetchModelData = async () => {
         try {
-          const response = await fetch(
-            `${API_BASE}/models/${modelId}`
+          const response = await fetchWithRetry(
+            `/models/${modelId}`
           );
           const data = await response.json();
 
@@ -746,13 +746,13 @@ export default function AddModel() {
       console.log("Making API call to suggestions endpoint");
       console.log(
         "API URL:",
-        `${API_BASE}/models/suggestions?search=${encodeURIComponent(
+        `/models/suggestions?search=${encodeURIComponent(
           searchTerm.trim()
         )}`
       );
 
-      const response = await fetch(
-        `${API_BASE}/models/suggestions?search=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/models/suggestions?search=${encodeURIComponent(
           searchTerm.trim()
         )}`
       );
@@ -825,14 +825,14 @@ export default function AddModel() {
       );
       console.log(
         "API URL:",
-        `${API_BASE}/models/company-suggestions?search=${encodeURIComponent(
+        `/models/company-suggestions?search=${encodeURIComponent(
           searchTerm.trim()
         )}`
       );
 
       // Use the dedicated company suggestions endpoint with bulletproof logic
-      const response = await fetch(
-        `${API_BASE}/models/company-suggestions?search=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/models/company-suggestions?search=${encodeURIComponent(
           searchTerm.trim()
         )}`
       );
@@ -957,7 +957,7 @@ export default function AddModel() {
 
       // First test if backend is accessible
       try {
-        const testResponse = await fetch(`${API_BASE}/models`);
+        const testResponse = await fetchWithRetry(`/models`);
         console.log("Backend connectivity test - status:", testResponse.status);
         if (testResponse.status !== 200) {
           throw new Error("Backend not responding correctly");
@@ -969,7 +969,7 @@ export default function AddModel() {
       }
 
       // Build the duplicate check URL (only checks model name, company, and warranty)
-      const checkUrl = `${API_BASE}/models/check-duplicate?modelName=${encodeURIComponent(
+      const checkUrl = `/models/check-duplicate?modelName=${encodeURIComponent(
         formData.modelName
       )}&company=${encodeURIComponent(
         formData.company
@@ -983,7 +983,7 @@ export default function AddModel() {
       console.log("- company:", formData.company);
       console.log("- purchasedInWarranty:", formData.purchasedInWarranty);
 
-      const response = await fetch(checkUrl);
+      const response = await fetchWithRetry(checkUrl);
 
       console.log("Duplicate check response status:", response.status);
 
@@ -1060,7 +1060,7 @@ export default function AddModel() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE}/models`, {
+      const response = await fetchWithRetry(`/models`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

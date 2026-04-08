@@ -4,7 +4,7 @@ import { formatDateForInput } from "../../utils/dateUtils";
 import DatePicker from "../../components/DatePicker";
 
 // Check if ID is a valid MongoDB ObjectId (24 hex characters)
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 const isValidObjectId = (id) => {
   return id && /^[0-9a-fA-F]{24}$/.test(id);
 };
@@ -49,8 +49,8 @@ export default function EditCharger() {
 
     const fetchCharger = async () => {
       try {
-        const response = await fetch(
-          `${API_BASE}/chargers/${id}`
+        const response = await fetchWithRetry(
+          `/chargers/${id}`
         );
         if (!response.ok) {
           throw new Error("Charger not found");
@@ -87,8 +87,8 @@ export default function EditCharger() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/chargers/suggestions/name?q=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/chargers/suggestions/name?q=${encodeURIComponent(
           query
         )}`
       );
@@ -109,8 +109,8 @@ export default function EditCharger() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/chargers/suggestions/supplier?q=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/chargers/suggestions/supplier?q=${encodeURIComponent(
           query
         )}`
       );
@@ -196,8 +196,8 @@ export default function EditCharger() {
         minStockLevel: parseFloat(formData.minStockLevel) || 0,
       };
 
-      const response = await fetch(
-        `${API_BASE}/chargers/${id}`,
+      const response = await fetchWithRetry(
+        `/chargers/${id}`,
         {
           method: "PUT",
           headers: {

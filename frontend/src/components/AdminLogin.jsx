@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { API_BASE } from "../config/api";
+import { fetchWithRetry } from "../config/api";
 export default function AdminLogin() {
   const [securityKey, setSecurityKey] = useState("");
   const [error, setError] = useState("");
@@ -17,7 +17,7 @@ export default function AdminLogin() {
 
     try {
       console.log("Attempting admin authentication...");
-      const response = await fetch(`${API_BASE}/admin/auth`, {
+      const response = await fetchWithRetry(`/admin/auth`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

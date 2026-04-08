@@ -4,7 +4,7 @@ import { formatDate } from "../../utils/dateUtils";
 import { useSessionTimeout } from "../../hooks/useSessionTimeout";
 
 // Add CSS animation for moving line
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 import { getFetchErrorMessage } from "../../utils/apiError";
 const style = document.createElement("style");
 style.textContent = `
@@ -109,8 +109,8 @@ function AllModels() {
         queryParams.append("stockStatus", filterStock);
       }
 
-      const response = await fetch(
-        `${API_BASE}/models?${queryParams}`
+      const response = await fetchWithRetry(
+        `/models?${queryParams}`
       );
       const data = await response.json();
 
@@ -495,8 +495,8 @@ function AllModels() {
           total: Math.max(0, prev.total - 1),
         }));
 
-        const response = await fetch(
-          `${API_BASE}/models/${modelId}`,
+        const response = await fetchWithRetry(
+          `/models/${modelId}`,
           {
             method: "DELETE",
           }

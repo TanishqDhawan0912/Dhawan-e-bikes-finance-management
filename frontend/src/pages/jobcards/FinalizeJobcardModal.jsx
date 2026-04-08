@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import DatePicker from "../../components/DatePicker";
 import { getTodayForInput } from "../../utils/dateUtils";
 
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEdit }) {
   const navigate = useNavigate();
   const today = getTodayForInput();
@@ -198,7 +198,7 @@ export default function FinalizeJobcardModal({ jobcard, onClose, onSuccess, onEd
             paymentDate,
           };
 
-      const response = await fetch(`${API_BASE}/jobcards/${jobcard._id}/finalize`, {
+      const response = await fetchWithRetry(`/jobcards/${jobcard._id}/finalize`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

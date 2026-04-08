@@ -6,7 +6,7 @@ import React, {
   useMemo,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 import { createPortal } from "react-dom";
 import { getTextColorForBackground } from "../../utils/themeUtils";
 import { getFetchErrorMessage } from "../../utils/apiError";
@@ -300,8 +300,8 @@ function AllSpares() {
 
       // Add cache-busting parameter to ensure fresh data
       const timestamp = Date.now();
-      const response = await fetch(
-        `${API_BASE}/spares?t=${timestamp}`
+      const response = await fetchWithRetry(
+        `/spares?t=${timestamp}`
       );
 
       if (!response.ok) {
@@ -444,8 +444,8 @@ function AllSpares() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/spares/${spareId}`,
+      const response = await fetchWithRetry(
+        `/spares/${spareId}`,
         {
           method: "DELETE",
         }
@@ -584,8 +584,8 @@ function AllSpares() {
   // Fetch suggestions for names
   const fetchNameSuggestions = async (searchStr) => {
     try {
-      const response = await fetch(
-        `${API_BASE}/spares/suggestions/names?search=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/spares/suggestions/names?search=${encodeURIComponent(
           searchStr
         )}`
       );
@@ -616,8 +616,8 @@ function AllSpares() {
   // Fetch suggestions for models
   const fetchModelSuggestions = async (searchStr) => {
     try {
-      const response = await fetch(
-        `${API_BASE}/spares/suggestions/models?search=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/spares/suggestions/models?search=${encodeURIComponent(
           searchStr
         )}`
       );
@@ -648,8 +648,8 @@ function AllSpares() {
   // Fetch suggestions for suppliers
   const fetchSupplierSuggestions = async (searchStr) => {
     try {
-      const response = await fetch(
-        `${API_BASE}/spares/suggestions/suppliers?search=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/spares/suggestions/suppliers?search=${encodeURIComponent(
           searchStr
         )}`
       );

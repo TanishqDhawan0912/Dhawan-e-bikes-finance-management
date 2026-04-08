@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getTextColorForBackground } from "../../utils/themeUtils";
 
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 export default function EditSpare() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -38,7 +38,7 @@ export default function EditSpare() {
 
   const fetchSpare = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/spares/${id}`);
+      const response = await fetchWithRetry(`/spares/${id}`);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -114,7 +114,7 @@ export default function EditSpare() {
 
   const fetchAllModels = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/models`);
+      const response = await fetchWithRetry(`/models`);
       if (response.ok) {
         const models = await response.json();
         setAllModels(models);
@@ -248,7 +248,7 @@ export default function EditSpare() {
 
       console.log("Complete data being sent to API:", spareData);
 
-      const response = await fetch(`${API_BASE}/spares/${id}`, {
+      const response = await fetchWithRetry(`/spares/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -274,8 +274,8 @@ export default function EditSpare() {
       );
 
       // Force a fresh API call to get the latest data
-      const freshResponse = await fetch(
-        `${API_BASE}/spares/${id}`
+      const freshResponse = await fetchWithRetry(
+        `/spares/${id}`
       );
       if (freshResponse.ok) {
         const freshData = await freshResponse.json();
@@ -321,7 +321,7 @@ export default function EditSpare() {
         stockEntries: [],
         colorQuantity: [],
       };
-      const response = await fetch(`${API_BASE}/spares/${id}`, {
+      const response = await fetchWithRetry(`/spares/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

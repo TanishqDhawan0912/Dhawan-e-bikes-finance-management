@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 // Check if ID is a valid MongoDB ObjectId (24 hex characters)
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 const isValidObjectId = (id) => {
   return id && /^[0-9a-fA-F]{24}$/.test(id);
 };
@@ -49,8 +49,8 @@ export default function EditBattery() {
 
     const fetchBattery = async () => {
       try {
-        const response = await fetch(
-          `${API_BASE}/batteries/${id}`
+        const response = await fetchWithRetry(
+          `/batteries/${id}`
         );
         if (!response.ok) {
           throw new Error("Battery not found");
@@ -96,8 +96,8 @@ export default function EditBattery() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/batteries/suggestions/name?q=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/batteries/suggestions/name?q=${encodeURIComponent(
           query
         )}`
       );
@@ -118,8 +118,8 @@ export default function EditBattery() {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/batteries/suggestions/supplier?q=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/batteries/suggestions/supplier?q=${encodeURIComponent(
           query
         )}`
       );
@@ -259,8 +259,8 @@ export default function EditBattery() {
         minStockLevel: parseFloat(formData.minStockLevel) || 0,
       };
 
-      const response = await fetch(
-        `${API_BASE}/batteries/${id}`,
+      const response = await fetchWithRetry(
+        `/batteries/${id}`,
         {
           method: "PUT",
           headers: {

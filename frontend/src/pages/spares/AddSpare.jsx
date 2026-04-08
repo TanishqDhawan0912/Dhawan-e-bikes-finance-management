@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 // displayDate helper removed; no date UI on add spare
 
 // Separate component for portal suggestions to avoid Babel parser issues
-import { API_BASE } from "../../config/api";
+import { fetchWithRetry } from "../../config/api";
 function SuggestionsPortal({
   suggestions,
   selectedIndex,
@@ -471,8 +471,8 @@ function AddSpare() {
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     try {
-      const response = await fetch(
-        `${API_BASE}/spares/suggestions/names?search=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/spares/suggestions/names?search=${encodeURIComponent(
           searchStr
         )}`
       );
@@ -515,8 +515,8 @@ function AddSpare() {
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     try {
-      const response = await fetch(
-        `${API_BASE}/models/suggestions?search=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/models/suggestions?search=${encodeURIComponent(
           searchStr
         )}`
       );
@@ -556,8 +556,8 @@ function AddSpare() {
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     try {
-      const response = await fetch(
-        `${API_BASE}/spares/suggestions/suppliers?search=${encodeURIComponent(
+      const response = await fetchWithRetry(
+        `/spares/suggestions/suppliers?search=${encodeURIComponent(
           searchStr
         )}`
       );
@@ -589,12 +589,12 @@ function AddSpare() {
     
     try {
       const modelsParam = JSON.stringify(selectedModels);
-      const url = `${API_BASE}/spares/check-duplicate?name=${encodeURIComponent(
+      const url = `/spares/check-duplicate?name=${encodeURIComponent(
         name
       )}&models=${encodeURIComponent(modelsParam)}&supplierName=${encodeURIComponent(supplier)}`;
       
       console.log("Duplicate check URL:", url);
-      const response = await fetch(url);
+      const response = await fetchWithRetry(url);
       console.log("Response status:", response.status, response.statusText);
 
       if (response.ok) {
@@ -821,7 +821,7 @@ function AddSpare() {
         stockEntries: [],
       };
 
-      const response = await fetch(`${API_BASE}/spares`, {
+      const response = await fetchWithRetry(`/spares`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
