@@ -1,3 +1,12 @@
+// 🔥 CRASH PROTECTION (VERY IMPORTANT) — keep process alive for logs
+process.on("uncaughtException", (err) => {
+  console.error("🔥 UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("🔥 UNHANDLED REJECTION:", err);
+});
+
 require("dotenv").config();
 
 // 🔥 IMPORTANT: Catch async errors globally
@@ -8,15 +17,6 @@ const cors = require("cors");
 const morgan = require("morgan");
 const { connectDatabase, closeDatabase } = require("./config/database");
 const { buildCorsOptions } = require("./config/corsOptions");
-
-// 🔥 CRASH PROTECTION (VERY IMPORTANT)
-process.on("uncaughtException", (err) => {
-  console.error("🔥 UNCAUGHT EXCEPTION:", err);
-});
-
-process.on("unhandledRejection", (err) => {
-  console.error("🔥 UNHANDLED REJECTION:", err);
-});
 
 const app = express();
 
@@ -29,6 +29,25 @@ const HOST = process.env.HOST || "0.0.0.0";
 
 // Middleware
 app.use(cors(buildCorsOptions()));
+
+// Lightweight request logger (method + URL)
+app.use((req, res, next) => {
+  console.log(`[REQ] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+// Global request timeout guard (10s). If a request hangs, respond 503.
+app.use((req, res, next) => {
+  res.setTimeout(10_000, () => {
+    if (res.headersSent) return;
+    res.status(503).json({
+      success: false,
+      message: "Request timed out",
+    });
+  });
+  next();
+});
+
 app.use(express.json());
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
@@ -117,9 +136,19 @@ app.use("/api", (req, res) => {
   });
 });
 
+// Fallback handler for any other unhandled route
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Route not found",
+    method: req.method,
+    path: req.originalUrl,
+  });
+});
+
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error("[Express Error]", err?.stack || err);
+  console.error("[Express Error]", err);
 
   if (res.headersSent) {
     return next(err);
@@ -186,7 +215,7 @@ app.use((err, req, res, next) => {
     server.close(() => {
       closeDatabase()
         .catch(() => {})
-        .finally(() => process.exit(0));
+        .finally(() => {});
     });
   };
 

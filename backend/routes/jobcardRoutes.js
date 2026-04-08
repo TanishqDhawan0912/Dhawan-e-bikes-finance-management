@@ -1,4 +1,5 @@
 const express = require("express");
+const { safe } = require("./_safeHandler");
 const {
   createJobcard,
   getJobcards,
@@ -18,21 +19,25 @@ const router = express.Router();
 // router.use(protect);
 
 // Jobcard routes
-router.route("/").post(createJobcard).get(getJobcards);
+router.route("/").post(safe(createJobcard)).get(safe(getJobcards));
 
-router.route("/:id").get(getJobcardById).put(updateJobcard).delete(deleteJobcard);
+router
+  .route("/:id")
+  .get(safe(getJobcardById))
+  .put(safe(updateJobcard))
+  .delete(safe(deleteJobcard));
 
-router.route("/:id/finalize").put(finalizeJobcard);
+router.route("/:id/finalize").put(safe(finalizeJobcard));
 
-router.route("/:id/settle").put(settleJobcard);
+router.route("/:id/settle").put(safe(settleJobcard));
 
 // Jobcard sync: sets lastSyncedAt on the Jobcard document (collection jobcards)
-router.route("/:id/synced").patch(markJobcardSynced);
+router.route("/:id/synced").patch(safe(markJobcardSynced));
 
 // Manual unit purchase cost override for a jobcard part (profit calc)
 router
   .route("/:id/parts/:partId/manual-unit-cost")
-  .patch(setJobcardPartManualUnitCost);
+  .patch(safe(setJobcardPartManualUnitCost));
 
 module.exports = router;
 

@@ -6,6 +6,26 @@ function maskMongoUri(uri) {
   return uri.replace(/\/\/([^:]+):([^@]+)@/, "//***:***@");
 }
 
+let listenersAttached = false;
+function attachConnectionListeners() {
+  if (listenersAttached) return;
+  listenersAttached = true;
+
+  mongoose.connection.on("error", (err) => {
+    // Do not throw here; keep the process alive and let the app handle DB outages.
+    console.error("[MongoDB] Connection error event:", err);
+  });
+
+  mongoose.connection.on("disconnected", () => {
+    console.warn("[MongoDB] Disconnected");
+  });
+
+  // Fires when Mongoose successfully reconnects after being disconnected
+  mongoose.connection.on("reconnected", () => {
+    console.log("[MongoDB] Reconnected");
+  });
+}
+
 /**
  * Single database connection (MongoDB Atlas or any URI).
  * Uses mongoose.connect(process.env.MONGO_URI).
@@ -19,9 +39,11 @@ async function connectDatabase() {
   }
 
   try {
+    attachConnectionListeners();
     await mongoose.connect(uri, {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 10_000,
+      socketTimeoutMS: 45_000,
     });
     console.log(
       "[MongoDB] Connected successfully —",
@@ -29,13 +51,6 @@ async function connectDatabase() {
       "| db:",
       mongoose.connection.name
     );
-
-    mongoose.connection.on("error", (err) => {
-      console.error("[MongoDB] Runtime connection error:", err?.message || err);
-    });
-    mongoose.connection.on("disconnected", () => {
-      console.warn("[MongoDB] Disconnected from cluster");
-    });
   } catch (err) {
     console.error("[MongoDB] Initial connection FAILED —", err?.message || err);
     if (err?.name) console.error("[MongoDB] Error name:", err.name);
@@ -46,7 +61,13 @@ async function connectDatabase() {
 
 async function closeDatabase() {
   if (mongoose.connection.readyState === 0) return;
-  await mongoose.connection.close();
+  try {
+    await mongoose.connection.close();
+    console.log("[MongoDB] Connection closed");
+  } catch (err) {
+    // Never crash during shutdown
+    console.error("[MongoDB] Error while closing connection:", err);
+  }
 }
 
 module.exports = {

@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { safe } = require("./_safeHandler");
 const {
   createOldCharger,
   getOldChargers,
@@ -9,9 +10,12 @@ const {
   updateOldChargerSummary,
 } = require("../controllers/oldChargerController");
 
-router.route("/").post(createOldCharger).get(getOldChargers);
-router.route("/summary").get(getOldChargerSummary).put(updateOldChargerSummary);
-router.route("/:id").put(updateOldCharger).delete(deleteOldCharger);
+router.route("/").post(safe(createOldCharger)).get(safe(getOldChargers));
+router
+  .route("/summary")
+  .get(safe(getOldChargerSummary))
+  .put(safe(updateOldChargerSummary));
+router.route("/:id").put(safe(updateOldCharger)).delete(safe(deleteOldCharger));
 
 module.exports = router;
 

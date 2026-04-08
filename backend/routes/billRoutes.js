@@ -1,4 +1,5 @@
 const express = require("express");
+const { safe } = require("./_safeHandler");
 const {
   getBills,
   getBillById,
@@ -9,7 +10,11 @@ const {
 
 const router = express.Router();
 
-router.route("/").get(getBills).post(createBill);
-router.route("/:id").get(getBillById).put(updateBill).delete(deleteBill);
+router.route("/").get(safe(getBills)).post(safe(createBill));
+router
+  .route("/:id")
+  .get(safe(getBillById))
+  .put(safe(updateBill))
+  .delete(safe(deleteBill));
 
 module.exports = router;

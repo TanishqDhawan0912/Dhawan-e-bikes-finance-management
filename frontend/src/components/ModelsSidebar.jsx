@@ -6,44 +6,61 @@ export default function ModelsSidebar({ showBottomHome, isOpen = false, onClose 
   return (
     <div
       className={`sidebar ${isOpen ? "open" : ""}`}
-      style={{ display: "flex", flexDirection: "column", height: "100%" }}
     >
       <div className="sidebar-header">
         <h3>Models Management</h3>
       </div>
       <nav className="sidebar-nav">
-        <NavLink
-          to="/models/add"
-          className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-          onClick={() => (typeof onClose === "function" ? onClose() : undefined)}
-        >
-          <span className="icon">➕</span>
-          Add Model
-        </NavLink>
-        <NavLink
-          to="/models/edit"
-          className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-          onClick={() => (typeof onClose === "function" ? onClose() : undefined)}
-        >
-          <span className="icon">✏️</span>
-          Edit Model
-        </NavLink>
-        <NavLink
-          to="/models/all"
-          className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-          onClick={() => (typeof onClose === "function" ? onClose() : undefined)}
-        >
-          <span className="icon">📋</span>
-          All Models
-        </NavLink>
-        <NavLink
-          to="/models/old-scooties"
-          className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
-          onClick={() => (typeof onClose === "function" ? onClose() : undefined)}
-        >
-          <span className="icon">🛵</span>
-          Old Scooties
-        </NavLink>
+        <ul>
+          <li>
+            <NavLink
+              to="/models/add"
+              className={({ isActive }) => (isActive ? "active" : "")}
+              onClick={() =>
+                typeof onClose === "function" ? onClose() : undefined
+              }
+            >
+              <span className="icon">➕</span>
+              <span className="label">Add Model</span>
+            </NavLink>
+          </li>
+          <li>
+            <NavLink
+              to="/models/edit"
+              className={({ isActive }) => (isActive ? "active" : "")}
+              onClick={() =>
+                typeof onClose === "function" ? onClose() : undefined
+              }
+            >
+              <span className="icon">✏️</span>
+              <span className="label">Edit Model</span>
+            </NavLink>
+          </li>
+          <li>
+            <NavLink
+              to="/models/all"
+              className={({ isActive }) => (isActive ? "active" : "")}
+              onClick={() =>
+                typeof onClose === "function" ? onClose() : undefined
+              }
+            >
+              <span className="icon">📋</span>
+              <span className="label">All Models</span>
+            </NavLink>
+          </li>
+          <li>
+            <NavLink
+              to="/models/old-scooties"
+              className={({ isActive }) => (isActive ? "active" : "")}
+              onClick={() =>
+                typeof onClose === "function" ? onClose() : undefined
+              }
+            >
+              <span className="icon">🛵</span>
+              <span className="label">Old Scooties</span>
+            </NavLink>
+          </li>
+        </ul>
       </nav>
       {showBottomHome && (
         <button

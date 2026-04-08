@@ -1,4 +1,5 @@
 const express = require("express");
+const { safe } = require("./_safeHandler");
 const {
   createSpare,
   getSpares,
@@ -21,23 +22,27 @@ const router = express.Router();
 // router.use(protect);
 
 // Spare routes
-router.route("/").post(createSpare).get(getSpares);
+router.route("/").post(safe(createSpare)).get(safe(getSpares));
 
-router.route("/analytics/stock").get(getStockAnalytics);
+router.route("/analytics/stock").get(safe(getStockAnalytics));
 
 // Suggestion routes (must be before /:id route)
-router.get("/suggestions/names", getSpareNameSuggestions);
-router.get("/suggestions/models", getModelSuggestions);
-router.get("/suggestions/suppliers", getSupplierSuggestions);
+router.get("/suggestions/names", safe(getSpareNameSuggestions));
+router.get("/suggestions/models", safe(getModelSuggestions));
+router.get("/suggestions/suppliers", safe(getSupplierSuggestions));
 
 // Duplicate check route (must be before /:id route)
-router.get("/check-duplicate", checkDuplicateSpare);
+router.get("/check-duplicate", safe(checkDuplicateSpare));
 
 // ID-based routes (must be last)
-router.route("/:id").get(getSpareById).put(updateSpare).delete(deleteSpare);
+router
+  .route("/:id")
+  .get(safe(getSpareById))
+  .put(safe(updateSpare))
+  .delete(safe(deleteSpare));
 
-router.route("/:id/stock").put(updateSpareStock);
+router.route("/:id/stock").put(safe(updateSpareStock));
 
-router.route("/:id/purchase-price").patch(setSparePurchasePrice);
+router.route("/:id/purchase-price").patch(safe(setSparePurchasePrice));
 
 module.exports = router;

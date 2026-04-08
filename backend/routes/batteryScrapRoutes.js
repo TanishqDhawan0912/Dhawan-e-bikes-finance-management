@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { safe } = require("./_safeHandler");
 const { protect } = require("../middleware/authMiddleware");
 const {
   createBatteryScrap,
@@ -12,10 +13,10 @@ const {
 // Public routes (same as battery routes - no auth required)
 // router.use(protect);
 
-router.route("/").post(createBatteryScrap).get(getBatteryScraps);
+router.route("/").post(safe(createBatteryScrap)).get(safe(getBatteryScraps));
 // Must be before /:id so "upsert" is not treated as an ObjectId
-router.route("/upsert").post(upsertBatteryScrap);
-router.route("/:id").put(updateBatteryScrap).delete(deleteBatteryScrap);
+router.route("/upsert").post(safe(upsertBatteryScrap));
+router.route("/:id").put(safe(updateBatteryScrap)).delete(safe(deleteBatteryScrap));
 
 module.exports = router;
 
