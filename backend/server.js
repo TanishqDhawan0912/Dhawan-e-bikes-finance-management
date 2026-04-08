@@ -25,7 +25,6 @@ if (process.env.NODE_ENV === "production") {
 }
 
 const PORT = Number(process.env.PORT) || 5000;
-const HOST = process.env.HOST || "0.0.0.0";
 
 // Middleware
 app.use(cors(buildCorsOptions()));
@@ -205,7 +204,7 @@ app.use((err, req, res, next) => {
     console.error("❌ Could not connect to MongoDB after retries.");
   }
 
-  const server = app.listen(PORT, HOST, () => {
+  const server = app.listen(PORT, () => {
     const publicUrl = process.env.RENDER_EXTERNAL_URL;
     console.log(
       publicUrl
