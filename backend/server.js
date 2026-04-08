@@ -204,7 +204,7 @@ app.use((err, req, res, next) => {
     console.error("❌ Could not connect to MongoDB after retries.");
   }
 
-  const server = app.listen(PORT, () => {
+  const server = app.listen(PORT, "0.0.0.0", () => {
     const publicUrl = process.env.RENDER_EXTERNAL_URL;
     console.log(
       publicUrl
