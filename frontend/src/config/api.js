@@ -6,7 +6,7 @@
 const envUrl = import.meta.env.VITE_API_URL?.trim();
 const LOCAL_DEV_ORIGIN = "http://localhost:5000";
 const DEPLOYED_API_ORIGIN =
-  "https://dhawan-e-bikes-finance-management.onrender.com";
+  "http://dhawan-e-bikes-finance-management.onrender.com";
 
 // In local dev, prefer the local backend so new routes work immediately.
 // (You can still point to a remote API by setting VITE_API_URL to localhost/127.0.0.1 explicitly.)
@@ -18,7 +18,7 @@ const origin = (
 
 if (import.meta.env.PROD && !envUrl) {
   console.warn(
-    "[api] VITE_API_URL was not set at build time; using Render API URL fallback. Set VITE_API_URL in Vercel to https://dhawan-e-bikes-finance-management.onrender.com for explicit configuration."
+    "[api] VITE_API_URL was not set at build time; using Render API URL fallback. Set VITE_API_URL in Vercel to http://dhawan-e-bikes-finance-management.onrender.com for explicit configuration."
   );
 }
 

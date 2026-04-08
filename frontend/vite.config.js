@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
     !apiUrl
   ) {
     throw new Error(
-      "VITE_API_URL must be set in Vercel (Settings → Environment Variables). Example: https://dhawan-e-bikes-finance-management.onrender.com (no trailing slash)."
+      "VITE_API_URL must be set in Vercel (Settings → Environment Variables). Example: http://dhawan-e-bikes-finance-management.onrender.com (no trailing slash)."
     );
   }
 
