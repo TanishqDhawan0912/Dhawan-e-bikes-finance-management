@@ -1,9 +1,22 @@
 require("dotenv").config();
+
+// 🔥 IMPORTANT: Catch async errors globally
+require("express-async-errors");
+
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
 const { connectDatabase, closeDatabase } = require("./config/database");
 const { buildCorsOptions } = require("./config/corsOptions");
+
+// 🔥 CRASH PROTECTION (VERY IMPORTANT)
+process.on("uncaughtException", (err) => {
+  console.error("🔥 UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("🔥 UNHANDLED REJECTION:", err);
+});
 
 const app = express();
 
@@ -14,16 +27,16 @@ if (process.env.NODE_ENV === "production") {
 const PORT = Number(process.env.PORT) || 5000;
 const HOST = process.env.HOST || "0.0.0.0";
 
+// Middleware
 app.use(cors(buildCorsOptions()));
 app.use(express.json());
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
-// Health check (Render / load balancers) — plain text for simple probes
+// Health check
 app.get("/", (req, res) => {
   res.type("text/plain").send("API Running");
 });
 
-// JSON health (optional monitoring / debugging)
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
@@ -37,8 +50,10 @@ app.get("/test", (req, res) => {
   res.type("text/plain").send("Backend working");
 });
 
+// DB test route
 app.get("/db-test", async (req, res) => {
   const User = require("./models/User");
+
   try {
     const userCount = await User.countDocuments().maxTimeMS(8000);
 
@@ -48,13 +63,13 @@ app.get("/db-test", async (req, res) => {
       userCount,
     };
 
-    // Avoid exposing PII on a public URL in production
     if (process.env.NODE_ENV !== "production") {
       const users = await User.find()
         .select("-password")
         .limit(5)
         .lean()
         .maxTimeMS(8000);
+
       payload.sampleCount = users.length;
       payload.users = users.map((u) => ({
         id: String(u._id),
@@ -77,37 +92,22 @@ app.get("/db-test", async (req, res) => {
   }
 });
 
-// Import routes
-const modelRoutes = require("./routes/modelRoutes");
-const spareRoutes = require("./routes/spareRoutes");
-const authRoutes = require("./routes/authRoutes");
-const adminRoutes = require("./routes/adminRoutes");
-const batteryRoutes = require("./routes/batteryRoutes");
-const batteryScrapRoutes = require("./routes/batteryScrapRoutes");
-const chargerRoutes = require("./routes/chargerRoutes");
-const oldChargerRoutes = require("./routes/oldChargerRoutes");
-const oldChargerScrapRoutes = require("./routes/oldChargerScrapRoutes");
-const oldScootyRoutes = require("./routes/oldScootyRoutes");
-const jobcardRoutes = require("./routes/jobcardRoutes");
-const billRoutes = require("./routes/billRoutes");
-const restoreRoutes = require("./routes/restoreRoutes");
+// Routes
+app.use("/api/models", require("./routes/modelRoutes"));
+app.use("/api/spares", require("./routes/spareRoutes"));
+app.use("/api/auth", require("./routes/authRoutes"));
+app.use("/api/admin", require("./routes/adminRoutes"));
+app.use("/api/batteries", require("./routes/batteryRoutes"));
+app.use("/api/battery-scraps", require("./routes/batteryScrapRoutes"));
+app.use("/api/chargers", require("./routes/chargerRoutes"));
+app.use("/api/old-chargers", require("./routes/oldChargerRoutes"));
+app.use("/api/old-charger-scraps", require("./routes/oldChargerScrapRoutes"));
+app.use("/api/old-scooties", require("./routes/oldScootyRoutes"));
+app.use("/api/jobcards", require("./routes/jobcardRoutes"));
+app.use("/api/bills", require("./routes/billRoutes"));
+app.use(require("./routes/restoreRoutes"));
 
-// Use routes
-app.use("/api/models", modelRoutes);
-app.use("/api/spares", spareRoutes);
-app.use("/api/auth", authRoutes);
-app.use("/api/admin", adminRoutes);
-app.use("/api/batteries", batteryRoutes);
-app.use("/api/battery-scraps", batteryScrapRoutes);
-app.use("/api/chargers", chargerRoutes);
-app.use("/api/old-chargers", oldChargerRoutes);
-app.use("/api/old-charger-scraps", oldChargerScrapRoutes);
-app.use("/api/old-scooties", oldScootyRoutes);
-app.use("/api/jobcards", jobcardRoutes);
-app.use("/api/bills", billRoutes);
-app.use(restoreRoutes);
-
-// Unmatched API routes → JSON 404 (mounted routers only handle their prefix)
+// 404 handler
 app.use("/api", (req, res) => {
   res.status(404).json({
     success: false,
@@ -117,69 +117,79 @@ app.use("/api", (req, res) => {
   });
 });
 
-// Error handling middleware — JSON for API clients
+// Global error handler
 app.use((err, req, res, next) => {
-  console.error("[Express]", err?.stack || err);
+  console.error("[Express Error]", err?.stack || err);
+
   if (res.headersSent) {
     return next(err);
   }
+
   if (err.name === "CastError") {
     return res.status(400).json({
       success: false,
       message: "Invalid document id",
     });
   }
+
   const status = Number(err.statusCode || err.status) || 500;
+
   res.status(status).json({
     success: false,
     message: err.message || "Something broke!",
   });
 });
 
+// 🚀 START SERVER WITH DB RETRY
 (async function startServer() {
   if (process.env.NODE_ENV === "production") {
     const secret = process.env.JWT_SECRET?.trim();
     if (!secret) {
-      console.error(
-        "[Server] JWT_SECRET is required in production (Render → Environment)."
-      );
+      console.error("JWT_SECRET is required in production");
       process.exit(1);
     }
   }
 
-  try {
-    await connectDatabase();
-  } catch (err) {
-    console.error("[Server] MongoDB connection failed — exiting.");
-    console.error(
-      "[Server] Ensure MONGO_URI is set (Render: Dashboard → Environment).",
-      err?.message || err
-    );
-    if (err?.name) console.error("[Server] Error name:", err.name);
-    process.exit(1);
+  // 🔥 RETRY DB CONNECTION (NO CRASH LOOP)
+  let retries = 5;
+  while (retries) {
+    try {
+      await connectDatabase();
+      console.log("✅ MongoDB connected");
+      break;
+    } catch (err) {
+      console.error("❌ MongoDB connection failed. Retrying...");
+      retries -= 1;
+      await new Promise((res) => setTimeout(res, 5000));
+    }
+  }
+
+  if (!retries) {
+    console.error("❌ Could not connect to MongoDB after retries.");
   }
 
   const server = app.listen(PORT, HOST, () => {
     const publicUrl = process.env.RENDER_EXTERNAL_URL;
-    if (publicUrl) {
-      console.log(`Server listening — public URL: ${publicUrl}`);
-    } else {
-      console.log(`Server listening on http://${HOST}:${PORT}`);
-    }
+    console.log(
+      publicUrl
+        ? `🚀 Server running at ${publicUrl}`
+        : `🚀 Server running on http://${HOST}:${PORT}`
+    );
   });
 
   server.on("error", (err) => {
     console.error("Server error:", err);
-    process.exit(1);
   });
 
   const shutdown = () => {
+    console.log("Shutting down server...");
     server.close(() => {
       closeDatabase()
         .catch(() => {})
         .finally(() => process.exit(0));
     });
   };
+
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
 })();
