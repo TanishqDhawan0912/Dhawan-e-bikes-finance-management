@@ -209,7 +209,7 @@ app.use((err, req, res, next) => {
     console.log(
       publicUrl
         ? `🚀 Server running at ${publicUrl}`
-        : `🚀 Server running on http://${HOST}:${PORT}`
+        : `🚀 Server running on port ${PORT}`
     );
   });
 
