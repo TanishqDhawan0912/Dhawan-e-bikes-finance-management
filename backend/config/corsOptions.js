@@ -1,7 +1,3 @@
-/**
- * Allowed browser origins (comma-separated in CORS_ORIGINS).
- * Trailing slashes are stripped. Requests with no Origin (curl, mobile) are allowed.
- */
 function parseAllowedOrigins() {
   const fromEnv = process.env.CORS_ORIGINS?.trim();
   if (fromEnv) {
@@ -28,11 +24,15 @@ function buildCorsOptions() {
       if (!origin) {
         return callback(null, true);
       }
+
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
+
       console.warn("[CORS] Blocked origin:", origin);
-      return callback(null, false);
+
+      // 🔥 IMPORTANT FIX
+      return callback(new Error("Not allowed by CORS"));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],

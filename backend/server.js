@@ -29,6 +29,7 @@ const HOST = process.env.HOST || "0.0.0.0";
 
 // Middleware
 app.use(cors(buildCorsOptions()));
+app.options("*", cors(buildCorsOptions()));
 
 // Lightweight request logger
 app.use((req, res, next) => {
