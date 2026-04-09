@@ -1,13 +1,11 @@
 import React, {
   useState,
   useEffect,
-  useRef,
   useCallback,
   useMemo,
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchWithRetry } from "../../config/api";
-import { createPortal } from "react-dom";
 import { getTextColorForBackground } from "../../utils/themeUtils";
 import { getFetchErrorMessage } from "../../utils/apiError";
 
@@ -32,189 +30,6 @@ function getSpareTotalStockPieces(spare) {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-// Suggestions Portal Component
-function SuggestionsPortal({
-  suggestions,
-  selectedIndex,
-  onSelect,
-  position,
-  inputName,
-}) {
-  if (!position || suggestions.length === 0) return null;
-
-  const style = {
-    position: "fixed",
-    top: position.bottom + 6,
-    left: position.left,
-    width: position.width,
-    background: "white",
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    zIndex: 10000,
-    boxShadow: "0 10px 25px rgba(0,0,0,0.1), 0 4px 10px rgba(0,0,0,0.05)",
-    maxHeight: 280,
-    overflowY: "auto",
-    overflowX: "hidden",
-    animation: "slideDown 0.2s ease-out",
-  };
-
-  return (
-    <div style={style} data-suggestions-portal="true" data-suggestions-input={inputName || ""}>
-      {suggestions.map((suggestion, idx) => (
-        <div
-          key={`${inputName}-${
-            suggestion.loading ? "loading" : suggestion
-          }-${idx}`}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            if (!suggestion.loading) {
-              onSelect(suggestion);
-            }
-          }}
-          style={{
-            padding: "0.75rem 1rem",
-            cursor: suggestion.loading ? "default" : "pointer",
-            backgroundColor:
-              idx === selectedIndex && !suggestion.loading
-                ? "#3b82f6"
-                : "white",
-            borderBottom:
-              idx !== suggestions.length - 1 ? "1px solid #f1f5f9" : "none",
-            transition: "all 0.15s ease",
-            transform:
-              idx === selectedIndex && !suggestion.loading
-                ? "translateX(4px)"
-                : "translateX(0)",
-          }}
-          onMouseEnter={(e) => {
-            if (!suggestion.loading) {
-              e.currentTarget.style.backgroundColor =
-                idx === selectedIndex ? "#3b82f6" : "#f8fafc";
-              e.currentTarget.style.transform = "translateX(2px)";
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!suggestion.loading) {
-              e.currentTarget.style.backgroundColor =
-                idx === selectedIndex ? "#3b82f6" : "white";
-              e.currentTarget.style.transform = "translateX(0)";
-            }
-          }}
-        >
-          <div
-            style={{
-              fontWeight:
-                idx === selectedIndex && !suggestion.loading ? 600 : 500,
-              color:
-                idx === selectedIndex && !suggestion.loading
-                  ? "white"
-                  : "#1f2937",
-              fontSize: "0.875rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              width: "100%",
-            }}
-          >
-            {suggestion.loading ? (
-              <>
-                <div
-                  style={{
-                    width: "16px",
-                    height: "16px",
-                    border: "2px solid #e5e7eb",
-                    borderTop: "2px solid #3b82f6",
-                    borderRadius: "50%",
-                    animation: "spin 1s linear infinite",
-                  }}
-                ></div>
-                Loading suggestions...
-              </>
-            ) : (
-              <>
-                {idx === selectedIndex ? (
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                ) : (
-                  <div
-                    style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      backgroundColor: "#3b82f6",
-                      flexShrink: 0,
-                    }}
-                  ></div>
-                )}
-                <span>{suggestion}</span>
-                {inputName && (
-                  <span
-                    style={{
-                      marginLeft: "auto",
-                      padding: "0.25rem 0.5rem",
-                      backgroundColor:
-                        idx === selectedIndex && !suggestion.loading
-                          ? "rgba(255, 255, 255, 0.2)"
-                          : "#f1f5f9",
-                      color:
-                        idx === selectedIndex && !suggestion.loading
-                          ? "white"
-                          : "#6b7280",
-                      borderRadius: "0.375rem",
-                      fontSize: "0.75rem",
-                      fontWeight: "500",
-                    }}
-                  >
-                    {inputName === "modelName"
-                      ? "Model"
-                      : inputName === "company"
-                      ? "Company"
-                      : inputName === "name"
-                      ? "Spare"
-                      : inputName === "modelSearch"
-                      ? "Model"
-                      : inputName === "supplierName"
-                      ? "Supplier"
-                      : inputName}
-                  </span>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      ))}
-      <style jsx>{`
-        @keyframes slideDown {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        @keyframes spin {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(360deg);
-          }
-        }
-      `}</style>
-    </div>
-  );
-}
-
 function AllSpares() {
   const navigate = useNavigate();
   const [spares, setSpares] = useState([]);
@@ -223,76 +38,6 @@ function AllSpares() {
   const [searchName, setSearchName] = useState("");
   const [searchModel, setSearchModel] = useState("");
   const [searchSupplier, setSearchSupplier] = useState("");
-
-  // Suggestions state for each field
-  const [nameSuggestions, setNameSuggestions] = useState([]);
-  const [modelSuggestions, setModelSuggestions] = useState([]);
-  const [supplierSuggestions, setSupplierSuggestions] = useState([]);
-
-  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
-  const [showModelSuggestions, setShowModelSuggestions] = useState(false);
-  const [showSupplierSuggestions, setShowSupplierSuggestions] = useState(false);
-
-  const [selectedNameIndex, setSelectedNameIndex] = useState(-1);
-  const [selectedModelIndex, setSelectedModelIndex] = useState(-1);
-  const [selectedSupplierIndex, setSelectedSupplierIndex] = useState(-1);
-
-  const [namePosition, setNamePosition] = useState(null);
-  const [modelPosition, setModelPosition] = useState(null);
-  const [supplierPosition, setSupplierPosition] = useState(null);
-
-  const nameInputRef = useRef(null);
-  const modelInputRef = useRef(null);
-  const supplierInputRef = useRef(null);
-
-  const nameTimeoutRef = useRef(null);
-  const modelTimeoutRef = useRef(null);
-  const supplierTimeoutRef = useRef(null);
-
-  // Dismiss suggestions on scroll / outside click / focus change
-  useEffect(() => {
-    const closeAll = () => {
-      setShowNameSuggestions(false);
-      setShowModelSuggestions(false);
-      setShowSupplierSuggestions(false);
-      setNameSuggestions([]);
-      setModelSuggestions([]);
-      setSupplierSuggestions([]);
-      setSelectedNameIndex(-1);
-      setSelectedModelIndex(-1);
-      setSelectedSupplierIndex(-1);
-    };
-
-    const isInSuggestionsUI = (target) => {
-      if (!target) return false;
-      if (nameInputRef.current && nameInputRef.current.contains(target)) return true;
-      if (modelInputRef.current && modelInputRef.current.contains(target)) return true;
-      if (supplierInputRef.current && supplierInputRef.current.contains(target)) return true;
-      return !!target.closest?.('[data-suggestions-portal="true"]');
-    };
-
-    const onMouseDown = (e) => {
-      if (!isInSuggestionsUI(e.target)) closeAll();
-    };
-    const onTouchStart = (e) => {
-      if (!isInSuggestionsUI(e.target)) closeAll();
-    };
-    const onFocusIn = (e) => {
-      if (!isInSuggestionsUI(e.target)) closeAll();
-    };
-    const onScroll = () => closeAll();
-
-    document.addEventListener("mousedown", onMouseDown, true);
-    document.addEventListener("touchstart", onTouchStart, true);
-    document.addEventListener("focusin", onFocusIn, true);
-    window.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("mousedown", onMouseDown, true);
-      document.removeEventListener("touchstart", onTouchStart, true);
-      document.removeEventListener("focusin", onFocusIn, true);
-      window.removeEventListener("scroll", onScroll, true);
-    };
-  }, []);
 
   const fetchSpares = useCallback(async () => {
     try {
@@ -581,309 +326,6 @@ function AllSpares() {
     };
   };
 
-  // Fetch suggestions for names
-  const fetchNameSuggestions = async (searchStr) => {
-    try {
-      const response = await fetchWithRetry(
-        `/spares/suggestions/names?search=${encodeURIComponent(
-          searchStr
-        )}`
-      );
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.message || "Error fetching suggestions");
-      setNameSuggestions((data.suggestions || []).slice(0, 2)); // Limit to 2 suggestions
-      setShowNameSuggestions(data.suggestions?.length > 0);
-
-      if (data.suggestions?.length > 0 && nameInputRef.current) {
-        const rect = nameInputRef.current.getBoundingClientRect();
-        setNamePosition({
-          bottom: rect.bottom,
-          left: rect.left,
-          width: rect.width,
-        });
-      } else {
-        setNamePosition(null);
-      }
-    } catch (err) {
-      console.error("Error fetching name suggestions:", err);
-      setNameSuggestions([]);
-      setShowNameSuggestions(false);
-      setNamePosition(null);
-    }
-  };
-
-  // Fetch suggestions for models
-  const fetchModelSuggestions = async (searchStr) => {
-    try {
-      const response = await fetchWithRetry(
-        `/spares/suggestions/models?search=${encodeURIComponent(
-          searchStr
-        )}`
-      );
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.message || "Error fetching suggestions");
-      setModelSuggestions((data.suggestions || []).slice(0, 2)); // Limit to 2 suggestions
-      setShowModelSuggestions(data.suggestions?.length > 0);
-
-      if (data.suggestions?.length > 0 && modelInputRef.current) {
-        const rect = modelInputRef.current.getBoundingClientRect();
-        setModelPosition({
-          bottom: rect.bottom,
-          left: rect.left,
-          width: rect.width,
-        });
-      } else {
-        setModelPosition(null);
-      }
-    } catch (err) {
-      console.error("Error fetching model suggestions:", err);
-      setModelSuggestions([]);
-      setShowModelSuggestions(false);
-      setModelPosition(null);
-    }
-  };
-
-  // Fetch suggestions for suppliers
-  const fetchSupplierSuggestions = async (searchStr) => {
-    try {
-      const response = await fetchWithRetry(
-        `/spares/suggestions/suppliers?search=${encodeURIComponent(
-          searchStr
-        )}`
-      );
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.message || "Error fetching suggestions");
-      setSupplierSuggestions((data.suggestions || []).slice(0, 2)); // Limit to 2 suggestions
-      setShowSupplierSuggestions(data.suggestions?.length > 0);
-
-      if (data.suggestions?.length > 0 && supplierInputRef.current) {
-        const rect = supplierInputRef.current.getBoundingClientRect();
-        setSupplierPosition({
-          bottom: rect.bottom,
-          left: rect.left,
-          width: rect.width,
-        });
-      } else {
-        setSupplierPosition(null);
-      }
-    } catch (err) {
-      console.error("Error fetching supplier suggestions:", err);
-      setSupplierSuggestions([]);
-      setShowSupplierSuggestions(false);
-      setSupplierPosition(null);
-    }
-  };
-
-  const handleNameInputChange = (e) => {
-    const value = e.target.value;
-    setSearchName(value);
-    setSelectedNameIndex(-1);
-
-    // If fully backspaced, clear all filters and show all spares
-    if (!value.trim()) {
-      setSearchName("");
-      setSearchModel("");
-      setSearchSupplier("");
-      setNameSuggestions([]);
-      setShowNameSuggestions(false);
-      setNamePosition(null);
-      setModelSuggestions([]);
-      setShowModelSuggestions(false);
-      setModelPosition(null);
-      setSupplierSuggestions([]);
-      setShowSupplierSuggestions(false);
-      setSupplierPosition(null);
-      return;
-    }
-
-    if (nameTimeoutRef.current) {
-      clearTimeout(nameTimeoutRef.current);
-      nameTimeoutRef.current = null;
-    }
-
-    nameTimeoutRef.current = setTimeout(() => {
-      fetchNameSuggestions(value.trim());
-    }, 200);
-  };
-
-  const handleModelInputChange = (e) => {
-    const value = e.target.value;
-    setSearchModel(value);
-    setSelectedModelIndex(-1);
-
-    // If fully backspaced, clear all filters and show all spares
-    if (!value.trim()) {
-      setSearchName("");
-      setSearchModel("");
-      setSearchSupplier("");
-      setNameSuggestions([]);
-      setShowNameSuggestions(false);
-      setNamePosition(null);
-      setModelSuggestions([]);
-      setShowModelSuggestions(false);
-      setModelPosition(null);
-      setSupplierSuggestions([]);
-      setShowSupplierSuggestions(false);
-      setSupplierPosition(null);
-      return;
-    }
-
-    if (modelTimeoutRef.current) {
-      clearTimeout(modelTimeoutRef.current);
-      modelTimeoutRef.current = null;
-    }
-
-    modelTimeoutRef.current = setTimeout(() => {
-      fetchModelSuggestions(value.trim());
-    }, 200);
-  };
-
-  const handleSupplierInputChange = (e) => {
-    const value = e.target.value;
-    setSearchSupplier(value);
-    setSelectedSupplierIndex(-1);
-
-    // If fully backspaced, clear all filters and show all spares
-    if (!value.trim()) {
-      setSearchName("");
-      setSearchModel("");
-      setSearchSupplier("");
-      setNameSuggestions([]);
-      setShowNameSuggestions(false);
-      setNamePosition(null);
-      setModelSuggestions([]);
-      setShowModelSuggestions(false);
-      setModelPosition(null);
-      setSupplierSuggestions([]);
-      setShowSupplierSuggestions(false);
-      setSupplierPosition(null);
-      return;
-    }
-
-    if (supplierTimeoutRef.current) {
-      clearTimeout(supplierTimeoutRef.current);
-      supplierTimeoutRef.current = null;
-    }
-
-    supplierTimeoutRef.current = setTimeout(() => {
-      fetchSupplierSuggestions(value.trim());
-    }, 200);
-  };
-
-  const selectNameSuggestion = (name) => {
-    setSearchName(name);
-    setNameSuggestions([]);
-    setShowNameSuggestions(false);
-    setNamePosition(null);
-    setSelectedNameIndex(-1);
-  };
-
-  const selectModelSuggestion = (model) => {
-    setSearchModel(model);
-    setModelSuggestions([]);
-    setShowModelSuggestions(false);
-    setModelPosition(null);
-    setSelectedModelIndex(-1);
-  };
-
-  const selectSupplierSuggestion = (supplier) => {
-    setSearchSupplier(supplier);
-    setSupplierSuggestions([]);
-    setShowSupplierSuggestions(false);
-    setSupplierPosition(null);
-    setSelectedSupplierIndex(-1);
-  };
-
-  // Handle keyboard navigation for name suggestions
-  const handleNameKeyDown = (e) => {
-    if (showNameSuggestions && nameSuggestions.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        const next =
-          selectedNameIndex >= nameSuggestions.length - 1
-            ? 0
-            : selectedNameIndex + 1;
-        setSelectedNameIndex(next);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        const prev =
-          selectedNameIndex <= 0
-            ? nameSuggestions.length - 1
-            : selectedNameIndex - 1;
-        setSelectedNameIndex(prev);
-      } else if (e.key === "Enter" && selectedNameIndex >= 0) {
-        e.preventDefault();
-        const picked = nameSuggestions[selectedNameIndex];
-        if (picked) selectNameSuggestion(picked);
-      } else if (e.key === "Escape") {
-        setShowNameSuggestions(false);
-        setNameSuggestions([]);
-        setSelectedNameIndex(-1);
-      }
-    }
-  };
-
-  // Handle keyboard navigation for model suggestions
-  const handleModelKeyDown = (e) => {
-    if (showModelSuggestions && modelSuggestions.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        const next =
-          selectedModelIndex >= modelSuggestions.length - 1
-            ? 0
-            : selectedModelIndex + 1;
-        setSelectedModelIndex(next);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        const prev =
-          selectedModelIndex <= 0
-            ? modelSuggestions.length - 1
-            : selectedModelIndex - 1;
-        setSelectedModelIndex(prev);
-      } else if (e.key === "Enter" && selectedModelIndex >= 0) {
-        e.preventDefault();
-        const picked = modelSuggestions[selectedModelIndex];
-        if (picked) selectModelSuggestion(picked);
-      } else if (e.key === "Escape") {
-        setShowModelSuggestions(false);
-        setModelSuggestions([]);
-        setSelectedModelIndex(-1);
-      }
-    }
-  };
-
-  // Handle keyboard navigation for supplier suggestions
-  const handleSupplierKeyDown = (e) => {
-    if (showSupplierSuggestions && supplierSuggestions.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        const next =
-          selectedSupplierIndex >= supplierSuggestions.length - 1
-            ? 0
-            : selectedSupplierIndex + 1;
-        setSelectedSupplierIndex(next);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        const prev =
-          selectedSupplierIndex <= 0
-            ? supplierSuggestions.length - 1
-            : selectedSupplierIndex - 1;
-        setSelectedSupplierIndex(prev);
-      } else if (e.key === "Enter" && selectedSupplierIndex >= 0) {
-        e.preventDefault();
-        const picked = supplierSuggestions[selectedSupplierIndex];
-        if (picked) selectSupplierSuggestion(picked);
-      } else if (e.key === "Escape") {
-        setShowSupplierSuggestions(false);
-        setSupplierSuggestions([]);
-        setSelectedSupplierIndex(-1);
-      }
-    }
-  };
-
   if (loading) {
     return (
       <div className="page-content">
@@ -951,9 +393,7 @@ function AllSpares() {
                 type="text"
                 placeholder="Search by spare name..."
                 value={searchName}
-                onChange={handleNameInputChange}
-                onKeyDown={handleNameKeyDown}
-                ref={nameInputRef}
+                onChange={(e) => setSearchName(e.target.value)}
                 autoComplete="off"
                 autoCorrect="off"
                 spellCheck={false}
@@ -965,19 +405,6 @@ function AllSpares() {
                   width: "100%",
                 }}
               />
-              {showNameSuggestions &&
-                nameSuggestions.length > 0 &&
-                namePosition &&
-                createPortal(
-                  <SuggestionsPortal
-                    suggestions={nameSuggestions}
-                    selectedIndex={selectedNameIndex}
-                    onSelect={selectNameSuggestion}
-                    position={namePosition}
-                    inputName="name"
-                  />,
-                  document.body
-                )}
             </div>
           </div>
 
@@ -997,9 +424,7 @@ function AllSpares() {
                 type="text"
                 placeholder="Search by model..."
                 value={searchModel}
-                onChange={handleModelInputChange}
-                onKeyDown={handleModelKeyDown}
-                ref={modelInputRef}
+                onChange={(e) => setSearchModel(e.target.value)}
                 autoComplete="off"
                 autoCorrect="off"
                 spellCheck={false}
@@ -1011,19 +436,6 @@ function AllSpares() {
                   width: "100%",
                 }}
               />
-              {showModelSuggestions &&
-                modelSuggestions.length > 0 &&
-                modelPosition &&
-                createPortal(
-                  <SuggestionsPortal
-                    suggestions={modelSuggestions}
-                    selectedIndex={selectedModelIndex}
-                    onSelect={selectModelSuggestion}
-                    position={modelPosition}
-                    inputName="model"
-                  />,
-                  document.body
-                )}
             </div>
           </div>
 
@@ -1043,9 +455,7 @@ function AllSpares() {
                 type="text"
                 placeholder="Search by supplier..."
                 value={searchSupplier}
-                onChange={handleSupplierInputChange}
-                onKeyDown={handleSupplierKeyDown}
-                ref={supplierInputRef}
+                onChange={(e) => setSearchSupplier(e.target.value)}
                 autoComplete="off"
                 autoCorrect="off"
                 spellCheck={false}
@@ -1057,19 +467,6 @@ function AllSpares() {
                   width: "100%",
                 }}
               />
-              {showSupplierSuggestions &&
-                supplierSuggestions.length > 0 &&
-                supplierPosition &&
-                createPortal(
-                  <SuggestionsPortal
-                    suggestions={supplierSuggestions}
-                    selectedIndex={selectedSupplierIndex}
-                    onSelect={selectSupplierSuggestion}
-                    position={supplierPosition}
-                    inputName="supplier"
-                  />,
-                  document.body
-                )}
             </div>
           </div>
 
@@ -1079,16 +476,6 @@ function AllSpares() {
                 setSearchName("");
                 setSearchModel("");
                 setSearchSupplier("");
-                // Clear all suggestions
-                setNameSuggestions([]);
-                setModelSuggestions([]);
-                setSupplierSuggestions([]);
-                setShowNameSuggestions(false);
-                setShowModelSuggestions(false);
-                setShowSupplierSuggestions(false);
-                setNamePosition(null);
-                setModelPosition(null);
-                setSupplierPosition(null);
               }}
               style={{
                 padding: "0.5rem 1rem",

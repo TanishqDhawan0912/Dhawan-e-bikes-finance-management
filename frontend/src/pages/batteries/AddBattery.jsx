@@ -469,12 +469,36 @@ export default function AddBattery() {
     setIsSubmitting(true);
 
     try {
+      const batteriesPerSetNum = parseFloat(formData.batteriesPerSet) || 0;
+      const totalSetsNum = parseFloat(formData.totalSets) || 0;
+      const openBatteriesNum = parseFloat(formData.openBatteries) || 0;
+      const totalBatteriesNum = batteriesPerSetNum * totalSetsNum + openBatteriesNum;
+
+      const purchaseDate =
+        formData.purchaseDate && String(formData.purchaseDate).trim()
+          ? formData.purchaseDate
+          : null;
+
+      const stockEntries =
+        totalBatteriesNum > 0
+          ? [
+              {
+                quantity: totalBatteriesNum,
+                originalQuantity: totalBatteriesNum,
+                // Purchase price can be filled later; keep 0 to indicate "pending".
+                purchasePrice: 0,
+                purchaseDate: purchaseDate || new Date().toISOString(),
+                batteriesPerSet: batteriesPerSetNum > 0 ? batteriesPerSetNum : undefined,
+              },
+            ]
+          : [];
+
       const batteryData = {
         name: formData.name,
         ampereValue: formData.ampereValue || "",
-        batteriesPerSet: parseFloat(formData.batteriesPerSet) || 0,
-        totalSets: parseFloat(formData.totalSets) || 0,
-        openBatteries: parseFloat(formData.openBatteries) || 0,
+        batteriesPerSet: batteriesPerSetNum,
+        totalSets: totalSetsNum,
+        openBatteries: openBatteriesNum,
         warrantyStatus: formData.warrantyStatus || false,
         sellingPrice: parseFloat(formData.sellingPrice) || 0,
         supplierName: formData.supplierName || "",
@@ -483,7 +507,8 @@ export default function AddBattery() {
             ? formData.batteryType
             : "",
         minStockLevel: parseFloat(formData.minStockLevel) || 0,
-        purchaseDate: formData.purchaseDate || null,
+        purchaseDate,
+        stockEntries,
       };
 
       const response = await fetchWithRetry(`/batteries`, {

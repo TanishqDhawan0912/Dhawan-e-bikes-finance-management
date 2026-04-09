@@ -33,7 +33,7 @@ function SuggestionsPortal({
   };
 
   return (
-    <div style={style}>
+    <div style={style} data-suggestion-portal="true">
       {suggestions.map((suggestion, idx) => (
         <div
           key={`${inputName}-${
@@ -327,17 +327,25 @@ function AddSpare() {
     setSuggestionPosition(null);
   }, []);
 
-  // Close suggestion popovers when user scrolls or changes focus.
-  // These popovers are rendered in a portal (fixed positioning) so they won't
-  // automatically disappear when the form scrolls.
+  // Close suggestion popovers on outside click/touch (not on scroll).
+  // Popovers use fixed positioning via a portal; keep them visible while scrolling.
   useEffect(() => {
-    const onScroll = () => {
-      closeAllSuggestionPopovers();
+    const isInsideSuggestionUi = (target) => {
+      if (!target) return false;
+      if (nameInputRef.current?.contains(target)) return true;
+      if (modelInputRef.current?.contains(target)) return true;
+      if (supplierInputRef.current?.contains(target)) return true;
+      return !!target.closest?.('[data-suggestion-portal="true"]');
+    };
+
+    const onPointerDown = (e) => {
+      if (!isInsideSuggestionUi(e.target)) {
+        closeAllSuggestionPopovers();
+      }
     };
 
     const onFocusIn = (e) => {
       const t = e?.target;
-      // Keep suggestions open only for the currently focused input.
       if (t !== nameInputRef.current) {
         setShowNameSuggestions(false);
         setNameSuggestions([]);
@@ -358,11 +366,12 @@ function AddSpare() {
       }
     };
 
-    // Capture scroll events from nested containers too.
-    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("mousedown", onPointerDown, true);
+    document.addEventListener("touchstart", onPointerDown, true);
     document.addEventListener("focusin", onFocusIn);
     return () => {
-      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("mousedown", onPointerDown, true);
+      document.removeEventListener("touchstart", onPointerDown, true);
       document.removeEventListener("focusin", onFocusIn);
     };
   }, [closeAllSuggestionPopovers]);

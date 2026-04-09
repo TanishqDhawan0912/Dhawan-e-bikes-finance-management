@@ -60,6 +60,26 @@ const createBattery = async (req, res) => {
           : [],
     });
 
+    // If no stock entries were sent but the battery has quantity, create an initial entry.
+    // This prevents UI from showing "All price entries up to date" when purchasePrice is pending.
+    if (!battery.stockEntries || battery.stockEntries.length === 0) {
+      const perSet = Math.max(0, Number(batteriesPerSet) || 0);
+      const sets = Math.max(0, Number(totalSets) || 0);
+      const open = Math.max(0, Number(openBatteries) || 0);
+      const qty = perSet > 0 ? perSet * sets + open : open;
+      if (qty > 0) {
+        battery.stockEntries = [
+          {
+            quantity: qty,
+            originalQuantity: qty,
+            purchasePrice: 0,
+            purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
+            batteriesPerSet: perSet > 0 ? perSet : undefined,
+          },
+        ];
+      }
+    }
+
     // If stock entries were provided, recalculate total sets/open batteries
     if (battery.stockEntries && battery.stockEntries.length > 0) {
       battery.recalculateFromStockEntries();

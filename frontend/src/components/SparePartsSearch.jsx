@@ -14,7 +14,7 @@ export default function SparePartsSearch({ onSelectPart }) {
   const modelInputRef = useRef(null);
   const resultsListRef = useRef(null);
 
-  // Dismiss suggestions on outside click/focus and on scroll (whole app)
+  // Dismiss suggestions on outside click/focus (not on scroll)
   useEffect(() => {
     const dismiss = () => {
       setSearchResults([]);
@@ -30,17 +30,14 @@ export default function SparePartsSearch({ onSelectPart }) {
     const onMouseDown = (e) => dismissIfOutside(e.target);
     const onTouchStart = (e) => dismissIfOutside(e.target);
     const onFocusIn = (e) => dismissIfOutside(e.target);
-    const onScroll = () => dismiss();
 
     document.addEventListener("mousedown", onMouseDown, true);
     document.addEventListener("touchstart", onTouchStart, true);
     document.addEventListener("focusin", onFocusIn, true);
-    window.addEventListener("scroll", onScroll, true);
     return () => {
       document.removeEventListener("mousedown", onMouseDown, true);
       document.removeEventListener("touchstart", onTouchStart, true);
       document.removeEventListener("focusin", onFocusIn, true);
-      window.removeEventListener("scroll", onScroll, true);
     };
   }, []);
 
