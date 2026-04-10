@@ -6,6 +6,12 @@ import { useSessionTimeout } from "../../hooks/useSessionTimeout";
 // Add CSS animation for moving line
 import { fetchWithRetry } from "../../config/api";
 import { getFetchErrorMessage } from "../../utils/apiError";
+import {
+  isPurchasePriceMissing,
+  pendingPurchaseDateKey,
+  sortPendingDateKeys,
+  formatPendingPurchaseDatesJoined,
+} from "../../utils/purchasePriceStatus";
 const style = document.createElement("style");
 style.textContent = `
   @keyframes moveLine {
@@ -381,27 +387,25 @@ function AllModels() {
 
     if (group && Array.isArray(group.models)) {
       group.models.forEach((model) => {
-        if (
-          model &&
-          Array.isArray(model.stockEntries) &&
-          model.stockEntries.length > 0
-        ) {
-          model.stockEntries.forEach((entry) => {
-            const price = entry?.purchasePrice;
-            const hasPrice =
-              typeof price === "number" ? price > 0 : !!price;
-            const rawDate = entry?.purchaseDate || "";
-            const dateLabel = rawDate.toString().trim();
+        if (!model) return;
 
-            if (!hasPrice && dateLabel) {
-              pendingDatesSet.add(dateLabel);
-            }
+        if (Array.isArray(model.stockEntries) && model.stockEntries.length > 0) {
+          model.stockEntries.forEach((entry) => {
+            if (!isPurchasePriceMissing(entry?.purchasePrice)) return;
+            pendingDatesSet.add(pendingPurchaseDateKey(entry?.purchaseDate));
           });
+        } else {
+          const qty = Number(model.quantity) || 0;
+          if (qty > 0 && isPurchasePriceMissing(model.purchasePrice)) {
+            pendingDatesSet.add(
+              pendingPurchaseDateKey(model.purchaseDate ?? model.createdAt)
+            );
+          }
         }
       });
     }
 
-    const pendingDates = Array.from(pendingDatesSet);
+    const pendingDates = sortPendingDateKeys(Array.from(pendingDatesSet));
 
     return {
       hasPending: pendingDates.length > 0,
@@ -1109,7 +1113,9 @@ function AllModels() {
                         {priceStatus.hasPending ? (
                           <span style={{ color: "#92400e" }}>
                             Price listing pending for{" "}
-                            {priceStatus.pendingDates.join(", ")}
+                            {formatPendingPurchaseDatesJoined(
+                              priceStatus.pendingDates
+                            )}
                           </span>
                         ) : (
                           <span style={{ color: "#166534" }}>

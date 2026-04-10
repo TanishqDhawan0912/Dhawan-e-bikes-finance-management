@@ -1,7 +1,117 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const PREVIEW_BASE_W = 1122;
 const PREVIEW_BASE_H = 794;
+
+/** Highest index for getPartsDensityStyle (inclusive). */
+const PARTS_DENSITY_MAX = 4;
+
+/** Fixed line slots in the parts body (not counting spacer row). */
+const JOB_CARD_BODY_LINE_ROWS = 20;
+
+/** Details column font will not grow beyond this when filling slack vertical space. */
+const MAX_DETAILS_FONT_FILL_PT = 16;
+
+/** Details body cells use true bold so print/preview match job-card readability. */
+const DETAILS_BODY_FONT_WEIGHT = 700;
+
+/** Tbody cell vertical padding when rows are stretched to fill (frees space for larger type). */
+const FILL_BODY_PAD_Y = "2px";
+
+/**
+ * Divide vertical space across max(8, used lines): ≤8 lines get the largest row height (max gap);
+ * adding a 9th line uses 9 slots (tighter rows), same block height — gap changes before shrinking type.
+ */
+const PARTS_LAYOUT_BASE_SLOTS = 8;
+
+/** Body rows below the layout block stay visually minimal (rules + empty slots). */
+const MIN_FILLER_LINE_ROW_PX = 3;
+
+function getPartsLayoutLineDenom(usedRowCount) {
+  const capped = Math.min(
+    JOB_CARD_BODY_LINE_ROWS,
+    Math.max(0, usedRowCount)
+  );
+  return Math.min(
+    JOB_CARD_BODY_LINE_ROWS,
+    Math.max(PARTS_LAYOUT_BASE_SLOTS, capped)
+  );
+}
+
+/** Minimal reserved height under thead for the spacer row (px, layout space). */
+const SPACER_ROW_RESERVE_PX = 8;
+
+/** Binary search lower bound when fitting detail text to row height (pt). */
+const MIN_DETAILS_FONT_FILL_PT = 8;
+
+/**
+ * Per-level tuning so many detail lines fit on one sheet: tighter padding/line-height,
+ * then smaller Details font only at higher levels.
+ */
+function getPartsDensityStyle(level) {
+  const L = Math.max(0, Math.min(PARTS_DENSITY_MAX, level));
+  const rows = [
+    {
+      rowPad: "4mm",
+      rowLineHeight: 1.5,
+      detailsFontPt: 14,
+      headerDetailsFontPt: 12,
+      theadCellPad: "4mm 0.5rem",
+      useTallSpacer: true,
+      spacerMinMm: 88,
+      compact: false,
+    },
+    {
+      rowPad: "2.5mm",
+      rowLineHeight: 1.38,
+      detailsFontPt: 13,
+      headerDetailsFontPt: 11.5,
+      theadCellPad: "3mm 0.45rem",
+      useTallSpacer: false,
+      spacerMinMm: 20,
+      compact: true,
+    },
+    {
+      rowPad: "1.5mm",
+      rowLineHeight: 1.28,
+      detailsFontPt: 12,
+      headerDetailsFontPt: 11,
+      theadCellPad: "2.5mm 0.4rem",
+      useTallSpacer: false,
+      spacerMinMm: 14,
+      compact: true,
+    },
+    {
+      rowPad: "1mm",
+      rowLineHeight: 1.18,
+      detailsFontPt: 11,
+      headerDetailsFontPt: 10,
+      theadCellPad: "2mm 0.35rem",
+      useTallSpacer: false,
+      spacerMinMm: 8,
+      compact: true,
+    },
+    {
+      rowPad: "0.45mm",
+      rowLineHeight: 1.08,
+      detailsFontPt: 10,
+      headerDetailsFontPt: 9.5,
+      theadCellPad: "1.5mm 0.3rem",
+      useTallSpacer: false,
+      spacerMinMm: 4,
+      compact: true,
+    },
+  ];
+  return rows[L];
+}
+
+function estimatePartsDensityFromRowCount(maxRows) {
+  if (maxRows <= 9) return 0;
+  if (maxRows <= 11) return 1;
+  if (maxRows <= 14) return 2;
+  if (maxRows <= 17) return 3;
+  return 4;
+}
 
 /**
  * Print-friendly jobcard layout matching the physical E-BIKE JOB CARD format.
@@ -10,6 +120,8 @@ const PREVIEW_BASE_H = 794;
 export default function JobcardPrintView({ jobcard, onClose, onPrint }) {
   const printRef = useRef(null);
   const previewRef = useRef(null);
+  const partsWrapRef = useRef(null);
+  const partsTableRef = useRef(null);
   const [previewScale, setPreviewScale] = useState(() => {
     if (typeof window === "undefined") return 1;
     const w = Math.min(1180, window.innerWidth - 48);
@@ -87,10 +199,216 @@ export default function JobcardPrintView({ jobcard, onClose, onPrint }) {
   const customerNameText = jobcard?.customerName && jobcard.customerName !== "N/A" ? jobcard.customerName : "";
   const nameWithPlace = placeText ? (customerNameText ? `${customerNameText} R/O ${placeText}` : `R/O ${placeText}`) : customerNameText;
   const maxRows = Math.max(detailsList.length, parts.length);
-  const totalContentRows = maxRows;
-  const isCompact = totalContentRows > 9;
-  const rowPad = isCompact ? "2mm" : "4mm";
-  const rowLineHeight = isCompact ? 1.2 : 1.5;
+
+  const [partsDensity, setPartsDensity] = useState(() =>
+    estimatePartsDensityFromRowCount(maxRows)
+  );
+
+  const [partsVerticalFill, setPartsVerticalFill] = useState(() => ({
+    rowHeightPx: null,
+    detailsFontPt: null,
+  }));
+
+  useEffect(() => {
+    setPartsDensity(estimatePartsDensityFromRowCount(maxRows));
+    setPartsVerticalFill({ rowHeightPx: null, detailsFontPt: null });
+  }, [jobcard?._id, jobcard?.jobcardNumber, maxRows]);
+
+  const densityStyle = getPartsDensityStyle(partsDensity);
+  const rowPad = densityStyle.rowPad;
+  const rowLineHeight = densityStyle.rowLineHeight;
+  const isCompact = densityStyle.compact;
+  const vfRowH = partsVerticalFill.rowHeightPx;
+  const filledDetailsFontPt =
+    partsVerticalFill.detailsFontPt ?? densityStyle.detailsFontPt;
+  const layoutLineDenom = getPartsLayoutLineDenom(maxRows);
+  const bodyPadY = vfRowH != null ? FILL_BODY_PAD_Y : rowPad;
+  const bodyLineHeight = vfRowH != null ? 1.18 : rowLineHeight;
+
+  const lineRowTrStyle = (lineIndex) => {
+    if (vfRowH == null) return undefined;
+    const h =
+      lineIndex < layoutLineDenom ? vfRowH : MIN_FILLER_LINE_ROW_PX;
+    return {
+      height: h,
+      minHeight: h,
+      boxSizing: "border-box",
+    };
+  };
+
+  const isBelowLayoutBlock = (lineIndex) =>
+    vfRowH != null && lineIndex >= layoutLineDenom;
+
+  const detailsFingerprint =
+    Array.isArray(jobcard?.details) && jobcard.details.length
+      ? jobcard.details.join("\n")
+      : "";
+
+  useLayoutEffect(() => {
+    const wrap = partsWrapRef.current;
+    const table = partsTableRef.current;
+    if (!wrap || !table) return;
+
+    let raf = 0;
+
+    const clearLineTrProbeStyles = (lineTrs) => {
+      for (const tr of lineTrs) {
+        tr.style.height = "";
+        tr.style.minHeight = "";
+        tr.style.boxSizing = "";
+        for (const td of tr.querySelectorAll("td")) {
+          td.style.verticalAlign = "";
+          td.style.padding = "";
+          td.style.lineHeight = "";
+        }
+        const d = tr.children[1];
+        if (d) {
+          d.style.fontSize = "";
+          d.style.fontWeight = "";
+        }
+      }
+    };
+
+    const run = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const wrapH = wrap.clientHeight;
+        if (wrapH < 48) {
+          setPartsVerticalFill((p) =>
+            p.rowHeightPx == null && p.detailsFontPt == null
+              ? p
+              : { rowHeightPx: null, detailsFontPt: null }
+          );
+          return;
+        }
+
+        const tbody = table.querySelector("tbody");
+        if (!tbody) return;
+        const allTrs = [...tbody.querySelectorAll("tr")];
+        if (allTrs.length < JOB_CARD_BODY_LINE_ROWS + 1) return;
+
+        const thead = table.querySelector("thead");
+        const theadH = thead?.offsetHeight ?? 0;
+        const lineTrs = allTrs.slice(0, JOB_CARD_BODY_LINE_ROWS);
+
+        const availForRows = Math.max(0, wrapH - theadH - SPACER_ROW_RESERVE_PX);
+        const usedLineCount = Math.min(maxRows, JOB_CARD_BODY_LINE_ROWS);
+        const layoutDenom = getPartsLayoutLineDenom(maxRows);
+        const fillerLineCount = JOB_CARD_BODY_LINE_ROWS - layoutDenom;
+        const availForLayoutSlots = Math.max(
+          0,
+          availForRows - fillerLineCount * MIN_FILLER_LINE_ROW_PX
+        );
+        const slotH = Math.max(
+          20,
+          Math.floor(availForLayoutSlots / layoutDenom)
+        );
+
+        // Tighten density only when a used row needs more than its layout slot (gap shrinks via
+        // layoutDenom when line count passes 8; density is for content that truly won't fit).
+        let needsTighten = false;
+        for (let i = 0; i < usedLineCount; i++) {
+          const tr = lineTrs[i];
+          if (tr && tr.offsetHeight > slotH + 8) {
+            needsTighten = true;
+            break;
+          }
+        }
+
+        if (needsTighten) {
+          if (partsDensity < PARTS_DENSITY_MAX) {
+            setPartsDensity((d) => d + 1);
+            setPartsVerticalFill({ rowHeightPx: null, detailsFontPt: null });
+            return;
+          }
+          // Already at max density: still run vertical fill so rows + font scale to the wrap.
+        }
+
+        const basePt = densityStyle.detailsFontPt;
+        const rowH = slotH;
+
+        const applyProbe = (pt) => {
+          lineTrs.forEach((tr, idx) => {
+            const h = idx < layoutDenom ? rowH : MIN_FILLER_LINE_ROW_PX;
+            const tight = idx >= layoutDenom;
+            tr.style.height = `${h}px`;
+            tr.style.minHeight = `${h}px`;
+            tr.style.boxSizing = "border-box";
+            for (const td of tr.querySelectorAll("td")) {
+              td.style.verticalAlign = "middle";
+              td.style.padding = tight ? "0 0.5rem" : `${FILL_BODY_PAD_Y} 0.5rem`;
+              td.style.lineHeight = tight ? "1" : "1.18";
+            }
+            const d = tr.children[1];
+            if (d) {
+              d.style.fontSize = `${pt}pt`;
+              d.style.fontWeight = String(DETAILS_BODY_FONT_WEIGHT);
+            }
+          });
+        };
+
+        const allDetailCellsFit = () => {
+          for (let idx = 0; idx < usedLineCount; idx++) {
+            const tr = lineTrs[idx];
+            if (!tr) continue;
+            const d = tr.children[1];
+            if (!d) continue;
+            if (d.scrollHeight > d.clientHeight + 3) return false;
+          }
+          return true;
+        };
+
+        let best = basePt;
+        let lo = MIN_DETAILS_FONT_FILL_PT;
+        let hi = MAX_DETAILS_FONT_FILL_PT;
+        for (let k = 0; k < 24; k++) {
+          const mid = (lo + hi) / 2;
+          applyProbe(mid);
+          if (allDetailCellsFit()) {
+            best = mid;
+            lo = mid;
+          } else {
+            hi = mid;
+          }
+          if (hi - lo < 0.18) break;
+        }
+
+        best = Math.min(
+          MAX_DETAILS_FONT_FILL_PT,
+          Math.max(MIN_DETAILS_FONT_FILL_PT, best)
+        );
+        best = Math.round(best * 4) / 4;
+        clearLineTrProbeStyles(lineTrs);
+
+        setPartsVerticalFill((prev) => {
+          const sameRow = prev.rowHeightPx === rowH;
+          const samePt =
+            prev.detailsFontPt != null &&
+            Math.abs(prev.detailsFontPt - best) < 0.01;
+          if (sameRow && samePt) return prev;
+          return { rowHeightPx: rowH, detailsFontPt: best };
+        });
+      });
+    };
+
+    run();
+    const ro = new ResizeObserver(() => run());
+    ro.observe(wrap);
+    return () => {
+      ro.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [
+    partsDensity,
+    densityStyle.detailsFontPt,
+    maxRows,
+    jobcard?._id,
+    jobcard?.jobcardNumber,
+    detailsFingerprint,
+    parts.length,
+    previewScale,
+  ]);
 
   const warrantyLabel = getWarrantyTypeLabel(jobcard?.warrantyType);
   const warrantyDisplay = warrantyLabel
@@ -120,17 +438,52 @@ export default function JobcardPrintView({ jobcard, onClose, onPrint }) {
         ? jobcard.ebikeDetails.trim()
         : "";
     const maxRows = Math.max(detailsList.length, parts.length);
-    const totalContentRows = maxRows;
-    const compact = totalContentRows > 9;
-    const pad = compact ? "2mm" : "4mm";
-    const lh = compact ? "1.2" : "1.4";
-    const cel = `style="border-left:1px solid #000;border-right:1px solid #000;border-top:none;border-bottom:none;padding:${pad} 6px;line-height:${lh}"`;
-    const firstCel = `style="border-left:none;border-right:1px solid #000;border-top:none;border-bottom:none;padding:${pad} 6px;line-height:${lh}"`;
-    const lastCel = `style="border-left:1px solid #000;border-right:none;border-top:none;border-bottom:none;padding:${pad} 6px;line-height:${lh}"`;
+    const ds = getPartsDensityStyle(partsDensity);
+    const pad = ds.rowPad;
+    const lh = String(ds.rowLineHeight);
+    const thPad = ds.theadCellPad;
+    const printRowH = partsVerticalFill.rowHeightPx;
+    const printDetailsPt =
+      partsVerticalFill.detailsFontPt ?? ds.detailsFontPt;
+    const layoutDenomPrint = getPartsLayoutLineDenom(maxRows);
+    const vaMid = printRowH != null ? ";vertical-align:middle" : "";
+    const trOpenForLine = (lineIdx) => {
+      if (printRowH == null) return "<tr>";
+      const h =
+        lineIdx < layoutDenomPrint
+          ? printRowH
+          : MIN_FILLER_LINE_ROW_PX;
+      return `<tr style="height:${h}px;min-height:${h}px;box-sizing:border-box">`;
+    };
+    const cellStylesForLine = (lineIdx, opts = {}) => {
+      const boldNo = opts.boldNo === true;
+      const yPad =
+        printRowH == null
+          ? pad
+          : lineIdx < layoutDenomPrint
+            ? FILL_BODY_PAD_Y
+            : "0";
+      const lhv =
+        printRowH == null
+          ? lh
+          : lineIdx < layoutDenomPrint
+            ? "1.18"
+            : "1";
+      const noBold = boldNo ? `;font-weight:${DETAILS_BODY_FONT_WEIGHT}` : "";
+      const cel = `style="border-left:1px solid #000;border-right:1px solid #000;border-top:none;border-bottom:none;padding:${yPad} 0.5rem;line-height:${lhv};font-family:Arial,sans-serif${vaMid}"`;
+      const detailFs = `${printDetailsPt}pt`;
+      const detailCel = `style="border-left:1px solid #000;border-right:1px solid #000;border-top:none;border-bottom:none;padding:${yPad} 0.5rem;line-height:${lhv};font-family:Arial,sans-serif;font-size:${detailFs};font-weight:${DETAILS_BODY_FONT_WEIGHT}${vaMid}"`;
+      const firstCel = `style="border-left:none;border-right:1px solid #000;border-top:none;border-bottom:none;padding:${yPad} 0.5rem;line-height:${lhv};font-family:Arial,sans-serif${noBold}${vaMid}"`;
+      const lastCel = `style="border-left:1px solid #000;border-right:none;border-top:none;border-bottom:none;padding:${yPad} 0.5rem;line-height:${lhv};font-family:Arial,sans-serif${vaMid}"`;
+      return { cel, detailCel, firstCel, lastCel };
+    };
     const dataRows = Array.from({ length: maxRows }).map((_, i) => {
       const detail = detailsList[i];
       const part = parts[i];
       const no = detail ? (i + 1) : "";
+      const { cel, detailCel, firstCel, lastCel } = cellStylesForLine(i, {
+        boldNo: no !== "",
+      });
       const detailText = detail || "";
       let partText = "";
       let priceText = "";
@@ -194,18 +547,22 @@ export default function JobcardPrintView({ jobcard, onClose, onPrint }) {
         partText = `${baseText}${wBadge}`;
         priceText = `₹${amount.toFixed(2)}`;
       }
-      return `<tr><td ${firstCel}>${no}</td><td ${cel}>${detailText}</td><td ${cel}>${partText}</td><td ${lastCel}>${priceText}</td></tr>`;
+      return `${trOpenForLine(i)}<td ${firstCel}>${no}</td><td ${detailCel}>${detailText}</td><td ${cel}>${partText}</td><td ${lastCel}>${priceText}</td></tr>`;
     }).join("");
     const emptyCount = Math.max(0, 20 - maxRows);
-    const emptyRows = Array.from({ length: emptyCount }).map(() => {
-      const epad = compact ? "2mm" : "4mm";
-      const cel = `style="border-left:1px solid #000;border-right:1px solid #000;border-top:none;border-bottom:none;padding:${epad} 8px;line-height:${lh}"`;
-      const firstCel = `style="border-left:none;border-right:1px solid #000;border-top:none;border-bottom:none;padding:${epad} 8px;line-height:${lh}"`;
-      const lastCel = `style="border-left:1px solid #000;border-right:none;border-top:none;border-bottom:none;padding:${epad} 8px;line-height:${lh}"`;
-      return `<tr><td ${firstCel}></td><td ${cel}></td><td ${cel}></td><td ${lastCel}></td></tr>`;
+    const emptyRows = Array.from({ length: emptyCount }).map((_, ei) => {
+      const lineIdx = maxRows + ei;
+      const { cel: ecel, detailCel: edetail, firstCel: efirst, lastCel: elast } =
+        cellStylesForLine(lineIdx);
+      return `${trOpenForLine(lineIdx)}<td ${efirst}></td><td ${edetail}></td><td ${ecel}></td><td ${elast}></td></tr>`;
     }).join("");
-    const spacerClass = totalContentRows > 9 ? "parts-spacer-inner short" : "parts-spacer-inner";
-    const spacerRow = `<tr class="parts-spacer"><td style="border-left:none;border-right:1px solid #000;padding:0;vertical-align:top"><div class="${spacerClass}"></div></td><td style="border-left:1px solid #000;border-right:1px solid #000;padding:0;vertical-align:top"></td><td style="border-left:1px solid #000;border-right:1px solid #000;padding:0;vertical-align:top"></td><td style="border-left:1px solid #000;border-right:none;padding:0;vertical-align:top"></td></tr>`;
+    const spacerDivStyle =
+      printRowH != null
+        ? "height:1px;min-height:4px;display:block"
+        : ds.useTallSpacer
+          ? "height:1px;min-height:min(90mm,38vh);display:block"
+          : `height:1px;min-height:${ds.spacerMinMm}mm;display:block`;
+    const spacerRow = `<tr class="parts-spacer"><td style="border-left:none;border-right:1px solid #000;padding:0;vertical-align:top"><div style="${spacerDivStyle}"></div></td><td style="border-left:1px solid #000;border-right:1px solid #000;padding:0;vertical-align:top"></td><td style="border-left:1px solid #000;border-right:1px solid #000;padding:0;vertical-align:top"></td><td style="border-left:1px solid #000;border-right:none;padding:0;vertical-align:top"></td></tr>`;
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Job Card - ${srNo || "Print"}</title>
 <style>
 @page{size:A4 landscape;margin:0!important}
@@ -213,7 +570,7 @@ export default function JobcardPrintView({ jobcard, onClose, onPrint }) {
   html,body{width:297mm!important;margin:0!important;padding:0!important;background:#fff!important;overflow:visible!important}
   .preview-toolbar{display:none!important}
   .preview-paper{position:fixed!important;inset:0!important;padding:0!important;display:flex!important}
-  .sheet{position:relative!important;width:297mm!important;min-height:210mm!important;transform:none!important;margin:0!important;padding:8mm!important;box-sizing:border-box!important;box-shadow:none!important;border-radius:0!important;border:1px solid #000!important;overflow:visible!important}
+  .sheet{position:relative!important;width:297mm!important;height:210mm!important;min-height:210mm!important;max-height:210mm!important;transform:none!important;margin:0!important;padding:20px!important;box-sizing:border-box!important;box-shadow:none!important;border-radius:0!important;border:1px solid #000!important;overflow:hidden!important;display:flex!important;flex-direction:column!important}
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;font-family:system-ui,-apple-system,sans-serif}
@@ -234,11 +591,10 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
 .info-table .label{font-weight:600;width:12%}
 .info-table .value{width:38%}
 .info-table .wide{padding:10px 10px}
-.parts-wrap{flex:1;min-height:120px;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box}
-.parts-table{width:100%;border-collapse:collapse;border:1px solid #000;table-layout:fixed;height:100%;min-height:100px;font-size:11pt}
-.parts-table thead td{border:1px solid #000;padding:10px 8px;font-weight:700}
-.parts-table tbody td{border-left:1px solid #000;border-right:1px solid #000;border-top:none;border-bottom:none;padding:4mm 8px;line-height:1.5}
-.parts-table.compact tbody td{padding:2mm 8px;line-height:1.2}
+.parts-wrap{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box}
+.parts-table{width:100%;border-collapse:collapse;border:1px solid #000;table-layout:fixed;height:100%;min-height:100px;font-size:11pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.parts-table thead td{border:1px solid #000;font-weight:700}
+.parts-table tbody td{border-left:1px solid #000;border-right:1px solid #000;border-top:none;border-bottom:none}
 .parts-table tbody tr td:first-child{border-left:none}
 .parts-table tbody tr td:last-child,.parts-table tbody tr.parts-spacer td{border-right:none}
 .parts-table tbody tr.parts-spacer td{border-bottom:none}
@@ -247,9 +603,7 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
 .total-table td{border:1px solid #000;padding:10px 8px;font-size:11pt}
 .total-table .total-label{font-weight:700;text-align:right}
 .total-table .total-amount{font-weight:700;text-align:right;font-size:13pt}
-.parts-spacer-inner{height:1px;min-height:380px;display:block}
-.parts-spacer-inner.short{min-height:20mm}
-@media print{.parts-wrap{overflow:visible!important}.parts-spacer-inner{height:50vh!important;min-height:90mm!important}.parts-spacer-inner.short{min-height:8mm!important}}
+@media print{.parts-wrap{overflow:hidden!important;min-height:0!important;flex:1 1 auto!important}}
 </style></head><body>
 <div class="preview-toolbar"><span class="icon">🖨️</span><span>Print Preview — A4 Landscape</span><span style="opacity:0.7;font-size:12px">For best results: More settings → Margins: None</span></div>
 <div class="preview-paper"><div class="sheet" id="print-sheet">
@@ -264,7 +618,7 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
 <tr><td class="label wide" style="vertical-align:top">E-BIKE Detail:-</td><td class="value wide">${ebikeDetailText}</td><td class="label wide">Mechanic</td><td class="value wide"></td></tr>
 <tr><td class="label">Bill No.</td><td class="value">${billNo}</td><td class="label">Warranty</td><td class="value">${warrantyDisplay}</td></tr>
 </table>
-<div class="parts-wrap"><table class="parts-table${totalContentRows>9?' compact':''}"><thead><tr><td style="width:5%">No.</td><td style="width:35%">Details</td><td style="width:45%">PARTS</td><td style="width:15%">PRICE</td></tr></thead>
+<div class="parts-wrap"><table class="parts-table${ds.compact ? " compact" : ""}"><thead><tr><td style="width:5%;padding:${thPad};font-weight:700">No.</td><td style="width:35%;padding:${thPad};font-weight:700;font-size:${ds.headerDetailsFontPt}pt">Details</td><td style="width:45%;padding:${thPad};font-weight:700">PARTS</td><td style="width:15%;padding:${thPad};font-weight:700">PRICE</td></tr></thead>
 <tbody>${dataRows}${emptyRows}${spacerRow}</tbody></table></div>
 <table class="total-table"><tr><td style="width:5%"></td><td style="width:35%"></td><td style="width:45%;font-weight:700;text-align:right">TOTAL</td><td style="width:15%;font-weight:700;text-align:right;border-right:1px solid #000!important">₹${billingTotal.toFixed(2)}</td></tr></table>
 </div></div></body>
@@ -294,10 +648,22 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
         printWin.document.write(getPrintHtml());
         printWin.document.close();
         printWin.focus();
-        setTimeout(() => {
+        const runPrint = () => {
           printWin.print();
           printWin.close();
-        }, 500);
+        };
+        if (printWin.document.readyState === "complete") {
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(runPrint, 150)));
+        } else {
+          printWin.addEventListener(
+            "load",
+            () =>
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => setTimeout(runPrint, 150))
+              ),
+            { once: true }
+          );
+        }
       } else {
         window.print();
       }
@@ -595,15 +961,41 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
           </tbody>
         </table>
 
-        {/* Parts Table: compact spacing when many entries to fit without scroll */}
-        <div style={{ flex: 1, minHeight: "115mm", display: "flex", flexDirection: "column", boxSizing: "border-box", overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", height: "100%", minHeight: "100px", border: "1px solid #000", tableLayout: "fixed" }} cellSpacing={0} cellPadding={0}>
+        {/* Parts table: density auto-tightens row gap + Details font when content overflows */}
+        <div
+          ref={partsWrapRef}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            boxSizing: "border-box",
+            overflow: "hidden",
+          }}
+        >
+        <table
+          ref={partsTableRef}
+          className={`jobcard-parts-table${isCompact ? " compact" : ""}`}
+          style={{ width: "100%", borderCollapse: "collapse", height: "100%", minHeight: "100px", border: "1px solid #000", tableLayout: "fixed", fontSize: "11pt" }}
+          cellSpacing={0}
+          cellPadding={0}
+        >
           <thead>
             <tr>
-              <td style={{ border: "1px solid #000", padding: "4mm 0.5rem", fontWeight: 700, width: "5%" }}>No.</td>
-              <td style={{ border: "1px solid #000", padding: "4mm 0.5rem", fontWeight: 700, width: "35%" }}>Details</td>
-              <td style={{ border: "1px solid #000", padding: "4mm 0.5rem", fontWeight: 700, width: "45%" }}>PARTS</td>
-              <td style={{ border: "1px solid #000", padding: "4mm 0.5rem", fontWeight: 700, width: "15%" }}>PRICE</td>
+              <td style={{ border: "1px solid #000", padding: densityStyle.theadCellPad, fontWeight: 700, width: "5%" }}>No.</td>
+              <td
+                style={{
+                  border: "1px solid #000",
+                  padding: densityStyle.theadCellPad,
+                  fontWeight: 700,
+                  width: "35%",
+                  fontSize: `${densityStyle.headerDetailsFontPt}pt`,
+                }}
+              >
+                Details
+              </td>
+              <td style={{ border: "1px solid #000", padding: densityStyle.theadCellPad, fontWeight: 700, width: "45%" }}>PARTS</td>
+              <td style={{ border: "1px solid #000", padding: densityStyle.theadCellPad, fontWeight: 700, width: "15%" }}>PRICE</td>
             </tr>
           </thead>
           <tbody>
@@ -611,13 +1003,15 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
             {Array.from({ length: maxRows }).map((_, i) => {
               const detail = detailsList[i];
               const part = parts[i];
+              const belowBlock = isBelowLayoutBlock(i);
               const cellStyle = {
                 borderLeft: "1px solid #000",
                 borderRight: "1px solid #000",
                 borderTop: "none",
                 borderBottom: "none",
-                padding: `${rowPad} 0.5rem`,
-                lineHeight: rowLineHeight,
+                padding: belowBlock ? "0 0.5rem" : `${bodyPadY} 0.5rem`,
+                lineHeight: belowBlock ? 1 : bodyLineHeight,
+                ...(vfRowH != null ? { verticalAlign: "middle" } : {}),
               };
               const no = detail ? i + 1 : "";
               const detailText = detail || "";
@@ -674,30 +1068,69 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
                 partText = baseText;
                 priceText = `₹${amount.toFixed(2)}`;
               }
+              const detailCellStyle = {
+                ...cellStyle,
+                fontSize: `${filledDetailsFontPt}pt`,
+                fontWeight: DETAILS_BODY_FONT_WEIGHT,
+              };
               return (
-                <tr key={i}>
-                  <td style={{ ...cellStyle, borderLeft: "none" }}>{no}</td>
-                  <td style={cellStyle}>{detailText}</td>
+                <tr key={i} style={lineRowTrStyle(i)}>
+                  <td
+                    style={{
+                      ...cellStyle,
+                      borderLeft: "none",
+                      ...(no !== "" ? { fontWeight: DETAILS_BODY_FONT_WEIGHT } : {}),
+                    }}
+                  >
+                    {no}
+                  </td>
+                  <td style={detailCellStyle}>{detailText}</td>
                   <td style={cellStyle}>{partText}</td>
                   <td style={{ ...cellStyle, borderRight: "none" }}>{priceText}</td>
                 </tr>
               );
             })}
             {Array.from({ length: Math.max(0, 20 - maxRows) }).map((_, i) => {
-              const cellStyle = { borderLeft: "1px solid #000", borderRight: "1px solid #000", borderTop: "none", borderBottom: "none", padding: `${rowPad} 0.5rem`, lineHeight: rowLineHeight };
+              const lineIdx = maxRows + i;
+              const belowBlock = isBelowLayoutBlock(lineIdx);
+              const cellStyle = {
+                borderLeft: "1px solid #000",
+                borderRight: "1px solid #000",
+                borderTop: "none",
+                borderBottom: "none",
+                padding: belowBlock ? "0 0.5rem" : `${bodyPadY} 0.5rem`,
+                lineHeight: belowBlock ? 1 : bodyLineHeight,
+                ...(vfRowH != null ? { verticalAlign: "middle" } : {}),
+              };
+              const emptyDetailStyle = {
+                ...cellStyle,
+                fontSize: `${filledDetailsFontPt}pt`,
+                fontWeight: DETAILS_BODY_FONT_WEIGHT,
+              };
               return (
-                <tr key={`empty-${i}`}>
+                <tr key={`empty-${i}`} style={lineRowTrStyle(lineIdx)}>
                   <td style={{ ...cellStyle, borderLeft: "none" }}></td>
-                  <td style={cellStyle}></td>
+                  <td style={emptyDetailStyle}></td>
                   <td style={cellStyle}></td>
                   <td style={{ ...cellStyle, borderRight: "none" }}></td>
                 </tr>
               );
             })}
-            {/* Spacer row: shrinks when many entries so section fits */}
+            {/* Spacer row: fills remaining space when few rows; min height shrinks at higher density */}
             <tr>
               <td style={{ borderLeft: "none", borderRight: "1px solid #000", borderTop: "none", borderBottom: "none", padding: 0, verticalAlign: "top" }}>
-                <div style={{ height: totalContentRows > 9 ? "15mm" : "50vh", minHeight: totalContentRows > 9 ? "8mm" : "90mm", display: "block" }} />
+                <div
+                  style={{
+                    height: "1px",
+                    display: "block",
+                    minHeight:
+                      vfRowH != null
+                        ? "4px"
+                        : densityStyle.useTallSpacer
+                          ? "min(90mm, 38vh)"
+                          : `${densityStyle.spacerMinMm}mm`,
+                  }}
+                />
               </td>
               <td style={{ borderLeft: "1px solid #000", borderRight: "1px solid #000", borderTop: "none", borderBottom: "none", padding: 0, verticalAlign: "top" }} />
               <td style={{ borderLeft: "1px solid #000", borderRight: "1px solid #000", borderTop: "none", borderBottom: "none", padding: 0, verticalAlign: "top" }} />

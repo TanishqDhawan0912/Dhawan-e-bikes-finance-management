@@ -4,6 +4,7 @@ import { formatDate, getTodayForInput } from "../utils/dateUtils";
 
 import { fetchWithRetry } from "../config/api";
 import { getFetchErrorMessage } from "../utils/apiError";
+import { isPurchasePriceMissing } from "../utils/purchasePriceStatus";
 /** Parse yyyy-mm-dd to local Date (noon) for stable calendar math */
 function ymdToLocalDate(ymd) {
   const parts = String(ymd || "").split("-");
@@ -1302,6 +1303,45 @@ export default function Admin() {
     return 0;
   };
 
+  /** Same newest lot as `getModelPurchaseUnitCostFromDoc` (positive qty and purchase). */
+  const getModelNewestQualifyingStockEntry = (m) => {
+    if (!m || !Array.isArray(m.stockEntries) || m.stockEntries.length === 0) {
+      return null;
+    }
+    const sorted = [...m.stockEntries].sort(
+      (a, b) => parseModelStockEntryTime(b) - parseModelStockEntryTime(a)
+    );
+    for (const e of sorted) {
+      const q = stockEntryUnitQuantity(e);
+      const price = Number(e.purchasePrice) || 0;
+      if (q > 0 && price > 0) return e;
+    }
+    return null;
+  };
+
+  /** Prefer `batteriesPerSet` on the newest qualifying stock entry, else model root. */
+  const getModelBatteriesPerSetFromDoc = (m) => {
+    if (!m) return 0;
+    const e = getModelNewestQualifyingStockEntry(m);
+    if (e != null && e.batteriesPerSet != null) {
+      const n = Number(e.batteriesPerSet);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return Number(m.batteriesPerSet) || 0;
+  };
+
+  /**
+   * Lithium bill vehicle line: newest lot purchase price per unit − ₹2000 × batteriesPerSet on that lot
+   * (same entry as `getModelPurchaseUnitCostFromDoc` / `getModelBatteriesPerSetFromDoc`).
+   */
+  const getLithiumModelCostBasisFromDoc = (m) => {
+    if (!m) return { base: 0, batteriesPerSet: 0 };
+    return {
+      base: getModelPurchaseUnitCostFromDoc(m),
+      batteriesPerSet: getModelBatteriesPerSetFromDoc(m),
+    };
+  };
+
   const getModelUnitCost = (modelId) => {
     if (!modelId) return 0;
     const m = Array.isArray(models)
@@ -1347,23 +1387,37 @@ export default function Admin() {
 
   const billEstimatedCost = (bill) => {
     if (!bill) return 0;
-    let cost = 0;
-    cost += getModelPurchaseUnitCostFromDoc(findInventoryModelForBill(bill));
+    const modelDoc = findInventoryModelForBill(bill);
+    const type = String(bill.batteryTypeForBill || "").toLowerCase();
+    const hasLithiumPack =
+      bill.withBattery &&
+      bill.batteryId &&
+      bill.batteryId !== "custom" &&
+      type === "lithium";
 
-    if (bill.withBattery && bill.batteryId && bill.batteryId !== "custom") {
-      const type = String(bill.batteryTypeForBill || "").toLowerCase();
-      const v = String(bill.batteryVoltageForBill || "");
-      const units =
-        type === "lead"
-          ? v.includes("72")
-            ? 6
-            : v.includes("60")
-            ? 5
-            : v.includes("48")
-            ? 4
-            : 0
-          : 1;
-      cost += (Number(units) || 0) * getBatteryUnitCost(bill.batteryId);
+    let cost;
+    if (hasLithiumPack) {
+      const { base, batteriesPerSet } = getLithiumModelCostBasisFromDoc(modelDoc);
+      const unitCost = Number(getBatteryUnitCost(bill.batteryId)) || 0;
+      const credit = batteriesPerSet > 0 ? batteriesPerSet * 2000 : 0;
+      cost = (Number(base) || 0) - credit + unitCost;
+    } else {
+      cost = getModelPurchaseUnitCostFromDoc(modelDoc);
+      if (bill.withBattery && bill.batteryId && bill.batteryId !== "custom") {
+        const v = String(bill.batteryVoltageForBill || "").toLowerCase();
+        const unitCost = Number(getBatteryUnitCost(bill.batteryId)) || 0;
+        const units =
+          type === "lead"
+            ? v.includes("72")
+              ? 6
+              : v.includes("60")
+              ? 5
+              : v.includes("48")
+              ? 4
+              : 0
+            : 1;
+        cost += (Number(units) || 0) * unitCost;
+      }
     }
 
     if (bill.withCharger && bill.chargerId && bill.chargerId !== "custom") {
@@ -2034,31 +2088,32 @@ export default function Admin() {
     let totalCostTally = 0;
 
     // Bill profit: customer paid (net) − new-vehicle cost + old-scooty trade-in value (when present).
-    // New-vehicle cost = adjusted model purchase + accessories; adjustment ₹2000 × battery unit diff (lead).
+    // New-vehicle cost = adjusted model purchase + accessories. Lead: ₹2000 × (sold cells − catalog set).
+    // Lithium: newest lot purchase price − ₹2000 × that lot’s batteriesPerSet + lithium pack cost.
     const modelDoc = findInventoryModelForBill(bill);
     const baseModelCost = getModelPurchaseUnitCostFromDoc(modelDoc);
-    const purchasedBatteryUnits = modelDoc
-      ? Number(modelDoc.batteriesPerSet) || 0
-      : 0;
+    const purchasedBatteryUnits = getModelBatteriesPerSetFromDoc(modelDoc);
     const batteryType = String(bill?.batteryTypeForBill || "").toLowerCase();
     const batteryV = String(bill?.batteryVoltageForBill || "").trim();
-    const soldBatteryUnits =
+    const batteryVLower = batteryV.toLowerCase();
+    /** Lead cells sold with bill (48V→4, 60V→5, 72V→6). */
+    const soldLeadBatteryCells =
       bill?.withBattery && batteryType === "lead"
-        ? batteryV.includes("72")
+        ? batteryVLower.includes("72")
           ? 6
-          : batteryV.includes("60")
+          : batteryVLower.includes("60")
           ? 5
-          : batteryV.includes("48")
+          : batteryVLower.includes("48")
           ? 4
           : 0
-        : null;
+        : 0;
 
     const parts = [];
     if (!bill?.withBattery) {
       parts.push("No battery on bill");
     } else {
-      if (soldBatteryUnits != null && soldBatteryUnits > 0) {
-        parts.push(`${soldBatteryUnits} with sale`);
+      if (batteryType === "lead" && soldLeadBatteryCells > 0) {
+        parts.push(`${soldLeadBatteryCells} with sale`);
       }
       if (purchasedBatteryUnits > 0) {
         parts.push(`${purchasedBatteryUnits} in model catalog set`);
@@ -2070,16 +2125,55 @@ export default function Admin() {
     }
     const batteryQtyLine = parts.join(" · ");
 
-    const modelBatteryAdjustment =
-      soldBatteryUnits != null &&
-      purchasedBatteryUnits > 0 &&
-      soldBatteryUnits > 0
-        ? (soldBatteryUnits - purchasedBatteryUnits) * 2000
-        : 0;
-    const modelCost = (Number(baseModelCost) || 0) + modelBatteryAdjustment;
+    const lithiumCostBasis =
+      bill?.withBattery && batteryType === "lithium"
+        ? getLithiumModelCostBasisFromDoc(modelDoc)
+        : null;
+
+    let modelCost;
+    if (lithiumCostBasis) {
+      const lithPurchase =
+        bill.batteryId && bill.batteryId !== "custom"
+          ? Number(getBatteryUnitCost(bill.batteryId)) || 0
+          : 0;
+      const lithiumLeadCredit =
+        lithiumCostBasis.batteriesPerSet > 0
+          ? lithiumCostBasis.batteriesPerSet * 2000
+          : 0;
+      modelCost =
+        (Number(baseModelCost) || 0) - lithiumLeadCredit + lithPurchase;
+    } else {
+      const modelBatteryAdjustment =
+        soldLeadBatteryCells > 0 &&
+        purchasedBatteryUnits > 0
+          ? (soldLeadBatteryCells - purchasedBatteryUnits) * 2000
+          : 0;
+      modelCost = (Number(baseModelCost) || 0) + modelBatteryAdjustment;
+    }
     totalCostTally += modelCost;
 
     const accessoryLines = [];
+    const missingPurchaseCostItems = [];
+    const looksOidBill = (v) => /^[0-9a-fA-F]{24}$/.test(String(v || "").trim());
+
+    const hasModelLine =
+      String(bill?.modelPurchased || "").trim().length > 0 ||
+      String(bill?.modelId || "").trim().length > 0;
+    if (hasModelLine && (Number(baseModelCost) || 0) <= 0) {
+      const mid =
+        modelDoc && modelDoc._id != null
+          ? String(modelDoc._id)
+          : String(bill?.modelId || "").trim();
+      missingPurchaseCostItems.push({
+        name:
+          String(bill?.modelPurchased || modelDoc?.modelName || "Model").trim() ||
+          "Model",
+        kindDisplay: "Model",
+        quantity: 1,
+        ...(looksOidBill(mid) ? { modelId: mid } : {}),
+      });
+    }
+
     if (Array.isArray(bill?.accessoryDetails) && bill.accessoryDetails.length > 0) {
       bill.accessoryDetails.forEach((a) => {
         const stored = Number(a?.unitPurchaseCost) || 0;
@@ -2089,8 +2183,67 @@ export default function Admin() {
           cost: lineCost,
         });
         totalCostTally += lineCost;
+        if ((Number(lineCost) || 0) <= 0) {
+          const sid = String(a?.id || "").trim();
+          missingPurchaseCostItems.push({
+            name: String(a?.name || "Accessory").trim() || "Accessory",
+            kindDisplay: "Accessory",
+            quantity: 1,
+            ...(looksOidBill(sid) ? { spareId: sid } : {}),
+          });
+        }
       });
     }
+
+    if (
+      bill?.withBattery &&
+      bill.batteryId &&
+      bill.batteryId !== "custom"
+    ) {
+      const type = String(bill?.batteryTypeForBill || "").toLowerCase();
+      const v = String(bill?.batteryVoltageForBill || "");
+      const batteryUnits =
+        type === "lead"
+          ? v.includes("72")
+            ? 6
+            : v.includes("60")
+            ? 5
+            : v.includes("48")
+            ? 4
+            : 0
+          : 1;
+      if (batteryUnits > 0 && (Number(getBatteryUnitCost(bill.batteryId)) || 0) <= 0) {
+        missingPurchaseCostItems.push({
+          name: String(bill.batteryName || "Battery").trim() || "Battery",
+          kindDisplay: "Battery",
+          quantity: batteryUnits,
+          ...(looksOidBill(bill.batteryId)
+            ? { batteryId: String(bill.batteryId) }
+            : {}),
+        });
+      }
+    }
+    if (
+      bill?.withCharger &&
+      bill.chargerId &&
+      bill.chargerId !== "custom" &&
+      (Number(getChargerUnitCost(bill.chargerId)) || 0) <= 0
+    ) {
+      missingPurchaseCostItems.push({
+        name: String(bill.chargerName || "Charger").trim() || "Charger",
+        kindDisplay: "Charger",
+        quantity: 1,
+        ...(looksOidBill(bill.chargerId)
+          ? { chargerId: String(bill.chargerId) }
+          : {}),
+      });
+    }
+
+    const missingPurchaseCostLabels = missingPurchaseCostItems.map((l) =>
+      l.quantity > 1
+        ? `${l.name} (${l.kindDisplay}, ×${l.quantity})`
+        : `${l.name} (${l.kindDisplay})`
+    );
 
     const totalCost = totalCostTally;
 
@@ -2156,6 +2309,8 @@ export default function Admin() {
       totalCost,
       tradeInCreditAmount,
       profit,
+      missingPurchaseCostLabels,
+      missingPurchaseCostItems,
     };
   };
 
@@ -2255,6 +2410,23 @@ export default function Admin() {
 
       return sum + valueFromEntries;
     }, 0);
+  }, [batteries]);
+
+  // Any battery stock entry with quantity on hand but no valid purchase price?
+  const batteriesHasMissingPurchasePrice = useMemo(() => {
+    if (!Array.isArray(batteries) || batteries.length === 0) return false;
+    return batteries.some((battery) => {
+      if (!battery) return false;
+      const entries = Array.isArray(battery.stockEntries)
+        ? battery.stockEntries
+        : [];
+      if (entries.length === 0) return false;
+      return entries.some((entry) => {
+        const qty = Math.max(0, Number(entry?.quantity) || 0);
+        if (qty <= 0) return false;
+        return isPurchasePriceMissing(entry?.purchasePrice);
+      });
+    });
   }, [batteries]);
 
   const sidebarItems = [
@@ -2622,8 +2794,16 @@ export default function Admin() {
                     ? "…"
                     : totalBatteriesValue.toLocaleString("en-IN")}
                 </p>
-                <small title="Calculated from battery stock entries using per-battery cost derived from each entry’s purchase price and batteries-per-set.">
-                  Inventory value (stock entries)
+                <small
+                  title={
+                    batteriesHasMissingPurchasePrice && !batteriesLoading
+                      ? undefined
+                      : "Calculated from battery stock entries using per-battery cost derived from each entry’s purchase price and batteries-per-set."
+                  }
+                >
+                  {batteriesHasMissingPurchasePrice && !batteriesLoading
+                    ? "⚠️ Some stock entries are missing purchase price. Enter prices for best accuracy."
+                    : "Inventory value (stock entries)"}
                 </small>
               </div>
             </div>
@@ -4452,6 +4632,7 @@ export default function Admin() {
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: "0.35rem",
+                                  minWidth: 0,
                                 }}
                               >
                                 <span
@@ -4464,12 +4645,45 @@ export default function Admin() {
                                       : "rotate(0deg)",
                                     transition: "transform 0.15s ease",
                                     display: "inline-block",
+                                    flexShrink: 0,
                                   }}
                                   aria-hidden
                                 >
                                   ▸
                                 </span>
-                                Bill {b.billNo}
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                    minWidth: 0,
+                                  }}
+                                >
+                                  <span style={{ flexShrink: 0 }}>Bill {b.billNo}</span>
+                                  {Array.isArray(b.missingPurchaseCostLabels) &&
+                                    b.missingPurchaseCostLabels.length > 0 && (
+                                      <span
+                                        title="Some line items have missing purchase cost in stock"
+                                        style={{
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          width: "18px",
+                                          height: "18px",
+                                          borderRadius: "999px",
+                                          backgroundColor: "#fee2e2",
+                                          border: "1px solid #fecaca",
+                                          color: "#b91c1c",
+                                          fontWeight: 900,
+                                          fontSize: "0.8rem",
+                                          lineHeight: 1,
+                                          flexShrink: 0,
+                                        }}
+                                      >
+                                        !
+                                      </span>
+                                    )}
+                                </span>
                               </span>
                               <span
                                 style={{
@@ -4619,6 +4833,87 @@ export default function Admin() {
                                     </div>
                                   </div>
                                 ) : null}
+                                {Array.isArray(b.missingPurchaseCostItems) &&
+                                  b.missingPurchaseCostItems.length > 0 && (
+                                    <div
+                                      style={{
+                                        marginTop: "0.55rem",
+                                        padding: "0.5rem 0.65rem",
+                                        background: "#fffbeb",
+                                        border: "1px solid #fcd34d",
+                                        borderRadius: "0.4rem",
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          fontSize: "0.68rem",
+                                          fontWeight: 600,
+                                          color: "#b45309",
+                                          marginBottom: "0.4rem",
+                                        }}
+                                      >
+                                        No purchase price in stock — cost taken as ₹0
+                                      </div>
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          flexWrap: "wrap",
+                                          gap: "0.35rem",
+                                        }}
+                                      >
+                                        {b.missingPurchaseCostItems.map((item, mi) => {
+                                          const label =
+                                            item.quantity > 1
+                                              ? `${item.name} (${item.kindDisplay}, ×${item.quantity})`
+                                              : `${item.name} (${item.kindDisplay})`;
+                                          return (
+                                            <button
+                                              type="button"
+                                              key={`${b.id}-bill-miss-${mi}`}
+                                              onClick={() => {
+                                                const looksObjectId = (v) =>
+                                                  /^[0-9a-fA-F]{24}$/.test(
+                                                    String(v || "").trim()
+                                                  );
+                                                if (looksObjectId(item.spareId)) {
+                                                  navigate(`/spares/add-more/${item.spareId}`);
+                                                  return;
+                                                }
+                                                if (looksObjectId(item.modelId)) {
+                                                  navigate(`/models/add-more/${item.modelId}`);
+                                                  return;
+                                                }
+                                                if (looksObjectId(item.batteryId)) {
+                                                  navigate(`/batteries/add-more/${item.batteryId}`);
+                                                  return;
+                                                }
+                                                if (looksObjectId(item.chargerId)) {
+                                                  navigate(`/chargers/add-more/${item.chargerId}`);
+                                                  return;
+                                                }
+                                                alert(
+                                                  "No inventory link for this line. Add purchase price under Models (model stock) or Spares (accessory stock), then refresh."
+                                                );
+                                              }}
+                                              style={{
+                                                fontSize: "0.82rem",
+                                                fontWeight: 800,
+                                                color: "#7c2d12",
+                                                background: "#ffedd5",
+                                                border: "1px solid #fb923c",
+                                                borderRadius: "0.35rem",
+                                                padding: "0.3rem 0.65rem",
+                                                lineHeight: 1.25,
+                                                cursor: "pointer",
+                                              }}
+                                            >
+                                              {label}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
                                 <div
                                   style={{
                                     marginTop: "0.65rem",

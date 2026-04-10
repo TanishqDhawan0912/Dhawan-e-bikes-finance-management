@@ -8,6 +8,10 @@ import { useNavigate } from "react-router-dom";
 import { fetchWithRetry } from "../../config/api";
 import { getTextColorForBackground } from "../../utils/themeUtils";
 import { getFetchErrorMessage } from "../../utils/apiError";
+import {
+  collectPendingPurchaseDateKeys,
+  formatPendingPurchaseDatesJoined,
+} from "../../utils/purchasePriceStatus";
 
 /** Same piece count as Add More Stock "Total Stock": layers first, then legacy quantity. */
 function getSpareTotalStockPieces(spare) {
@@ -284,42 +288,11 @@ function AllSpares() {
     return latest.raw;
   };
 
-  // Helper: detect missing purchase price in any stock entry/color entry
-  // Matches Models-style UI: show a dot + pending dates list.
   const getSparePriceStatus = (spare) => {
-    const pendingDatesSet = new Set();
-
-    const isMissing = (v) => {
-      if (v === undefined || v === null) return true;
-      if (typeof v === "string") return v.trim() === "" || Number(v) <= 0;
-      const n = Number(v);
-      return Number.isNaN(n) || n <= 0;
-    };
-
-    if (spare) {
-      if (Array.isArray(spare.stockEntries)) {
-        spare.stockEntries.forEach((entry) => {
-          const rawDate = entry?.purchaseDate || "";
-          const dateLabel = rawDate.toString().trim();
-          if (isMissing(entry?.purchasePrice) && dateLabel) {
-            pendingDatesSet.add(dateLabel);
-          }
-        });
-      }
-
-      if (Array.isArray(spare.colorQuantity)) {
-        spare.colorQuantity.forEach((cq) => {
-          const rawDate = cq?.purchaseDate || "";
-          const dateLabel = rawDate.toString().trim();
-          if (isMissing(cq?.purchasePrice) && dateLabel) {
-            pendingDatesSet.add(dateLabel);
-          }
-        });
-      }
-    }
-
-    const pendingDates = Array.from(pendingDatesSet);
-
+    const pendingDates = collectPendingPurchaseDateKeys(
+      spare?.stockEntries,
+      spare?.colorQuantity
+    );
     return {
       hasPending: pendingDates.length > 0,
       pendingDates,
@@ -687,7 +660,9 @@ function AllSpares() {
                             {priceStatus.hasPending ? (
                               <span style={{ color: "#92400e" }}>
                                 Price listing pending for{" "}
-                                {priceStatus.pendingDates.join(", ")}
+                                {formatPendingPurchaseDatesJoined(
+                                  priceStatus.pendingDates
+                                )}
                               </span>
                             ) : (
                               <span style={{ color: "#166534" }}>

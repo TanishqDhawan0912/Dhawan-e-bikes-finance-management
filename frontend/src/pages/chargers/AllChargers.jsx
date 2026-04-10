@@ -4,6 +4,10 @@ import { formatDate } from "../../utils/dateUtils";
 
 import { fetchWithRetry } from "../../config/api";
 import { getFetchErrorMessage } from "../../utils/apiError";
+import {
+  collectPendingPurchaseDateKeys,
+  formatPendingPurchaseDatesJoined,
+} from "../../utils/purchasePriceStatus";
 export default function AllChargers() {
   const navigate = useNavigate();
   const [chargers, setchargers] = useState([]);
@@ -92,65 +96,11 @@ export default function AllChargers() {
     return nameMatch && supplierMatch;
   });
 
-  // Helper: detect missing purchase price in any charger stock entry
-  // Collects purchaseDate for which purchasePrice is missing/empty/<= 0.
   const getChargerPriceStatus = (Charger) => {
-    const pendingDatesSet = new Set();
-
-    const normalizeDateLabel = (raw) => {
-      if (!raw) return "";
-      const s = String(raw).trim();
-      // If ISO like 2026-02-27T00:00:00.000Z, keep only YYYY-MM-DD
-      if (s.includes("T")) return s.split("T")[0];
-      return s;
-    };
-
-    const formatPendingDate = (raw) => {
-      const s = normalizeDateLabel(raw);
-      if (!s) return "";
-
-      // Expect YYYY-MM-DD -> DD/MM/YY
-      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (m) {
-        const yy = m[1].slice(2);
-        return `${m[3]}/${m[2]}/${yy}`;
-      }
-
-      // If already in dd/mm/yyyy, convert to dd/mm/yy
-      const parts = s.split("/");
-      if (parts.length === 3) {
-        const [dd, mm, yyyyOrYy] = parts;
-        if (typeof yyyyOrYy === "string" && yyyyOrYy.length === 4) {
-          return `${dd}/${mm}/${yyyyOrYy.slice(2)}`;
-        }
-      }
-
-      return s;
-    };
-
-    const isMissing = (v) => {
-      if (v === undefined || v === null) return true;
-      if (typeof v === "string") return v.trim() === "" || Number(v) <= 0;
-      const n = Number(v);
-      return Number.isNaN(n) || n <= 0;
-    };
-
-    if (Charger && Array.isArray(Charger.stockEntries)) {
-      Charger.stockEntries.forEach((entry) => {
-        const dateLabel = normalizeDateLabel(entry?.purchaseDate || "");
-        if (!dateLabel) return;
-        if (isMissing(entry?.purchasePrice)) {
-          pendingDatesSet.add(dateLabel);
-        }
-      });
-    }
-
-    const pendingDates = Array.from(pendingDatesSet);
-
+    const pendingDates = collectPendingPurchaseDateKeys(Charger?.stockEntries);
     return {
       hasPending: pendingDates.length > 0,
       pendingDates,
-      formatPendingDate,
     };
   };
 
@@ -526,10 +476,9 @@ export default function AllChargers() {
                             {priceStatus.hasPending ? (
                               <span style={{ color: "#92400e" }}>
                                 Price listing pending for{" "}
-                                {priceStatus.pendingDates
-                                  .map((d) => priceStatus.formatPendingDate(d))
-                                  .filter(Boolean)
-                                  .join(", ")}
+                                {formatPendingPurchaseDatesJoined(
+                                  priceStatus.pendingDates
+                                )}
                               </span>
                             ) : (
                               <span style={{ color: "#166534" }}>

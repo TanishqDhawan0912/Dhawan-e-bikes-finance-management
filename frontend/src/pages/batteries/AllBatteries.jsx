@@ -4,6 +4,10 @@ import { formatDate } from "../../utils/dateUtils";
 
 import { fetchWithRetry } from "../../config/api";
 import { getFetchErrorMessage } from "../../utils/apiError";
+import {
+  collectPendingPurchaseDateKeys,
+  formatPendingPurchaseDatesJoined,
+} from "../../utils/purchasePriceStatus";
 /** Left = sum of remaining pieces in layers; aligns with FIFO stockEntries.quantity. */
 function batteryStockAggregates(battery) {
   const entries = Array.isArray(battery.stockEntries) ? battery.stockEntries : [];
@@ -112,38 +116,8 @@ export default function AllBatteries() {
     return nameMatch && supplierMatch && batteryTypeMatch;
   });
 
-  // Helper: detect missing purchase price in any stock entry (by purchaseDate)
-  // We show a warning only when at least one entry has missing/<=0 purchasePrice.
   const getBatteryPriceStatus = (battery) => {
-    const pendingDatesSet = new Set();
-
-    const normalizeDateLabel = (raw) => {
-      if (!raw) return "";
-      const s = String(raw).trim();
-      // If ISO like 2026-02-27T00:00:00.000Z, keep only YYYY-MM-DD
-      if (s.includes("T")) return s.split("T")[0];
-      return s;
-    };
-
-    const isMissing = (v) => {
-      if (v === undefined || v === null) return true;
-      if (typeof v === "string") return v.trim() === "" || Number(v) <= 0;
-      const n = Number(v);
-      return Number.isNaN(n) || n <= 0;
-    };
-
-    if (battery && Array.isArray(battery.stockEntries)) {
-      battery.stockEntries.forEach((entry) => {
-        const dateLabel = normalizeDateLabel(entry?.purchaseDate || "");
-        if (!dateLabel) return;
-        if (isMissing(entry?.purchasePrice)) {
-          pendingDatesSet.add(dateLabel);
-        }
-      });
-    }
-
-    const pendingDates = Array.from(pendingDatesSet);
-
+    const pendingDates = collectPendingPurchaseDateKeys(battery?.stockEntries);
     return {
       hasPending: pendingDates.length > 0,
       pendingDates,
@@ -578,7 +552,9 @@ export default function AllBatteries() {
                             {priceStatus.hasPending ? (
                               <span style={{ color: "#92400e" }}>
                                 Price listing pending for{" "}
-                                {priceStatus.pendingDates.join(", ")}
+                                {formatPendingPurchaseDatesJoined(
+                                  priceStatus.pendingDates
+                                )}
                               </span>
                             ) : (
                               <span style={{ color: "#166534" }}>

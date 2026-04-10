@@ -206,13 +206,12 @@ export default function AddMoreBattery() {
     const { name, value } = e.target;
     // Lithium: one field = packs; quantity in API is "sets" per layer.
     if (battery?.batteryType === "lithium" && name === "totalSets") {
+      const n =
+        value === "" ? NaN : Math.max(0, Math.floor(parseFloat(value) || 0));
       setNewEntry((prev) => ({
         ...prev,
         totalSets: value,
-        totalQuantity:
-          value === "" || Math.floor(parseFloat(value) || 0) <= 0
-            ? ""
-            : String(Math.max(0, Math.floor(parseFloat(value) || 0))),
+        totalQuantity: value === "" || Number.isNaN(n) ? "" : String(n),
       }));
       return;
     }
@@ -420,13 +419,28 @@ export default function AddMoreBattery() {
       ? Math.max(0, Math.floor(parseFloat(newEntry.totalSets) || 0))
       : Math.max(0, Math.floor(parseFloat(newEntry.totalQuantity) || 0));
     const priceNum = parseFloat(newEntry.purchasePrice) || 0;
+    const isEditing = editingIndex !== null;
 
-    if (leftNum <= 0 || priceNum < 0 || !newEntry.purchaseDate) {
+    if (priceNum < 0 || !newEntry.purchaseDate) {
       alert(
         isLithiumBattery
-          ? "Please enter valid total sets, price and date."
+          ? "Please enter a valid price and purchase date."
           : "Please enter valid quantity, price and date."
       );
+      return;
+    }
+
+    if (isLithiumBattery) {
+      if (!isEditing && leftNum <= 0) {
+        alert("Please enter valid total sets, price and date.");
+        return;
+      }
+      if (isEditing && leftNum < 0) {
+        alert("Sets left cannot be negative.");
+        return;
+      }
+    } else if (leftNum <= 0) {
+      alert("Please enter valid quantity, price and date.");
       return;
     }
 
@@ -455,11 +469,27 @@ export default function AddMoreBattery() {
           }
         }
       } else {
-        const prevOrig = batteryLayerPurchasedQty(
-          existingEntries[editingIndex]
-        );
-        if (prevOrig != null) {
-          purchasedNum = Math.max(prevOrig, leftNum);
+        const rawPurch = String(newEntry.purchasedPieces ?? "").trim();
+        if (rawPurch !== "") {
+          purchasedNum = Math.max(0, Math.floor(parseInt(rawPurch, 10) || 0));
+          if (purchasedNum < leftNum) {
+            alert(
+              "Purchased sets cannot be less than sets left in this entry."
+            );
+            return;
+          }
+        } else {
+          const prevOrig = batteryLayerPurchasedQty(
+            existingEntries[editingIndex]
+          );
+          if (prevOrig != null) {
+            purchasedNum = Math.max(prevOrig, leftNum);
+          } else if (leftNum === 0) {
+            alert(
+              'Enter how many sets were originally in this batch under "Purchased (sets)" so this entry can be saved with purchase price.'
+            );
+            return;
+          }
         }
       }
     }
@@ -550,12 +580,18 @@ export default function AddMoreBattery() {
 
     const qty = entry.quantity || 0;
     if (battery.batteryType === "lithium") {
+      const pQty = batteryLayerPurchasedQty(entry);
       setNewEntry({
         batteriesPerSet: "",
-        totalSets: qty ? String(qty) : "",
+        totalSets: String(Math.max(0, qty)),
         openBatteries: "",
-        totalQuantity: qty ? String(qty) : "",
-        purchasedPieces: "",
+        totalQuantity: String(Math.max(0, qty)),
+        purchasedPieces:
+          pQty != null
+            ? String(pQty)
+            : qty > 0
+              ? String(qty)
+              : "",
         purchasePrice:
           entry.purchasePrice !== undefined && entry.purchasePrice !== null
             ? String(entry.purchasePrice)
@@ -824,36 +860,115 @@ export default function AddMoreBattery() {
           }}
         >
           {battery.batteryType === "lithium" ? (
-            <div>
-              <label
-                style={{
-                  fontSize: "0.8rem",
-                  fontWeight: 500,
-                  marginBottom: "0.25rem",
-                  display: "block",
-                }}
-              >
-                {editingIndex !== null
-                  ? "Sets in this entry"
-                  : "Total sets purchased *"}
-              </label>
-              <input
-                type="number"
-                name="totalSets"
-                value={newEntry.totalSets}
-                onChange={handleNewEntryChange}
-                placeholder="Enter number of packs"
-                min="0"
-                onWheel={(e) => e.target.blur()}
-                style={{
-                  padding: "0.5rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "0.375rem",
-                  fontSize: "0.875rem",
-                  width: "100%",
-                }}
-              />
-            </div>
+            editingIndex !== null ? (
+              <>
+                <div>
+                  <label
+                    style={{
+                      fontSize: "0.8rem",
+                      fontWeight: 500,
+                      marginBottom: "0.25rem",
+                      display: "block",
+                    }}
+                  >
+                    Purchased (sets)
+                  </label>
+                  <input
+                    type="number"
+                    name="purchasedPieces"
+                    value={newEntry.purchasedPieces}
+                    onChange={handleNewEntryChange}
+                    placeholder="Original batch size"
+                    min="0"
+                    onWheel={(e) => e.target.blur()}
+                    style={{
+                      padding: "0.5rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "0.375rem",
+                      fontSize: "0.875rem",
+                      width: "100%",
+                    }}
+                  />
+                  <div
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#6b7280",
+                      marginTop: "0.2rem",
+                    }}
+                  >
+                    Sets bought in this lot; must be ≥ sets left. Required if
+                    left is 0 and the batch size was not stored before.
+                  </div>
+                </div>
+                <div>
+                  <label
+                    style={{
+                      fontSize: "0.8rem",
+                      fontWeight: 500,
+                      marginBottom: "0.25rem",
+                      display: "block",
+                    }}
+                  >
+                    Left (sets)
+                  </label>
+                  <input
+                    type="number"
+                    name="totalSets"
+                    value={newEntry.totalSets}
+                    onChange={handleNewEntryChange}
+                    placeholder="0"
+                    min="0"
+                    onWheel={(e) => e.target.blur()}
+                    style={{
+                      padding: "0.5rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "0.375rem",
+                      fontSize: "0.875rem",
+                      width: "100%",
+                    }}
+                  />
+                  <div
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#6b7280",
+                      marginTop: "0.2rem",
+                    }}
+                  >
+                    Remaining sets (0 is OK — you can still save purchase
+                    price).
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div>
+                <label
+                  style={{
+                    fontSize: "0.8rem",
+                    fontWeight: 500,
+                    marginBottom: "0.25rem",
+                    display: "block",
+                  }}
+                >
+                  Total sets purchased *
+                </label>
+                <input
+                  type="number"
+                  name="totalSets"
+                  value={newEntry.totalSets}
+                  onChange={handleNewEntryChange}
+                  placeholder="Enter number of packs"
+                  min="0"
+                  onWheel={(e) => e.target.blur()}
+                  style={{
+                    padding: "0.5rem",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "0.375rem",
+                    fontSize: "0.875rem",
+                    width: "100%",
+                  }}
+                />
+              </div>
+            )
           ) : (
             <>
               <div>
