@@ -8,6 +8,7 @@ const MODEL_PATHS = [
   "../models/Bill",
   "../models/Charger",
   "../models/Jobcard",
+  "../models/JobcardDaySequence",
   "../models/Model",
   "../models/OldCharger",
   "../models/OldChargerScrap",

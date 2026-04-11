@@ -1296,10 +1296,9 @@ const applyJobcardInventoryDeductionOnce = async (jobcard) => {
 // @access  Public (add auth later)
 const createJobcard = async (req, res) => {
   try {
-    const jobcardData = req.body;
+    const jobcardData = { ...req.body };
+    delete jobcardData.jobcardNumber;
 
-    // Calculate total amount from parts, excluding replacement parts from billing
-    // (only service + sales parts should contribute to the bill)
     const totalAmount = Array.isArray(jobcardData.parts)
       ? jobcardData.parts.reduce((sum, part) => {
           if (part.partType === "replacement" || part.replacementType) {
@@ -1312,11 +1311,11 @@ const createJobcard = async (req, res) => {
     const jobcard = new Jobcard({
       ...jobcardData,
       totalAmount,
-      status: "pending", // Always create as pending
+      status: "pending",
     });
 
     const createdJobcard = await jobcard.save();
-    res.status(201).json(createdJobcard);
+    return res.status(201).json(createdJobcard);
   } catch (error) {
     console.error("Error creating jobcard:", error);
     res.status(500).json({ message: "Server error", error: error.message });

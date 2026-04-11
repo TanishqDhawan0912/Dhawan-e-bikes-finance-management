@@ -4,6 +4,9 @@
  */
 const mongoose = require("mongoose");
 const softDeletePlugin = require("./plugins/softDelete");
+const {
+  allocateNextJobcardSuffix,
+} = require("../utils/allocateJobcardSuffix");
 
 const jobcardPartSchema = new mongoose.Schema({
   // For normal parts this references a Spare document.
@@ -413,25 +416,18 @@ jobcardSchema.plugin(softDeletePlugin);
 jobcardSchema.index({ createdAt: 1 });
 jobcardSchema.index({ updatedAt: 1 });
 
-// Generate jobcard number before saving: jc-date-(entry number of that date)
+// Assign jobcard number via atomic per-day sequence (see allocateJobcardSuffix.js).
 jobcardSchema.pre("save", async function (next) {
   if (!this.jobcardNumber) {
-    // Get the date from the jobcard (format: YYYY-MM-DD)
     const jobcardDate = this.date || new Date().toISOString().split("T")[0];
-    
-    // Convert date from YYYY-MM-DD to DD-MM-YYYY
     const [year, month, day] = jobcardDate.split("-");
     const formattedDate = `${day}-${month}-${year}`;
-    
-    // Count how many jobcards exist for this date (entry number = 1, 2, 3, ...)
-    const count = await this.constructor.countDocuments({
-      date: jobcardDate,
-    });
-    
-    const entryNumber = count + 1;
-    
-    // Format: jc-11-02-2025-(1)
-    this.jobcardNumber = `jc-${formattedDate}-(${entryNumber})`;
+    try {
+      const entryNumber = await allocateNextJobcardSuffix(jobcardDate);
+      this.jobcardNumber = `jc-${formattedDate}-(${entryNumber})`;
+    } catch (e) {
+      return next(e);
+    }
   }
   next();
 });
