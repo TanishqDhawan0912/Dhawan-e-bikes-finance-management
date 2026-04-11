@@ -2495,7 +2495,10 @@ export default function NewJobcard() {
 
           return basePart;
         }),
-        status: "pending", // Always save as pending
+        status:
+          isEditMode && editJobcard?.status === "finalized"
+            ? "finalized"
+            : "pending",
       };
 
       const endpoint = isEditMode
@@ -2529,10 +2532,12 @@ export default function NewJobcard() {
           : "Jobcard saved successfully! It has been added to Pending Jobcards."
       );
 
-      // Redirect to Pending Jobcards; pass ID so the jobcard can be scrolled into view
+      // Pending: return to pending list; finalized edit: return to all jobcards
       const jobcardId = isEditMode ? editJobcard._id : savedJobcard?._id;
+      const isFinalizedEdit =
+        isEditMode && editJobcard?.status === "finalized";
       navigate(
-        "/jobcards/pending",
+        isFinalizedEdit ? "/jobcards/all" : "/jobcards/pending",
         jobcardId ? { state: { editedJobcardId: jobcardId } } : {}
       );
 

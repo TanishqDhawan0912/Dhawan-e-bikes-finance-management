@@ -1023,6 +1023,26 @@ export default function AllJobcards() {
                   View Details
                 </button>
                 <button
+                  type="button"
+                  onClick={() =>
+                    navigate("/jobcards/new", {
+                      state: { editJobcard: jobcard },
+                    })
+                  }
+                  style={{
+                    padding: "0.5rem 1rem",
+                    fontSize: "0.875rem",
+                    fontWeight: 500,
+                    borderRadius: "0.375rem",
+                    border: "1px solid #0ea5e9",
+                    backgroundColor: "#e0f2fe",
+                    color: "#0369a1",
+                    cursor: "pointer",
+                  }}
+                >
+                  Edit
+                </button>
+                <button
                   onClick={() => handleDeleteClick(jobcard)}
                   style={{
                     padding: "0.5rem 1rem",

@@ -1276,10 +1276,66 @@ const refreshJobcardPartsFromDb = async (jobcard) => {
   }
 };
 
-// Run stock deductions once (finalize and/or first settle must both trigger this).
-const applyJobcardInventoryDeductionOnce = async (jobcard) => {
-  if (!jobcard || jobcard.inventoryAdjusted) return;
+/**
+ * Compare parts for inventory-affecting changes (ignores price-only / cosmetic edits).
+ */
+function jobcardPartsAffectStockEqual(oldParts, newParts) {
+  const norm = (parts) =>
+    JSON.stringify(
+      (parts || []).map((p) => {
+        const x = p && typeof p.toObject === "function" ? p.toObject() : { ...p };
+        return {
+          spareId: String(x.spareId || ""),
+          q: Number(x.quantity) || 1,
+          pt: x.partType || "",
+          st: x.salesType || "",
+          rt: x.replacementType || "",
+          c: String(x.selectedColor || "").trim(),
+          custom: Boolean(x.isCustom),
+          bi: String(x.batteryInventoryId || ""),
+          ci: String(x.chargerInventoryId || ""),
+          bt: x.batteryType || "",
+          bv: x.batteryVoltage || "",
+          bc: x.batteryChemistry || "",
+          ct: x.chargerType || "",
+          cv: x.chargerVoltage || "",
+          v: x.voltage || "",
+          bon: x.batteryOldNew || "",
+          con: x.chargerOldNew || "",
+          pmc: String(x.pmcNo || "").trim(),
+          scrap: Number(x.scrapQuantity) || 0,
+          oca: x.oldChargerAvailable,
+        };
+      })
+    );
+  return norm(oldParts) === norm(newParts);
+}
+
+/** Restore all stock tied to this jobcard (same as delete path). */
+async function restoreAllInventoryFromJobcard(jobcard) {
+  if (!jobcard || !jobcard.inventoryAdjusted) return;
   await refreshJobcardPartsFromDb(jobcard);
+  await adjustSpareInventoryForJobcard(jobcard, "restore");
+  await adjustBatteryInventoryForReplacements(jobcard, "restore");
+  await adjustBatteryInventoryForNewBatterySales(jobcard, "restore");
+  await adjustChargerInventoryForReplacements(jobcard, "restore");
+  await adjustChargerInventoryForNewChargerSales(jobcard, "restore");
+  await adjustOldScootyInventoryForSales(jobcard, "restore");
+  await adjustBatteryScrapInventoryForOldBatterySales(jobcard, "restore");
+  await adjustOldChargerEntriesForReplacementChargers(jobcard, "restore");
+  jobcard.inventoryAdjusted = false;
+}
+
+/**
+ * Apply all inventory deductions for current jobcard.parts.
+ * @param {{ skipPartsRefresh?: boolean }} options — skip DB refresh when parts are new (finalized edit before save)
+ */
+async function runInventoryDeductionPasses(jobcard, options = {}) {
+  const skipPartsRefresh = options.skipPartsRefresh === true;
+  if (!jobcard || !Array.isArray(jobcard.parts)) return;
+  if (!skipPartsRefresh && jobcard._id) {
+    await refreshJobcardPartsFromDb(jobcard);
+  }
   await adjustSpareInventoryForJobcard(jobcard, "deduct");
   await adjustBatteryInventoryForReplacements(jobcard, "deduct");
   await adjustBatteryInventoryForNewBatterySales(jobcard, "deduct");
@@ -1289,6 +1345,12 @@ const applyJobcardInventoryDeductionOnce = async (jobcard) => {
   await adjustBatteryScrapInventoryForOldBatterySales(jobcard, "deduct");
   await adjustOldChargerEntriesForReplacementChargers(jobcard, "deduct");
   jobcard.inventoryAdjusted = true;
+}
+
+// Run stock deductions once (finalize and/or first settle must both trigger this).
+const applyJobcardInventoryDeductionOnce = async (jobcard) => {
+  if (!jobcard || jobcard.inventoryAdjusted) return;
+  await runInventoryDeductionPasses(jobcard, { skipPartsRefresh: false });
 };
 
 // @desc    Create a new jobcard
@@ -1400,15 +1462,45 @@ const updateJobcard = async (req, res) => {
     // Calculate total amount from parts if parts are provided
     // Exclude replacement parts from billing total (only service + sales count)
     if (Array.isArray(jobcardData.parts)) {
-      jobcardData.totalAmount = jobcardData.parts.reduce((sum, part) => {
+      const partsTotal = jobcardData.parts.reduce((sum, part) => {
         if (part.partType === "replacement" || part.replacementType) {
           return sum;
         }
         return sum + (part.price || 0) * (part.quantity || 1);
       }, 0);
+      const labour =
+        jobcardData.labour !== undefined
+          ? Number(jobcardData.labour) || 0
+          : Number(existing.labour) || 0;
+      const discount =
+        jobcardData.discount !== undefined
+          ? Number(jobcardData.discount) || 0
+          : Number(existing.discount) || 0;
+      jobcardData.totalAmount = Math.max(0, partsTotal + labour - discount);
 
-      // If stock was already deducted on finalize/settle, lowering old-charger sale qty restores stock.
-      if (existing.inventoryAdjusted) {
+      // Inventory: after stock was deducted for this jobcard, any add/remove/qty change on parts
+      // → restore everything that was tied to the saved lines, then deduct for the new lines
+      // (removal refills stock; addition subtracts).
+      if (
+        existing.inventoryAdjusted &&
+        !jobcardPartsAffectStockEqual(existing.parts, jobcardData.parts)
+      ) {
+        await restoreAllInventoryFromJobcard(existing);
+        const working = existing.toObject
+          ? existing.toObject()
+          : { ...existing };
+        working.parts = jobcardData.parts;
+        working.inventoryAdjusted = false;
+        await runInventoryDeductionPasses(working, { skipPartsRefresh: true });
+        jobcardData.parts = working.parts;
+        jobcardData.inventoryAdjusted = true;
+        if (Array.isArray(working.consumedOldChargers)) {
+          jobcardData.consumedOldChargers = working.consumedOldChargers;
+        }
+      } else if (
+        existing.inventoryAdjusted &&
+        existing.status !== "finalized"
+      ) {
         await restoreOldChargerInventoryAfterJobcardEdit(
           existing,
           jobcardData.parts
