@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import SparePartsSearch from "../../components/SparePartsSearch";
+import VoiceWorkDetailsAssistant from "../../components/VoiceWorkDetailsAssistant";
 
 // Helper function to check if a value is a valid MongoDB ObjectId
 import { fetchWithRetry } from "../../config/api";
@@ -34,6 +35,8 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
   });
 
   const [detailInput, setDetailInput] = useState("");
+  const [editingDetailIndex, setEditingDetailIndex] = useState(null);
+  const [editingDetailText, setEditingDetailText] = useState("");
   const [selectedParts, setSelectedParts] = useState([]);
   const [activeTab, setActiveTab] = useState(jobcard?.jobcardType || "service"); // service | replacement | sales
   const [showPartsList, setShowPartsList] = useState(false);
@@ -543,6 +546,41 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
     }
   };
 
+  const addWorkDetailsFromVoice = (lines) => {
+    if (!lines?.length) return;
+    setFormData((prev) => ({
+      ...prev,
+      details: [...prev.details, ...lines],
+    }));
+  };
+
+  const beginEditDetail = (index) => {
+    setEditingDetailIndex(index);
+    setEditingDetailText(formData.details[index] ?? "");
+  };
+
+  const cancelEditDetail = () => {
+    setEditingDetailIndex(null);
+    setEditingDetailText("");
+  };
+
+  const saveEditDetail = () => {
+    if (editingDetailIndex === null) return;
+    const t = editingDetailText.trim();
+    if (t === "") {
+      cancelEditDetail();
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      details: prev.details.map((d, i) =>
+        i === editingDetailIndex ? t : d
+      ),
+    }));
+    setEditingDetailIndex(null);
+    setEditingDetailText("");
+  };
+
   const removeDetail = (index) => {
     const detailToRemove = formData.details[index];
     if (window.confirm(`Are you sure you want to remove "${detailToRemove}"?`)) {
@@ -550,6 +588,15 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
         ...prev,
         details: prev.details.filter((_, i) => i !== index),
       }));
+      setEditingDetailIndex((ei) => {
+        if (ei === null) return null;
+        if (ei === index) {
+          setEditingDetailText("");
+          return null;
+        }
+        if (index < ei) return ei - 1;
+        return ei;
+      });
     }
   };
 
@@ -957,14 +1004,32 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
         {/* Work Details Section */}
         <div style={{ marginBottom: "1.5rem" }}>
           <h3 style={{ marginBottom: "1rem" }}>Work Details</h3>
-          <input
-            type="text"
-            value={detailInput}
-            onChange={(e) => setDetailInput(e.target.value)}
-            onKeyPress={handleDetailKeyPress}
-            placeholder="Enter work detail and press Enter to add..."
-            style={{ width: "100%", padding: "0.5rem", borderRadius: "0.375rem", border: "1px solid #d1d5db", marginBottom: "0.75rem" }}
-          />
+          <div
+            className="work-details-input-row"
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              alignItems: "flex-start",
+              width: "100%",
+              marginBottom: "0.75rem",
+            }}
+          >
+            <input
+              type="text"
+              value={detailInput}
+              onChange={(e) => setDetailInput(e.target.value)}
+              onKeyPress={handleDetailKeyPress}
+              placeholder="Enter work detail and press Enter to add…"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                padding: "0.5rem",
+                borderRadius: "0.375rem",
+                border: "1px solid #d1d5db",
+              }}
+            />
+            <VoiceWorkDetailsAssistant onAddDetails={addWorkDetailsFromVoice} />
+          </div>
           {formData.details.length > 0 && (
             <div style={{ padding: "0.75rem", backgroundColor: "#f9fafb", borderRadius: "0.375rem", border: "1px solid #e5e7eb" }}>
               <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
@@ -975,30 +1040,114 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
                       padding: "0.5rem 0",
                       display: "flex",
                       justifyContent: "space-between",
-                      alignItems: "center",
+                      alignItems: "flex-start",
                       gap: "0.5rem",
                       borderBottom: index < formData.details.length - 1 ? "1px solid #e5e7eb" : "none",
                     }}
                   >
-                    <span style={{ flex: 1, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <span style={{ color: "#6b7280", fontWeight: 500, minWidth: "1.5rem" }}>{index + 1})</span>
-                      <span>{detail}</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeDetail(index)}
-                      style={{
-                        padding: "0.25rem 0.5rem",
-                        fontSize: "0.75rem",
-                        backgroundColor: "#ef4444",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "0.25rem",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Remove
-                    </button>
+                    <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+                      <span style={{ color: "#6b7280", fontWeight: 500, minWidth: "1.5rem", flexShrink: 0 }}>{index + 1})</span>
+                      {editingDetailIndex === index ? (
+                        <input
+                          type="text"
+                          value={editingDetailText}
+                          onChange={(e) => setEditingDetailText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              saveEditDetail();
+                            }
+                            if (e.key === "Escape") {
+                              e.preventDefault();
+                              cancelEditDetail();
+                            }
+                          }}
+                          autoFocus
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            padding: "0.35rem 0.5rem",
+                            borderRadius: "0.25rem",
+                            border: "1px solid #3b82f6",
+                            fontSize: "0.875rem",
+                          }}
+                        />
+                      ) : (
+                        <span style={{ wordBreak: "break-word" }}>{detail}</span>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", flexShrink: 0 }}>
+                      {editingDetailIndex === index ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={saveEditDetail}
+                            style={{
+                              padding: "0.25rem 0.5rem",
+                              fontSize: "0.75rem",
+                              backgroundColor: "#2563eb",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "0.25rem",
+                              cursor: "pointer",
+                              fontWeight: 500,
+                            }}
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEditDetail}
+                            style={{
+                              padding: "0.25rem 0.5rem",
+                              fontSize: "0.75rem",
+                              backgroundColor: "#f3f4f6",
+                              color: "#374151",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "0.25rem",
+                              cursor: "pointer",
+                              fontWeight: 500,
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => beginEditDetail(index)}
+                            style={{
+                              padding: "0.25rem 0.5rem",
+                              fontSize: "0.75rem",
+                              backgroundColor: "#ffffff",
+                              color: "#2563eb",
+                              border: "1px solid #93c5fd",
+                              borderRadius: "0.25rem",
+                              cursor: "pointer",
+                              fontWeight: 500,
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeDetail(index)}
+                            style={{
+                              padding: "0.25rem 0.5rem",
+                              fontSize: "0.75rem",
+                              backgroundColor: "#ef4444",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "0.25rem",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
