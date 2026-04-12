@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "../config/api";
-import { parseVoiceSpareText } from "../utils/voiceSpareParse";
+import {
+  parseVoiceSpareText,
+  filterIntegerDigits,
+} from "../utils/voiceSpareParse";
 import {
   getModelOptions,
   isUniversalSpare,
@@ -35,7 +38,8 @@ export default function VoiceSpareAssistant({
   const [matches, setMatches] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
-  const [quantity, setQuantity] = useState(1);
+  /** String so the field can be cleared while editing; coerce on Confirm. */
+  const [quantity, setQuantity] = useState("1");
   const [searching, setSearching] = useState(false);
   const [noMatch, setNoMatch] = useState(false);
   /** Parsed spare phrase sent to API (e.g. throttle) — shown in modal header */
@@ -125,6 +129,7 @@ export default function VoiceSpareAssistant({
         setSelectedModel("");
         setSearchQueryText("");
         setListFilter("");
+        setQuantity("1");
         setModalOpen(true);
         return;
       }
@@ -145,7 +150,7 @@ export default function VoiceSpareAssistant({
         const items = Array.isArray(data.items) ? data.items : [];
         setMatches(items);
         setSelectedId(items[0]?._id ? String(items[0]._id) : "");
-        setQuantity(Math.max(1, defaultQty || 1));
+        setQuantity(String(Math.max(1, defaultQty || 1)));
         setNoMatch(items.length === 0);
         setModalOpen(true);
       } catch (e) {
@@ -154,6 +159,7 @@ export default function VoiceSpareAssistant({
         setMatches([]);
         setNoMatch(true);
         setSearchQueryText(q);
+        setQuantity(String(Math.max(1, defaultQty || 1)));
         setModalOpen(true);
       } finally {
         setSearching(false);
@@ -235,7 +241,10 @@ export default function VoiceSpareAssistant({
       showToast("Item not found, please select manually");
       return;
     }
-    const qty = Math.max(1, Math.floor(Number(quantity) || 1));
+    const qty = Math.max(
+      1,
+      Math.floor(Number.parseInt(String(quantity).trim(), 10) || 1)
+    );
 
     if (isUniversalSpare(spare)) {
       onConfirmPart?.(spare, qty, { isUniversal: true });
@@ -366,6 +375,7 @@ export default function VoiceSpareAssistant({
 
       {modalOpen && (
         <div
+          className="voice-spare-modal-overlay"
           style={{
             position: "fixed",
             inset: 0,
@@ -379,30 +389,35 @@ export default function VoiceSpareAssistant({
           onClick={(e) => e.target === e.currentTarget && handleCancel()}
         >
           <div
+            className="voice-spare-modal-panel"
             style={{
               background: "#fff",
               borderRadius: "0.5rem",
               padding: "1.25rem",
               maxWidth: "min(560px, 96vw)",
               width: "100%",
-              maxHeight: "min(90vh, 720px)",
+              maxHeight: "min(92dvh, 720px)",
               display: "flex",
               flexDirection: "column",
               boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+              overflow: "hidden",
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <h3
+              className="voice-spare-modal-title"
               style={{
                 margin: "0 0 0.65rem 0",
                 fontSize: "1.05rem",
                 fontWeight: 600,
                 color: "#0f172a",
+                flexShrink: 0,
               }}
             >
               Confirm spare
             </h3>
 
+            <div className="voice-spare-modal-body">
             {searchQueryText && matches.length > 0 && (
               <div
                 style={{
@@ -485,14 +500,13 @@ export default function VoiceSpareAssistant({
                   }}
                 />
                 <div
+                  className="voice-spare-modal-list"
                   role="listbox"
                   aria-label="Matching spares"
                   style={{
                     border: "1px solid #e2e8f0",
                     borderRadius: "0.5rem",
                     overflow: "hidden",
-                    maxHeight: "min(320px, 42vh)",
-                    overflowY: "auto",
                     marginBottom: "0.85rem",
                     background: "#fafafa",
                   }}
@@ -629,8 +643,11 @@ export default function VoiceSpareAssistant({
                 </select>
               </>
             )}
+            </div>
 
+            <div className="voice-spare-modal-footer">
             <label
+              htmlFor="voice-spare-qty"
               style={{
                 display: "block",
                 fontSize: "0.8rem",
@@ -642,27 +659,33 @@ export default function VoiceSpareAssistant({
               Quantity
             </label>
             <input
+              id="voice-spare-qty"
               type="number"
               min={1}
+              inputMode="numeric"
               value={quantity}
-              onChange={(e) =>
-                setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))
-              }
+              onChange={(e) => setQuantity(filterIntegerDigits(e.target.value))}
+              onBlur={() => {
+                if (String(quantity).trim() === "") setQuantity("1");
+              }}
               style={{
                 width: "100%",
                 padding: "0.5rem 0.65rem",
-                marginBottom: "1rem",
+                marginBottom: "0.75rem",
                 borderRadius: "0.375rem",
                 border: "1px solid #d1d5db",
-                fontSize: "0.9rem",
+                fontSize: "1rem",
+                boxSizing: "border-box",
               }}
             />
             <div
+              className="voice-spare-modal-footer-actions"
               style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}
             >
               <button
                 type="button"
                 onClick={handleCancel}
+                className="voice-spare-modal-btn voice-spare-modal-btn-secondary"
                 style={{
                   padding: "0.5rem 1rem",
                   fontSize: "0.875rem",
@@ -678,6 +701,7 @@ export default function VoiceSpareAssistant({
                 type="button"
                 disabled={!confirmAllowed}
                 onClick={handleConfirm}
+                className="voice-spare-modal-btn voice-spare-modal-btn-primary"
                 style={{
                   padding: "0.5rem 1rem",
                   fontSize: "0.875rem",
@@ -691,6 +715,7 @@ export default function VoiceSpareAssistant({
               >
                 Confirm
               </button>
+            </div>
             </div>
           </div>
         </div>

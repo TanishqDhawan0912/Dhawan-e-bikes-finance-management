@@ -4,6 +4,7 @@ import SparePartsSearch from "../../components/SparePartsSearch";
 import DatePicker from "../../components/DatePicker";
 import { fetchWithRetry } from "../../config/api";
 import { getTodayForInput } from "../../utils/dateUtils";
+import { filterIntegerDigits } from "../../utils/voiceSpareParse";
 
 // Helper function to check if a value is a valid MongoDB ObjectId
 const isValidObjectId = (id) => {
@@ -8541,7 +8542,7 @@ export default function NewJobcard() {
                           onChange={(e) =>
                             setCustomSpareData((prev) => ({
                               ...prev,
-                              quantity: e.target.value, // allow empty while typing/backspacing
+                              quantity: filterIntegerDigits(e.target.value),
                             }))
                           }
                           placeholder="1"

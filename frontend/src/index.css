@@ -4507,3 +4507,75 @@ body {
 .overlay.show {
   display: block;
 }
+
+/* Voice spare assistant — Confirm spare modal (desktop + mobile sheet) */
+.voice-spare-modal-overlay {
+  box-sizing: border-box;
+}
+
+.voice-spare-modal-panel {
+  box-sizing: border-box;
+}
+
+.voice-spare-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-right: 2px; /* avoid scrollbar clipping focus rings */
+}
+
+@media (min-width: 641px) {
+  .voice-spare-modal-list {
+    max-height: min(320px, 42vh);
+    overflow-y: auto;
+  }
+}
+
+.voice-spare-modal-footer {
+  flex-shrink: 0;
+  padding-top: 0.65rem;
+  margin-top: 0.35rem;
+  border-top: 1px solid #e5e7eb;
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+}
+
+@media (max-width: 640px) {
+  .voice-spare-modal-overlay {
+    align-items: flex-end !important;
+    justify-content: stretch !important;
+    padding: 0 !important;
+    padding-top: max(0.5rem, env(safe-area-inset-top, 0px)) !important;
+  }
+
+  .voice-spare-modal-panel {
+    max-width: 100% !important;
+    width: 100% !important;
+    border-radius: 0.75rem 0.75rem 0 0 !important;
+    padding: 1rem 1rem 0 !important;
+    max-height: min(92vh, 720px) !important;
+    max-height: min(92dvh, 720px) !important;
+    margin: 0 !important;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18) !important;
+  }
+
+  .voice-spare-modal-footer {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .voice-spare-modal-title {
+    font-size: 1.1rem !important;
+  }
+
+  .voice-spare-modal-footer-actions {
+    flex-direction: column-reverse !important;
+    gap: 0.65rem !important;
+  }
+
+  .voice-spare-modal-footer-actions .voice-spare-modal-btn {
+    width: 100% !important;
+    min-height: 44px;
+    font-size: 1rem !important;
+  }
+}

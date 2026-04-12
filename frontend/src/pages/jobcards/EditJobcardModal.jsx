@@ -4,6 +4,7 @@ import SparePartsSearch from "../../components/SparePartsSearch";
 
 // Helper function to check if a value is a valid MongoDB ObjectId
 import { fetchWithRetry } from "../../config/api";
+import { filterIntegerDigits } from "../../utils/voiceSpareParse";
 const isValidObjectId = (id) => {
   if (!id) return false;
   // If it's already an ObjectId object, it's valid
@@ -1198,7 +1199,7 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
                       onChange={(e) =>
                         setCustomSpareData((prev) => ({
                           ...prev,
-                          quantity: e.target.value,
+                          quantity: filterIntegerDigits(e.target.value),
                         }))
                       }
                       placeholder="1"
