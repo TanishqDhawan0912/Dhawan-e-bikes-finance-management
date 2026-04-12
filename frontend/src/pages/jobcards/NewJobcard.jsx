@@ -103,9 +103,16 @@ export default function NewJobcard() {
   const location = useLocation();
   const editJobcard = location.state?.editJobcard || null;
   const isEditMode = Boolean(editJobcard && editJobcard._id);
+  const scrollToAddPartsFromPending =
+    Boolean(location.state?.scrollToAddParts) && isEditMode;
 
   // Active tab for adding parts (can be service, replacement, or sales)
   const [activeTab, setActiveTab] = useState(null); // null, "service", "replacement", or "sales"
+
+  /** Scroll target: "Add Items to Jobcard" (from Pending → Edit) */
+  const addItemsToJobcardSectionRef = useRef(null);
+  const didScrollToAddItemsRef = useRef(false);
+  const customSparePriceInputRef = useRef(null);
 
   // Local calendar date (not UTC — toISOString() can be the previous day in IST, etc.)
   const today = getTodayForInput();
@@ -528,6 +535,24 @@ export default function NewJobcard() {
     setSelectedSalesType(null);
   }, [isEditMode, editJobcard, today]);
 
+  useEffect(() => {
+    didScrollToAddItemsRef.current = false;
+  }, [editJobcard?._id]);
+
+  // Pending jobcard → Edit: scroll to "Add Items to Jobcard" after layout (ref + tab prefill)
+  useEffect(() => {
+    if (!scrollToAddPartsFromPending) return;
+    if (didScrollToAddItemsRef.current) return;
+    const t = window.setTimeout(() => {
+      const el = addItemsToJobcardSectionRef.current;
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        didScrollToAddItemsRef.current = true;
+      }
+    }, 180);
+    return () => window.clearTimeout(t);
+  }, [scrollToAddPartsFromPending, editJobcard?._id]);
+
   // Fetch spare stock for controller/motor suggestions (once)
   useEffect(() => {
     const fetchSparesForControllerMotor = async () => {
@@ -660,7 +685,11 @@ export default function NewJobcard() {
     return colorMap[colorName?.toLowerCase()] || "#CCCCCC";
   };
 
-  const handlePartSelect = (part) => {
+  const handlePartSelect = (part, opts = {}) => {
+    const requestedQty = Math.max(
+      1,
+      Math.floor(Number(opts.quantity) || 1)
+    );
     const hasColors =
       part.hasColors || (part.colorQuantity && part.colorQuantity.length > 0);
 
@@ -730,6 +759,9 @@ export default function NewJobcard() {
         colorQuantity: aggregatedColorQuantity, // Store aggregated colorQuantity array
         partType: activeTab, // Tag the part with its type
       };
+
+      const maxQ = getMaxQuantity(partData);
+      partData.selectedQuantity = Math.min(requestedQty, maxQ);
 
       // If it's sales tab and spare type is selected, add salesType
       if (activeTab === "sales" && selectedSalesType === "spare") {
@@ -878,6 +910,23 @@ export default function NewJobcard() {
     if (selectedReplacementType) setSelectedReplacementType(null);
     if (selectedSalesType && selectedSalesType !== "spare")
       setSelectedSalesType(null);
+  };
+
+  const handleVoiceCustomSpare = (name, defaultQty) => {
+    const n = String(name || "").trim();
+    if (!n) return;
+    setShowSearch(false);
+    setShowCustomSpare(true);
+    setCustomSpareData((prev) => ({
+      ...prev,
+      name: n,
+      price: "",
+      quantity: String(Math.max(1, Math.floor(Number(defaultQty) || 1))),
+      color: "",
+    }));
+    window.setTimeout(() => {
+      customSparePriceInputRef.current?.focus?.();
+    }, 150);
   };
 
   // Fetch batteries
@@ -2977,7 +3026,11 @@ export default function NewJobcard() {
         </div>
 
         {/* Jobcard Type Selection */}
-        <div className="form-section">
+        <div
+          ref={addItemsToJobcardSectionRef}
+          id="jobcard-add-items-section"
+          className="form-section"
+        >
           <h3>Add Items to Jobcard</h3>
           <div className="form-row jobcard-category-form-row">
             <div className="form-group full-width jobcard-category-picker">
@@ -8364,7 +8417,10 @@ export default function NewJobcard() {
 
               {showSearch && (
                 <div className="search-container">
-                  <SparePartsSearch onSelectPart={handlePartSelect} />
+                  <SparePartsSearch
+                    onSelectPart={handlePartSelect}
+                    onVoiceCustomSpare={handleVoiceCustomSpare}
+                  />
                 </div>
               )}
 
@@ -8447,6 +8503,7 @@ export default function NewJobcard() {
                           <span style={{ color: "#ef4444" }}>*</span>
                         </label>
                         <input
+                          ref={customSparePriceInputRef}
                           type="number"
                           value={customSpareData.price}
                           onChange={(e) =>

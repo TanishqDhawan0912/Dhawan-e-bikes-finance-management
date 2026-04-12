@@ -48,6 +48,7 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
   const [validationError, setValidationError] = useState("");
   const errorRef = useRef(null);
   const isAddingPartRef = useRef(false);
+  const customSparePriceInputRef = useRef(null);
 
   // Load jobcard parts
   useEffect(() => {
@@ -437,6 +438,23 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
   const toggleCustomSpare = () => {
     setShowCustomSpare(!showCustomSpare);
     if (showSearch) setShowSearch(false);
+  };
+
+  const handleVoiceCustomSpare = (name, defaultQty) => {
+    const n = String(name || "").trim();
+    if (!n) return;
+    setShowSearch(false);
+    setShowCustomSpare(true);
+    setCustomSpareData((prev) => ({
+      ...prev,
+      name: n,
+      price: "",
+      quantity: String(Math.max(1, Math.floor(Number(defaultQty) || 1))),
+      color: "",
+    }));
+    window.setTimeout(() => {
+      customSparePriceInputRef.current?.focus?.();
+    }, 150);
   };
 
   const handleAddCustomSpare = () => {
@@ -1078,7 +1096,10 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
 
           {showSearch && (
             <div style={{ marginBottom: "1rem" }}>
-              <SparePartsSearch onSelectPart={handlePartSelect} />
+              <SparePartsSearch
+                onSelectPart={handlePartSelect}
+                onVoiceCustomSpare={handleVoiceCustomSpare}
+              />
             </div>
           )}
 
@@ -1139,6 +1160,7 @@ export default function EditJobcardModal({ jobcard, onClose, onSuccess }) {
                       Quantity (₹) <span style={{ color: "#ef4444" }}>*</span>
                     </label>
                     <input
+                      ref={customSparePriceInputRef}
                       type="number"
                       value={customSpareData.price}
                       onChange={(e) =>

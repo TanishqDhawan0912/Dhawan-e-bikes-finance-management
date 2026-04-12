@@ -1,7 +1,39 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 import { fetchWithRetry } from "../config/api";
-export default function SparePartsSearch({ onSelectPart }) {
+import VoiceSpareAssistant from "./VoiceSpareAssistant";
+import {
+  spareMatchRank,
+  spareMatchesNameOrSupplier,
+} from "../utils/spareSearchQuery";
+
+/** voiceMeta: { isUniversal?, selectedModel? } from voice confirm */
+function mapSpareDocToJobcardPart(spare, voiceMeta) {
+  let models;
+  if (voiceMeta?.isUniversal) {
+    models = Array.isArray(spare.models) ? [...spare.models] : [];
+  } else if (voiceMeta?.selectedModel) {
+    models = [voiceMeta.selectedModel];
+  } else {
+    models = Array.isArray(spare.models) ? [...spare.models] : [];
+  }
+  return {
+    id: spare._id || spare.id,
+    _id: spare._id,
+    name: spare.name,
+    price: spare.sellingPrice || 0,
+    inStock: (spare.quantity || 0) > 0,
+    quantity: spare.quantity || 0,
+    models,
+    supplierName: spare.supplierName || "",
+    hasColors:
+      spare.hasColors ||
+      (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0),
+    colorQuantity: Array.isArray(spare.colorQuantity) ? spare.colorQuantity : [],
+  };
+}
+
+export default function SparePartsSearch({ onSelectPart, onVoiceCustomSpare }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [modelSearchTerm, setModelSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -88,10 +120,12 @@ export default function SparePartsSearch({ onSelectPart }) {
     let results = allSpares;
     
     if (searchTerm.trim() !== "") {
-      results = results.filter(
-        (spare) =>
-          spare.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          spare.supplierName?.toLowerCase().includes(searchTerm.toLowerCase())
+      results = results.filter((spare) =>
+        spareMatchesNameOrSupplier(spare, searchTerm)
+      );
+      results = [...results].sort(
+        (a, b) =>
+          spareMatchRank(b, searchTerm) - spareMatchRank(a, searchTerm)
       );
     }
 
@@ -128,36 +162,31 @@ export default function SparePartsSearch({ onSelectPart }) {
     }
   }, [searchResults]);
 
-  const handleSelectPart = (spare) => {
-    // Transform spare data to match expected format
-    const part = {
-      id: spare._id || spare.id,
-      name: spare.name,
-      price: spare.sellingPrice || 0,
-      inStock: (spare.quantity || 0) > 0,
-      quantity: spare.quantity || 0,
-      models: spare.models || [],
-      supplierName: spare.supplierName || "",
-      // Pass color information through so jobcard can show color dropdown
-      hasColors:
-        spare.hasColors ||
-        (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0),
-      colorQuantity: Array.isArray(spare.colorQuantity)
-        ? spare.colorQuantity
-        : [],
-    };
-    
-    // Clear search fields and results to allow adding more spares
+  const clearSearchUi = () => {
     setSearchTerm("");
     setModelSearchTerm("");
     setSearchResults([]);
     setSelectedIndex(-1);
     setSelectedPart(null);
-    
+  };
+
+  const handleSelectPart = (spare, voiceOpts) => {
+    const part = mapSpareDocToJobcardPart(spare);
+    clearSearchUi();
     if (onSelectPart) {
-      onSelectPart(part);
+      onSelectPart(part, voiceOpts || {});
     }
   };
+
+  const handleVoiceConfirmPart = useCallback((spareDoc, qty, voiceMeta) => {
+    const part = mapSpareDocToJobcardPart(spareDoc, voiceMeta);
+    setSearchTerm("");
+    setModelSearchTerm("");
+    setSearchResults([]);
+    setSelectedIndex(-1);
+    setSelectedPart(null);
+    onSelectPart?.(part, { quantity: qty });
+  }, [onSelectPart]);
 
   // Scroll selected item into view
   useEffect(() => {
@@ -250,25 +279,39 @@ export default function SparePartsSearch({ onSelectPart }) {
           >
             Search by Spare Name
           </label>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => {
-              console.log("Spare name input changed:", e.target.value);
-              setSearchTerm(e.target.value);
-            }}
-            onKeyDown={(e) => handleKeyDown(e, "spare")}
-            placeholder="Enter spare name..."
-            className="search-input"
-            ref={inputRef}
+          <div
             style={{
+              display: "flex",
+              gap: "0.5rem",
+              alignItems: "flex-start",
               width: "100%",
-              padding: "0.5rem 0.75rem",
-              borderRadius: "0.375rem",
-              border: "1px solid #d1d5db",
-              fontSize: "0.875rem",
             }}
-          />
+          >
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => {
+                console.log("Spare name input changed:", e.target.value);
+                setSearchTerm(e.target.value);
+              }}
+              onKeyDown={(e) => handleKeyDown(e, "spare")}
+              placeholder="Enter spare name..."
+              className="search-input"
+              ref={inputRef}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                padding: "0.5rem 0.75rem",
+                borderRadius: "0.375rem",
+                border: "1px solid #d1d5db",
+                fontSize: "0.875rem",
+              }}
+            />
+            <VoiceSpareAssistant
+              onConfirmPart={handleVoiceConfirmPart}
+              onCustomVoicePart={onVoiceCustomSpare}
+            />
+          </div>
         </div>
         <div className="search-box" style={{ position: "relative" }}>
           <label

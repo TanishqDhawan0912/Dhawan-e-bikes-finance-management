@@ -151,6 +151,7 @@ setImmediate(() => {
 
     safeUse("/api/models", "./routes/modelRoutes");
     safeUse("/api/spares", "./routes/spareRoutes");
+    safeUse("/api/items", "./routes/itemRoutes");
     safeUse("/api/auth", "./routes/authRoutes");
     safeUse("/api/admin", "./routes/adminRoutes");
     safeUse("/api/batteries", "./routes/batteryRoutes");

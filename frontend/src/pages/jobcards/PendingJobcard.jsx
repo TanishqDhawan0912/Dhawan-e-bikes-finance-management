@@ -159,6 +159,7 @@ export default function PendingJobcard() {
     navigate("/jobcards/new", {
       state: {
         editJobcard: jobcard,
+        scrollToAddParts: true,
       },
     });
   };
