@@ -1549,6 +1549,38 @@ export default function Admin() {
     return id ? String(id) : null;
   };
 
+  /** Resolve Battery doc for profit (id first; then exact name match — fixes rows where batteryInventoryId was not saved or spareId did not populate). */
+  const findBatteryDocForJobcardPart = (part) => {
+    if (!part || !Array.isArray(batteries)) return null;
+    const id = resolveBatteryInventoryIdFromJobcardPart(part);
+    if (id) {
+      const byId = batteries.find((x) => String(x._id) === String(id));
+      if (byId) return byId;
+    }
+    const name = String(part.spareName || part.batteryName || part.name || "")
+      .trim()
+      .toLowerCase();
+    if (!name) return null;
+    const matches = batteries.filter(
+      (x) => String(x.name || "").trim().toLowerCase() === name
+    );
+    if (matches.length === 1) return matches[0];
+    const chem = String(part.batteryChemistry || "").trim().toLowerCase();
+    if (chem && matches.length > 1) {
+      const byChem = matches.filter(
+        (x) => String(x.batteryType || "").trim().toLowerCase() === chem
+      );
+      if (byChem.length === 1) return byChem[0];
+    }
+    return matches[0] || null;
+  };
+
+  const getBatteryUnitCostForJobcardPart = (part) => {
+    const b = findBatteryDocForJobcardPart(part);
+    if (!b) return 0;
+    return getBatteryUnitCost(b._id);
+  };
+
   /** Resolve Charger doc for profit cost (id first; then name + voltage for legacy rows where spareId was lost to Spare populate). */
   const findChargerDocForJobcardPart = (part) => {
     if (!part || !Array.isArray(chargers)) return null;
@@ -1651,11 +1683,11 @@ export default function Admin() {
 
     const isProfitBatteryLine = (p) => {
       if (!p || p.isCustom === true) return false;
-      const battId = resolveBatteryInventoryIdFromJobcardPart(p);
-      if (!battId) return false;
       const pt = String(p.partType || "").toLowerCase();
       const st = String(p.salesType || "").toLowerCase();
       const rt = String(p.replacementType || "").toLowerCase();
+      // Billable battery lines: do not require inventory id (some saves omit batteryInventoryId;
+      // cost is then resolved by id, stored FIFO, manual unit, or matching Battery catalog by name).
       if (
         pt === "sales" &&
         st === "battery" &&
@@ -1916,7 +1948,6 @@ export default function Admin() {
                 ? p.selectedQuantity
                 : p.quantity
             ) || 0;
-          const battId = resolveBatteryInventoryIdFromJobcardPart(p);
           const storedFifo = Number(p.fifoLinePurchaseCost) || 0;
           const manualUnit = Math.max(0, Number(p.manualUnitPurchaseCost) || 0);
           let unitCost;
@@ -1928,7 +1959,7 @@ export default function Admin() {
             unitCost = manualUnit;
             lineCost = qty * manualUnit;
           } else {
-            unitCost = getBatteryUnitCost(battId);
+            unitCost = getBatteryUnitCostForJobcardPart(p);
             lineCost = qty * unitCost;
           }
           const pt = String(p.partType || "").toLowerCase();
