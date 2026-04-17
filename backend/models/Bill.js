@@ -46,7 +46,23 @@ const billSchema = new mongoose.Schema(
     netAmount: { type: Number, default: 0, min: 0 },
     paidAmount: { type: Number, default: 0, min: 0 },
     pendingAmount: { type: Number, default: 0, min: 0 },
-    paymentMode: { type: String, enum: ["cash", "upi"], default: "cash" },
+    paymentMode: {
+      type: String,
+      enum: ["cash", "upi", "bajaj", "cash+upi"],
+      default: "cash",
+    },
+    /** When paymentMode === "bajaj": downpayment collected from customer */
+    bajajDownPayment: { type: Number, default: 0, min: 0 },
+    /** When paymentMode === "bajaj": downpayment method */
+    bajajDownPaymentMode: {
+      type: String,
+      enum: ["cash", "upi", ""],
+      default: "",
+    },
+    /** When paymentMode === "cash+upi": split paidAmount */
+    cashPaidAmount: { type: Number, default: 0, min: 0 },
+    /** When paymentMode === "cash+upi": split paidAmount */
+    upiPaidAmount: { type: Number, default: 0, min: 0 },
     paymentHistory: [paymentEntrySchema],
     // Optional bank detail (collected when paymentMode === "upi")
     bankDetail: { type: String, default: "", trim: true },

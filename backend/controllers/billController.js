@@ -349,7 +349,18 @@ const createBill = async (req, res) => {
   try {
     const body = req.body;
     const sellingPrice = Number(body.sellingPrice) || 0;
-    const paidAmount = Number(body.paidAmount) || 0;
+    const paymentMode = (body.paymentMode || "cash").toString();
+    const cashPaidAmount = Number(body.cashPaidAmount) || 0;
+    const upiPaidAmount = Number(body.upiPaidAmount) || 0;
+    const bajajDownPayment = Number(body.bajajDownPayment) || 0;
+    const bajajDownPaymentMode = (body.bajajDownPaymentMode || "").toString();
+
+    const paidAmount =
+      paymentMode === "cash+upi"
+        ? Math.max(0, cashPaidAmount + upiPaidAmount)
+        : paymentMode === "bajaj"
+          ? Math.max(0, bajajDownPayment)
+          : Number(body.paidAmount) || 0;
     const pendingAmountFromBody =
       body.pendingAmount !== undefined ? Number(body.pendingAmount) || 0 : 0;
     const oldScootyPrice = Number(body.oldScootyExchangePrice) || 0;
@@ -394,8 +405,55 @@ const createBill = async (req, res) => {
       netAmount,
       paidAmount,
       pendingAmount,
-      paymentMode: body.paymentMode || "cash",
-      paymentHistory: Array.isArray(body.paymentHistory) ? body.paymentHistory : paidAmount > 0 ? [{ amount: paidAmount, date: body.billDate || new Date().toISOString().split("T")[0], time: "", paymentMode: body.paymentMode || "cash" }] : [],
+      paymentMode,
+      cashPaidAmount: paymentMode === "cash+upi" ? cashPaidAmount : 0,
+      upiPaidAmount: paymentMode === "cash+upi" ? upiPaidAmount : 0,
+      bajajDownPayment: paymentMode === "bajaj" ? bajajDownPayment : 0,
+      bajajDownPaymentMode: paymentMode === "bajaj" ? bajajDownPaymentMode : "",
+      paymentHistory: Array.isArray(body.paymentHistory)
+        ? body.paymentHistory
+        : paidAmount > 0
+          ? (() => {
+              const date =
+                body.billDate || new Date().toISOString().split("T")[0];
+              if (paymentMode === "cash+upi") {
+                const entries = [];
+                if (cashPaidAmount > 0)
+                  entries.push({
+                    amount: cashPaidAmount,
+                    date,
+                    time: "",
+                    paymentMode: "cash",
+                  });
+                if (upiPaidAmount > 0)
+                  entries.push({
+                    amount: upiPaidAmount,
+                    date,
+                    time: "",
+                    paymentMode: "upi",
+                  });
+                return entries;
+              }
+              if (paymentMode === "bajaj") {
+                return [
+                  {
+                    amount: paidAmount,
+                    date,
+                    time: "",
+                    paymentMode: bajajDownPaymentMode === "upi" ? "upi" : "cash",
+                  },
+                ];
+              }
+              return [
+                {
+                  amount: paidAmount,
+                  date,
+                  time: "",
+                  paymentMode: paymentMode === "upi" ? "upi" : "cash",
+                },
+              ];
+            })()
+          : [],
       bankDetail: body.bankDetail || "",
       warranty: body.warranty || "None",
       withBattery: body.withBattery !== false,
@@ -444,10 +502,35 @@ const updateBill = async (req, res) => {
       body.sellingPrice !== undefined
         ? Number(body.sellingPrice) || 0
         : bill.sellingPrice;
+    const paymentMode =
+      body.paymentMode !== undefined
+        ? (body.paymentMode || "cash").toString()
+        : (bill.paymentMode || "cash").toString();
+    const cashPaidAmount =
+      body.cashPaidAmount !== undefined
+        ? Number(body.cashPaidAmount) || 0
+        : Number(bill.cashPaidAmount) || 0;
+    const upiPaidAmount =
+      body.upiPaidAmount !== undefined
+        ? Number(body.upiPaidAmount) || 0
+        : Number(bill.upiPaidAmount) || 0;
+    const bajajDownPayment =
+      body.bajajDownPayment !== undefined
+        ? Number(body.bajajDownPayment) || 0
+        : Number(bill.bajajDownPayment) || 0;
+    const bajajDownPaymentMode =
+      body.bajajDownPaymentMode !== undefined
+        ? (body.bajajDownPaymentMode || "").toString()
+        : (bill.bajajDownPaymentMode || "").toString();
+
     const paidAmount =
-      body.paidAmount !== undefined
-        ? Number(body.paidAmount) || 0
-        : bill.paidAmount;
+      paymentMode === "cash+upi"
+        ? Math.max(0, cashPaidAmount + upiPaidAmount)
+        : paymentMode === "bajaj"
+          ? Math.max(0, bajajDownPayment)
+          : body.paidAmount !== undefined
+            ? Number(body.paidAmount) || 0
+            : bill.paidAmount;
     const oldScootyPrice =
       body.oldScootyExchangePrice !== undefined
         ? Number(body.oldScootyExchangePrice) || 0
@@ -498,7 +581,11 @@ const updateBill = async (req, res) => {
       netAmount,
       paidAmount,
       pendingAmount,
-      paymentMode: body.paymentMode !== undefined ? body.paymentMode : bill.paymentMode,
+      paymentMode,
+      cashPaidAmount: paymentMode === "cash+upi" ? cashPaidAmount : 0,
+      upiPaidAmount: paymentMode === "cash+upi" ? upiPaidAmount : 0,
+      bajajDownPayment: paymentMode === "bajaj" ? bajajDownPayment : 0,
+      bajajDownPaymentMode: paymentMode === "bajaj" ? bajajDownPaymentMode : "",
       warranty: body.warranty !== undefined ? body.warranty : bill.warranty,
       bankDetail:
         body.bankDetail !== undefined

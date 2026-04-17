@@ -140,6 +140,10 @@ export default function NewBill({
   const [pendingAmount, setPendingAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("cash");
   const [bankDetail, setBankDetail] = useState("");
+  const [bajajDownPayment, setBajajDownPayment] = useState("");
+  const [bajajDownPaymentMode, setBajajDownPaymentMode] = useState("cash"); // cash | upi
+  const [cashPaidAmount, setCashPaidAmount] = useState("");
+  const [upiPaidAmount, setUpiPaidAmount] = useState("");
   const [oldScootyAvailable, setOldScootyAvailable] = useState("no"); // "yes" | "no"
   const [oldScootyPmcNo, setOldScootyPmcNo] = useState("");
   const [oldScootyWithBattery, setOldScootyWithBattery] = useState("no"); // "yes" | "no"
@@ -175,10 +179,43 @@ export default function NewBill({
     }
   };
 
-  // If payment mode is not UPI, clear bank detail so we don't accidentally submit it.
+  const effectivePaidAmount = useMemo(() => {
+    if (paymentMode === "cash+upi") {
+      return String((Number(cashPaidAmount) || 0) + (Number(upiPaidAmount) || 0));
+    }
+    if (paymentMode === "bajaj") {
+      return String(Number(bajajDownPayment) || 0);
+    }
+    return paidAmount;
+  }, [paymentMode, paidAmount, cashPaidAmount, upiPaidAmount, bajajDownPayment]);
+
+  const shouldShowBankDetail = useMemo(() => {
+    if (paymentMode === "upi") return true;
+    if (paymentMode === "bajaj") return bajajDownPaymentMode === "upi";
+    if (paymentMode === "cash+upi") return (Number(upiPaidAmount) || 0) > 0;
+    return false;
+  }, [paymentMode, bajajDownPaymentMode, upiPaidAmount]);
+
+  // If payment mode does not require UPI detail, clear bank detail so we don't accidentally submit it.
   useEffect(() => {
-    if (paymentMode !== "upi") {
+    if (!shouldShowBankDetail) {
       setBankDetail("");
+    }
+  }, [shouldShowBankDetail]);
+
+  // Clear mode-specific fields when payment mode switches.
+  useEffect(() => {
+    if (paymentMode !== "bajaj") {
+      setBajajDownPayment("");
+      setBajajDownPaymentMode("cash");
+    }
+    if (paymentMode !== "cash+upi") {
+      setCashPaidAmount("");
+      setUpiPaidAmount("");
+    }
+    // For split modes we compute paidAmount; keep the manual paidAmount only for cash/upi.
+    if (paymentMode === "cash+upi" || paymentMode === "bajaj") {
+      setPaidAmount("");
     }
   }, [paymentMode]);
 
@@ -237,6 +274,10 @@ export default function NewBill({
     setPaidAmount(String(b.paidAmount ?? 0));
     setPendingAmount(String(b.pendingAmount ?? 0));
     setPaymentMode(b.paymentMode || "cash");
+    setBajajDownPayment(String(b.bajajDownPayment ?? 0));
+    setBajajDownPaymentMode(b.bajajDownPaymentMode || "cash");
+    setCashPaidAmount(String(b.cashPaidAmount ?? 0));
+    setUpiPaidAmount(String(b.upiPaidAmount ?? 0));
 
     setBankDetail(
       b.bankDetail ||
@@ -785,7 +826,7 @@ export default function NewBill({
   ]);
 
   const oldScootyPriceNumber = Number(oldScootyExchangePrice) || 0;
-  const paidNum = Number(paidAmount) || 0;
+  const paidNum = Number(effectivePaidAmount) || 0;
   const sellNum = Number(sellingPrice) || 0;
   // Discount = list price minus (cash paid + trade-in value). Pending is balance due, not part of this sum.
   const discount = Math.max(0, sellNum - (paidNum + oldScootyPriceNumber));
@@ -965,7 +1006,7 @@ export default function NewBill({
         selectedChargerId === "custom" ? "Custom" : selectedCharger?.name || "";
 
       const sellP = Number(sellingPrice) || 0;
-      const paidP = Number(paidAmount) || 0;
+      const paidP = Number(effectivePaidAmount) || 0;
       const oldP = Number(oldScootyExchangePrice) || 0;
       const billDiscount = Math.max(0, sellP - (paidP + oldP));
       const billNet = sellP - billDiscount;
@@ -987,7 +1028,14 @@ export default function NewBill({
         pendingAmount: Number(pendingAmount) || 0,
         paymentMode: paymentMode || "cash",
         warranty: modelWarranty ? "With warranty" : "No warranty",
-        bankDetail: paymentMode === "upi" ? bankDetail.trim() : "",
+        bankDetail: shouldShowBankDetail ? bankDetail.trim() : "",
+        bajajDownPayment:
+          paymentMode === "bajaj" ? Number(bajajDownPayment) || 0 : 0,
+        bajajDownPaymentMode: paymentMode === "bajaj" ? bajajDownPaymentMode : "",
+        cashPaidAmount:
+          paymentMode === "cash+upi" ? Number(cashPaidAmount) || 0 : 0,
+        upiPaidAmount:
+          paymentMode === "cash+upi" ? Number(upiPaidAmount) || 0 : 0,
         batteryId: withBattery ? selectedBatteryId : "",
         batteryName: withBattery ? batteryNameForBill : "",
         batteryTypeForBill: withBattery ? batteryTypeForBill : "",
@@ -1959,9 +2007,11 @@ export default function NewBill({
                     type="number"
                     min={0}
                     step={1}
-                    value={paidAmount}
+                    value={effectivePaidAmount}
                     onChange={(e) => setPaidAmount(e.target.value)}
                     placeholder="0"
+                    readOnly={paymentMode === "bajaj" || paymentMode === "cash+upi"}
+                    className={paymentMode === "bajaj" || paymentMode === "cash+upi" ? "readonly" : undefined}
                   />
                 </div>
                 <div className="form-group payment-key-amount">
@@ -1983,11 +2033,72 @@ export default function NewBill({
                   >
                     <option value="cash">Cash</option>
                     <option value="upi">UPI</option>
+                    <option value="bajaj">Bajaj</option>
+                    <option value="cash+upi">Cash + UPI</option>
                   </select>
                 </div>
               </div>
 
-              {paymentMode === "upi" && (
+              {paymentMode === "bajaj" && (
+                <div className="bill-detail-card" style={{ marginTop: "1rem" }}>
+                  <h4>Bajaj downpayment</h4>
+                  <div className="payment-row" style={{ marginBottom: 0 }}>
+                    <div className="form-group" style={{ flex: "1 1 200px" }}>
+                      <label>Downpayment (₹)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={bajajDownPayment}
+                        onChange={(e) => setBajajDownPayment(e.target.value)}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="form-group" style={{ flex: "1 1 180px" }}>
+                      <label>Downpayment mode</label>
+                      <select
+                        value={bajajDownPaymentMode}
+                        onChange={(e) => setBajajDownPaymentMode(e.target.value)}
+                      >
+                        <option value="cash">Cash</option>
+                        <option value="upi">UPI</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {paymentMode === "cash+upi" && (
+                <div className="bill-detail-card" style={{ marginTop: "1rem" }}>
+                  <h4>Cash + UPI split</h4>
+                  <div className="payment-row" style={{ marginBottom: 0 }}>
+                    <div className="form-group" style={{ flex: "1 1 200px" }}>
+                      <label>Cash (₹)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={cashPaidAmount}
+                        onChange={(e) => setCashPaidAmount(e.target.value)}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="form-group" style={{ flex: "1 1 200px" }}>
+                      <label>UPI (₹)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={upiPaidAmount}
+                        onChange={(e) => setUpiPaidAmount(e.target.value)}
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {shouldShowBankDetail && (
                 <div className="bill-detail-card" style={{ marginTop: "1rem" }}>
                   <h4>Bank detail</h4>
                   <div className="payment-row" style={{ marginBottom: 0 }}>
