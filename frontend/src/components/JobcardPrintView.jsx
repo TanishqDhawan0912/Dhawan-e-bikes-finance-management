@@ -586,10 +586,10 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
 .jobcard-title{font-weight:700;font-size:22pt;letter-spacing:1px}
 .header-right{flex-shrink:0}
 .srno-box{border:1px solid #000;padding:8px 16px;font-weight:700;font-size:11pt}
-.info-table{width:100%;border-collapse:collapse;margin-bottom:0;flex-shrink:0;font-size:11pt}
-.info-table td{border:1px solid #000;padding:8px 10px}
-.info-table .label{font-weight:600;width:12%}
-.info-table .value{width:38%}
+.info-table{width:100%;border-collapse:collapse;margin-bottom:0;flex-shrink:0;font-size:13pt}
+.info-table td{border:1px solid #000;padding:10px 10px}
+.info-table .label{font-weight:900;width:12%;font-size:13.5pt;letter-spacing:0.5px}
+.info-table .value{width:38%;font-weight:800;font-size:13pt}
 .info-table .wide{padding:10px 10px}
 .parts-wrap{flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box}
 .parts-table{width:100%;border-collapse:collapse;border:1px solid #000;table-layout:fixed;height:100%;min-height:100px;font-size:11pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
