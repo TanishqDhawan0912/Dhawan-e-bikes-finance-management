@@ -8573,6 +8573,26 @@ export default function NewJobcard() {
                   <SparePartsSearch
                     onSelectPart={handlePartSelect}
                     onVoiceCustomSpare={handleVoiceCustomSpare}
+                    reservedById={Object.values(selectedParts || {}).flat().reduce(
+                      (acc, p) => {
+                        if (!p || p.isCustom) return acc;
+                        const qty = Number(p.selectedQuantity ?? p.quantity ?? 0) || 0;
+                        if (qty <= 0) return acc;
+                        const keys = [
+                          p._id,
+                          p.id,
+                          p.spareId,
+                          p.lineId, // ignored if not matching inventory ids
+                        ]
+                          .map((k) => (k != null ? String(k) : ""))
+                          .filter(Boolean);
+                        for (const k of keys) {
+                          acc[k] = (acc[k] || 0) + qty;
+                        }
+                        return acc;
+                      },
+                      {}
+                    )}
                   />
                 </div>
               )}

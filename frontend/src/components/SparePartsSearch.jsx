@@ -7,6 +7,29 @@ import {
   spareMatchesNameOrSupplier,
 } from "../utils/spareSearchQuery";
 
+/** Prefer true remaining stock from entries/colors; fallback to top-level quantity. */
+function getSpareLeftStock(spare) {
+  if (Array.isArray(spare?.stockEntries) && spare.stockEntries.length > 0) {
+    return Math.max(
+      0,
+      spare.stockEntries.reduce(
+        (sum, row) => sum + (Number(row?.quantity) || 0),
+        0
+      )
+    );
+  }
+  if (Array.isArray(spare?.colorQuantity) && spare.colorQuantity.length > 0) {
+    return Math.max(
+      0,
+      spare.colorQuantity.reduce(
+        (sum, row) => sum + (Number(row?.quantity) || 0),
+        0
+      )
+    );
+  }
+  return Math.max(0, Number(spare?.quantity) || 0);
+}
+
 /** voiceMeta: { isUniversal?, selectedModel? } from voice confirm */
 function mapSpareDocToJobcardPart(spare, voiceMeta) {
   let models;
@@ -22,8 +45,8 @@ function mapSpareDocToJobcardPart(spare, voiceMeta) {
     _id: spare._id,
     name: spare.name,
     price: spare.sellingPrice || 0,
-    inStock: (spare.quantity || 0) > 0,
-    quantity: spare.quantity || 0,
+    inStock: getSpareLeftStock(spare) > 0,
+    quantity: getSpareLeftStock(spare),
     models,
     supplierName: spare.supplierName || "",
     hasColors:
@@ -33,7 +56,11 @@ function mapSpareDocToJobcardPart(spare, voiceMeta) {
   };
 }
 
-export default function SparePartsSearch({ onSelectPart, onVoiceCustomSpare }) {
+export default function SparePartsSearch({
+  onSelectPart,
+  onVoiceCustomSpare,
+  reservedById = {},
+}) {
   const [searchTerm, setSearchTerm] = useState("");
   const [modelSearchTerm, setModelSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -404,7 +431,8 @@ export default function SparePartsSearch({ onSelectPart, onVoiceCustomSpare }) {
           }}
         >
           {searchResults.map((spare, index) => {
-            const inStock = (spare.quantity || 0) > 0;
+            const leftStock = getSpareLeftStock(spare);
+            const inStock = leftStock > 0;
             const isSelected = selectedIndex === index;
             return (
               <li
@@ -496,7 +524,8 @@ export default function SparePartsSearch({ onSelectPart, onVoiceCustomSpare }) {
                       marginRight: "0.5rem",
                     }}
                   >
-                    Qty: {spare.quantity || 0}
+                    Left:{" "}
+                    {leftStock}
                   </span>
                   {spare.models && spare.models.length > 0 && (
                     <span
