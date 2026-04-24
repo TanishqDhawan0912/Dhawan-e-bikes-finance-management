@@ -358,9 +358,7 @@ const createBill = async (req, res) => {
     const paidAmount =
       paymentMode === "cash+upi"
         ? Math.max(0, cashPaidAmount + upiPaidAmount)
-        : paymentMode === "bajaj"
-          ? Math.max(0, bajajDownPayment)
-          : Number(body.paidAmount) || 0;
+        : Number(body.paidAmount) || 0;
     const pendingAmountFromBody =
       body.pendingAmount !== undefined ? Number(body.pendingAmount) || 0 : 0;
     const oldScootyPrice = Number(body.oldScootyExchangePrice) || 0;
@@ -526,11 +524,9 @@ const updateBill = async (req, res) => {
     const paidAmount =
       paymentMode === "cash+upi"
         ? Math.max(0, cashPaidAmount + upiPaidAmount)
-        : paymentMode === "bajaj"
-          ? Math.max(0, bajajDownPayment)
-          : body.paidAmount !== undefined
-            ? Number(body.paidAmount) || 0
-            : bill.paidAmount;
+        : body.paidAmount !== undefined
+          ? Number(body.paidAmount) || 0
+          : bill.paidAmount;
     const oldScootyPrice =
       body.oldScootyExchangePrice !== undefined
         ? Number(body.oldScootyExchangePrice) || 0

@@ -183,11 +183,8 @@ export default function NewBill({
     if (paymentMode === "cash+upi") {
       return String((Number(cashPaidAmount) || 0) + (Number(upiPaidAmount) || 0));
     }
-    if (paymentMode === "bajaj") {
-      return String(Number(bajajDownPayment) || 0);
-    }
     return paidAmount;
-  }, [paymentMode, paidAmount, cashPaidAmount, upiPaidAmount, bajajDownPayment]);
+  }, [paymentMode, paidAmount, cashPaidAmount, upiPaidAmount]);
 
   const shouldShowBankDetail = useMemo(() => {
     if (paymentMode === "upi") return true;
@@ -198,10 +195,6 @@ export default function NewBill({
 
   const handlePaidAmountChange = (value) => {
     const v = String(value ?? "");
-    if (paymentMode === "bajaj") {
-      setBajajDownPayment(v);
-      return;
-    }
     if (paymentMode === "cash+upi") {
       const total = Number(v) || 0;
       const upi = Number(upiPaidAmount) || 0;
@@ -230,7 +223,7 @@ export default function NewBill({
       setUpiPaidAmount("");
     }
     // For split modes we compute paidAmount; keep the manual paidAmount only for cash/upi.
-    if (paymentMode === "cash+upi" || paymentMode === "bajaj") {
+    if (paymentMode === "cash+upi") {
       setPaidAmount("");
     }
   }, [paymentMode]);
