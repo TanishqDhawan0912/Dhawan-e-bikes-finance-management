@@ -626,6 +626,8 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
 (function(){
   var sheet=document.getElementById('print-sheet');
   var paper=document.querySelector('.preview-paper');
+  var partsWrap=document.querySelector('.parts-wrap');
+  var partsTable=document.querySelector('.parts-table');
   var w=1122,h=794;
   function scale(){
     if(!paper||!sheet)return;
@@ -633,8 +635,50 @@ body{background:linear-gradient(180deg,#e5e7eb 0%,#d1d5db 100%);display:flex;fle
     var s=Math.min(1,pw/w,ph/h);
     sheet.style.transform='scale('+s+')';
   }
+
+  function fillPartsRows(){
+    try{
+      if(!partsWrap||!partsTable)return;
+      var tbody=partsTable.querySelector('tbody');
+      var thead=partsTable.querySelector('thead');
+      if(!tbody||!thead)return;
+      var trs=tbody.querySelectorAll('tr');
+      if(!trs||trs.length<21)return;
+      var wrapH=partsWrap.clientHeight||0;
+      var theadH=thead.offsetHeight||0;
+      if(wrapH<48||theadH<=0)return;
+      var JOB_CARD_BODY_LINE_ROWS=20;
+      var SPACER_ROW_RESERVE_PX=8;
+      var MIN_FILLER_LINE_ROW_PX=3;
+      var layoutDenom=${layoutDenomPrint};
+      var availForRows=Math.max(0, wrapH - theadH - SPACER_ROW_RESERVE_PX);
+      var fillerLineCount=JOB_CARD_BODY_LINE_ROWS - layoutDenom;
+      var availForLayoutSlots=Math.max(0, availForRows - fillerLineCount*MIN_FILLER_LINE_ROW_PX);
+      var slotH=Math.max(20, Math.floor(availForLayoutSlots / layoutDenom));
+
+      for(var i=0;i<JOB_CARD_BODY_LINE_ROWS;i++){
+        var tr=trs[i];
+        if(!tr) continue;
+        var h=(i<layoutDenom)?slotH:MIN_FILLER_LINE_ROW_PX;
+        tr.style.height=h+'px';
+        tr.style.minHeight=h+'px';
+        tr.style.boxSizing='border-box';
+        var tds=tr.querySelectorAll('td');
+        for(var j=0;j<tds.length;j++){
+          var td=tds[j];
+          td.style.verticalAlign='middle';
+          td.style.padding=(i<layoutDenom)?'2px 0.5rem':'0 0.5rem';
+          td.style.lineHeight=(i<layoutDenom)?'1.18':'1';
+        }
+      }
+    }catch(e){
+      // ignore
+    }
+  }
   scale();
+  fillPartsRows();
   window.addEventListener('resize',scale);
+  window.addEventListener('resize',fillPartsRows);
 })();
 </script></html>`;
   };

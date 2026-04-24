@@ -196,6 +196,22 @@ export default function NewBill({
     return false;
   }, [paymentMode, bajajDownPaymentMode, upiPaidAmount]);
 
+  const handlePaidAmountChange = (value) => {
+    const v = String(value ?? "");
+    if (paymentMode === "bajaj") {
+      setBajajDownPayment(v);
+      return;
+    }
+    if (paymentMode === "cash+upi") {
+      const total = Number(v) || 0;
+      const upi = Number(upiPaidAmount) || 0;
+      const cash = Math.max(0, total - upi);
+      setCashPaidAmount(String(cash));
+      return;
+    }
+    setPaidAmount(v);
+  };
+
   // If payment mode does not require UPI detail, clear bank detail so we don't accidentally submit it.
   useEffect(() => {
     if (!shouldShowBankDetail) {
@@ -251,15 +267,38 @@ export default function NewBill({
     setBatteryTypeForBill(b.batteryTypeForBill || "");
     setChargerTypeForBill(b.chargerTypeForBill || "");
 
-    const leadVoltageMatch =
-      (b.batteryVoltageForBill || "").toString().match(/\b(48|60|72)\b/i);
-    if (leadVoltageMatch && leadVoltageMatch[1]) {
-      setBatteryVoltage(leadVoltageMatch[1]);
+    const prefillBatteryTypeRaw = (b.batteryTypeForBill || "")
+      .toString()
+      .toLowerCase();
+    const batteryVoltText = (b.batteryVoltageForBill || "").toString();
+    const leadParseSrc = `${batteryVoltText} ${(b.batteryName || "").toString()}`.trim();
+    const parsedLeadVoltage = (() => {
+      const m = leadParseSrc.match(/(\d{2,3})\s*v/i);
+      if (!m || !m[1]) return "";
+      const n = Number.parseInt(m[1], 10);
+      if (n === 48 || n === 60 || n === 72) return String(n);
+      return "";
+    })();
+
+    // Some older bills may have voltage stored but batteryTypeForBill missing.
+    // If we can parse a lead nominal voltage, prefer that over defaults.
+    const looksLikeLeadVoltage = Boolean(parsedLeadVoltage);
+    const prefillBatteryType =
+      prefillBatteryTypeRaw || (looksLikeLeadVoltage ? "lead" : "");
+
+    if (!prefillBatteryTypeRaw && looksLikeLeadVoltage) {
+      setBatteryTypeForBill("lead");
+    }
+
+    // Only prefill the lead dropdown when we conclude it's a lead bill.
+    if (prefillBatteryType === "lead" && looksLikeLeadVoltage) {
+      setBatteryVoltage(parsedLeadVoltage);
     } else {
       setBatteryVoltage("");
     }
-    // Lithium voltage can be a free-text field like "72V"
-    setCustomLithiumVoltage(b.batteryVoltageForBill || "");
+
+    // Lithium voltage is free-text (e.g. "72V") — only set it for Lithium.
+    setCustomLithiumVoltage(prefillBatteryType === "lithium" ? batteryVoltText : "");
     setBatteryNumbers(
       b.batteryNumbersForBill ||
         b.batteryNumbers ||
@@ -493,6 +532,13 @@ export default function NewBill({
     if (batteryVoltage) return;
     if (!selectedBatteryId || !Array.isArray(batteries) || batteries.length === 0)
       return;
+    // If the bill already has a lead voltage snapshot (in voltage or name), do not override.
+    const snap = `${initialBill?.batteryVoltageForBill || ""} ${initialBill?.batteryName || ""}`;
+    const snapLead = snap.match(/(\d{2,3})\s*v/i);
+    if (snapLead) {
+      const n = Number.parseInt(snapLead[1], 10);
+      if (n === 48 || n === 60 || n === 72) return;
+    }
     const matchedBattery =
       batteries.find((b) => b._id === selectedBatteryId) || null;
     if (!matchedBattery || !matchedBattery.batteriesPerSet) return;
@@ -500,7 +546,14 @@ export default function NewBill({
     if (setSize === 4) setBatteryVoltage("48");
     else if (setSize === 5) setBatteryVoltage("60");
     else if (setSize === 6) setBatteryVoltage("72");
-  }, [mode, batteryTypeForBill, batteryVoltage, selectedBatteryId, batteries]);
+  }, [
+    mode,
+    initialBill,
+    batteryTypeForBill,
+    batteryVoltage,
+    selectedBatteryId,
+    batteries,
+  ]);
 
   // When "Battery available" is unchecked, clear battery type, voltage and selection
   useEffect(() => {
@@ -2008,10 +2061,8 @@ export default function NewBill({
                     min={0}
                     step={1}
                     value={effectivePaidAmount}
-                    onChange={(e) => setPaidAmount(e.target.value)}
+                    onChange={(e) => handlePaidAmountChange(e.target.value)}
                     placeholder="0"
-                    readOnly={paymentMode === "bajaj" || paymentMode === "cash+upi"}
-                    className={paymentMode === "bajaj" || paymentMode === "cash+upi" ? "readonly" : undefined}
                   />
                 </div>
                 <div className="form-group payment-key-amount">
