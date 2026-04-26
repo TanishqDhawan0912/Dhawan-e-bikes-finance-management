@@ -56,6 +56,47 @@ const validateDateFormat = (dateString) => {
   );
 };
 
+const parseDisplayDateToTime = (raw) => {
+  const ds = displayDate(raw || "");
+  if (!ds) return 0;
+  const parts = ds.split("/");
+  if (parts.length === 3) {
+    const [day, month, year] = parts.map((v) => parseInt(v, 10));
+    if (!Number.isNaN(day) && !Number.isNaN(month) && !Number.isNaN(year)) {
+      return new Date(year, month - 1, day).getTime();
+    }
+  }
+  const t = new Date(ds).getTime();
+  return Number.isNaN(t) ? 0 : t;
+};
+
+const getAutoPurchasePriceFromSpare = (spare, stockField) => {
+  if (!spare) return "";
+
+  const pickLatestPrice = (rows) => {
+    if (!Array.isArray(rows) || rows.length === 0) return "";
+    const sorted = [...rows].sort((a, b) => {
+      const dt = parseDisplayDateToTime(a?.purchaseDate) - parseDisplayDateToTime(b?.purchaseDate);
+      if (dt !== 0) return dt;
+      return 0;
+    });
+    // Prefer latest non-zero price, fallback to latest raw price.
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const p = Number(sorted[i]?.purchasePrice);
+      if (Number.isFinite(p) && p > 0) return String(p);
+    }
+    const lp = Number(sorted[sorted.length - 1]?.purchasePrice);
+    return Number.isFinite(lp) ? String(lp) : "";
+  };
+
+  // Color-tracked spares keep prices at color row level.
+  if (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0) {
+    return pickLatestPrice(spare.colorQuantity);
+  }
+  // Non-color spares keep prices in stock entries.
+  return pickLatestPrice(spare?.[stockField] || spare?.stockEntries || []);
+};
+
 const style = {
   padding: "1rem",
   backgroundColor: "#f9fafb",
@@ -1135,6 +1176,16 @@ function AddMoreStock() {
   useEffect(() => {
     fetchSpareDetails();
   }, [fetchSpareDetails]);
+
+  // Auto-fill purchase price from previous stock entry (editable by user).
+  useEffect(() => {
+    const autoPrice = getAutoPurchasePriceFromSpare(spare, stockField);
+    if (!autoPrice) return;
+    setNewStockEntry((prev) => {
+      if (String(prev.purchasePrice || "").trim() !== "") return prev;
+      return { ...prev, purchasePrice: autoPrice };
+    });
+  }, [spare, stockField]);
 
   // Close date picker when clicking outside
   useEffect(() => {

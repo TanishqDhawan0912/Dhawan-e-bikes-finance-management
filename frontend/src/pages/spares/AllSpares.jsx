@@ -42,6 +42,7 @@ function AllSpares() {
   const [searchName, setSearchName] = useState("");
   const [searchModel, setSearchModel] = useState("");
   const [searchSupplier, setSearchSupplier] = useState("");
+  const [sortOption, setSortOption] = useState("latest");
 
   const fetchSpares = useCallback(async () => {
     try {
@@ -148,11 +149,7 @@ function AllSpares() {
 
   // Optimize filtering with useMemo
   const filteredSpares = useMemo(() => {
-    if (!searchName.trim() && !searchModel.trim() && !searchSupplier.trim()) {
-      return spares;
-    }
-
-    return spares.filter((spare) => {
+    const filtered = spares.filter((spare) => {
       const nameMatch =
         !searchName.trim() ||
         (spare.name || "").toLowerCase().includes(searchName.toLowerCase());
@@ -172,7 +169,43 @@ function AllSpares() {
 
       return nameMatch && modelMatch && supplierMatch;
     });
-  }, [spares, searchName, searchModel, searchSupplier]);
+
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      if (sortOption === "name_asc") {
+        return String(a?.name || "").localeCompare(
+          String(b?.name || ""),
+          undefined,
+          { sensitivity: "base" }
+        );
+      }
+      if (sortOption === "name_desc") {
+        return String(b?.name || "").localeCompare(
+          String(a?.name || ""),
+          undefined,
+          { sensitivity: "base" }
+        );
+      }
+      if (sortOption === "price_low_high") {
+        return (Number(a?.sellingPrice) || 0) - (Number(b?.sellingPrice) || 0);
+      }
+      if (sortOption === "price_high_low") {
+        return (Number(b?.sellingPrice) || 0) - (Number(a?.sellingPrice) || 0);
+      }
+      if (sortOption === "oldest") {
+        return (
+          new Date(a?.createdAt || 0).getTime() -
+          new Date(b?.createdAt || 0).getTime()
+        );
+      }
+      // Default: latest added
+      return (
+        new Date(b?.createdAt || 0).getTime() -
+        new Date(a?.createdAt || 0).getTime()
+      );
+    });
+    return sorted;
+  }, [spares, searchName, searchModel, searchSupplier, sortOption]);
 
   // Debug: Log current state
   console.log("Debug - Spares:", spares.length);
@@ -390,6 +423,38 @@ function AllSpares() {
                 marginBottom: "0.25rem",
               }}
             >
+              Sort:
+            </label>
+            <select
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value)}
+              style={{
+                padding: "0.5rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "0.375rem",
+                fontSize: "0.875rem",
+                width: "100%",
+                backgroundColor: "#fff",
+              }}
+            >
+              <option value="latest">Latest Added</option>
+              <option value="oldest">Oldest Added</option>
+              <option value="name_asc">Name (A to Z)</option>
+              <option value="name_desc">Name (Z to A)</option>
+              <option value="price_low_high">Price (Low to High)</option>
+              <option value="price_high_low">Price (High to Low)</option>
+            </select>
+          </div>
+
+          <div style={{ flex: "1", minWidth: "200px" }}>
+            <label
+              style={{
+                fontSize: "0.875rem",
+                fontWeight: "500",
+                display: "block",
+                marginBottom: "0.25rem",
+              }}
+            >
               Model:
             </label>
             <div style={{ position: "relative" }}>
@@ -449,6 +514,7 @@ function AllSpares() {
                 setSearchName("");
                 setSearchModel("");
                 setSearchSupplier("");
+                setSortOption("latest");
               }}
               style={{
                 padding: "0.5rem 1rem",
