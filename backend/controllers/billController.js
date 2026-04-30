@@ -178,6 +178,32 @@ const adjustBillInventory = async (billLike, mode = "deduct") => {
   if (!billLike) return;
   const factor = mode === "restore" ? 1 : -1;
 
+  const normalizeText = (s) =>
+    String(s || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  const splitVariantTokens = (raw) =>
+    String(raw || "")
+      .split(/[•|,]/g)
+      .map((x) => normalizeText(x))
+      .filter(Boolean);
+  const includesAllTokens = (haystack, tokens) => {
+    if (!tokens.length) return false;
+    const h = normalizeText(haystack);
+    if (!h) return false;
+    return tokens.every((t) => h.includes(t));
+  };
+  const entryMatchesVariant = (entry, selectedVariantTokens) => {
+    if (!selectedVariantTokens.length) return false;
+    const descs = Array.isArray(entry?.description) ? entry.description : [];
+    if (!descs.length) return false;
+    // Entry descriptions are usually tag arrays like ["front disc", "front 12'"].
+    // Match against the COMBINED entry description text (not one tag at a time).
+    const joined = normalizeText(descs.join(" • "));
+    return selectedVariantTokens.every((t) => joined.includes(t));
+  };
+
   // 1) Model stock (one scooty per bill)
   let modelDoc = null;
   const modelId = String(billLike.modelId || "").trim();
@@ -191,6 +217,9 @@ const adjustBillInventory = async (billLike, mode = "deduct") => {
     const colorKey = String(billLike.modelColor || "")
       .trim()
       .toLowerCase();
+    const selectedVariantTokens = splitVariantTokens(
+      billLike.descriptionVariant || ""
+    );
     if (Array.isArray(modelDoc.colorQuantities) && colorKey) {
       const colorEntry = modelDoc.colorQuantities.find(
         (cq) =>
@@ -206,10 +235,38 @@ const adjustBillInventory = async (billLike, mode = "deduct") => {
       }
     }
     // Keep stockEntries aligned so Model pre-save quantity recalculation remains correct.
-    if (Array.isArray(modelDoc.stockEntries) && modelDoc.stockEntries.length > 0 && colorKey) {
-      for (const entry of modelDoc.stockEntries) {
-        if (!Array.isArray(entry.colorQuantities)) continue;
-        const cq = entry.colorQuantities.find(
+    if (
+      Array.isArray(modelDoc.stockEntries) &&
+      modelDoc.stockEntries.length > 0 &&
+      colorKey
+    ) {
+      // 1) Prefer an entry that matches BOTH color + selected description variant.
+      // 2) Fallback to first color-only match to keep backward compatibility.
+      let targetEntry = modelDoc.stockEntries.find((entry) => {
+        if (!Array.isArray(entry?.colorQuantities)) return false;
+        const hasColor = entry.colorQuantities.some(
+          (x) =>
+            x &&
+            typeof x.color === "string" &&
+            x.color.trim().toLowerCase() === colorKey
+        );
+        if (!hasColor) return false;
+        return entryMatchesVariant(entry, selectedVariantTokens);
+      });
+      if (!targetEntry) {
+        targetEntry = modelDoc.stockEntries.find((entry) => {
+          if (!Array.isArray(entry?.colorQuantities)) return false;
+          return entry.colorQuantities.some(
+            (x) =>
+              x &&
+              typeof x.color === "string" &&
+              x.color.trim().toLowerCase() === colorKey
+          );
+        });
+      }
+
+      if (targetEntry) {
+        const cq = targetEntry.colorQuantities.find(
           (x) =>
             x &&
             typeof x.color === "string" &&
@@ -217,7 +274,6 @@ const adjustBillInventory = async (billLike, mode = "deduct") => {
         );
         if (cq) {
           cq.quantity = Math.max(0, (Number(cq.quantity) || 0) + factor * 1);
-          break;
         }
       }
     }
