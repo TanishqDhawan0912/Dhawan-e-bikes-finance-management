@@ -312,45 +312,69 @@ function AllModels() {
         }
       }
 
-      // Build per-model color totals with a single source of truth.
+      const addColorToGroup = (colour, quantity, descriptionTags = []) => {
+        const normalizedColour = (colour || "").toString().trim();
+        const quantityToAdd = parseInt(quantity, 10) || 0;
+        if (!normalizedColour) return;
+
+        let existingColor = grouped[key].colours.find(
+          (c) => c.colour === normalizedColour
+        );
+        if (!existingColor) {
+          existingColor = {
+            colour: normalizedColour,
+            quantity: 0,
+            descriptionQty: {},
+          };
+          grouped[key].colours.push(existingColor);
+        }
+
+        existingColor.quantity += quantityToAdd;
+        grouped[key].totalQuantity += quantityToAdd;
+
+        const cleanedTags = Array.isArray(descriptionTags)
+          ? descriptionTags
+              .map((tag) => String(tag || "").trim())
+              .filter(Boolean)
+          : [];
+
+        if (cleanedTags.length > 0) {
+          const descriptionKey = cleanedTags.join(" • ");
+          existingColor.descriptionQty[descriptionKey] =
+            (existingColor.descriptionQty[descriptionKey] || 0) + quantityToAdd;
+        }
+      };
+
+      // Build per-model color totals with description-wise quantities.
       // Prefer stockEntries (live layer data). If absent, fall back to model.colorQuantities,
       // then legacy (model.colour + model.quantity).
-      const perModelColorTotals = new Map();
       const hasStockEntries =
         Array.isArray(model.stockEntries) && model.stockEntries.length > 0;
 
       if (hasStockEntries) {
         model.stockEntries.forEach((entry) => {
+          const entryDescription = Array.isArray(entry?.description)
+            ? entry.description
+            : [];
           if (Array.isArray(entry?.colorQuantities)) {
             entry.colorQuantities.forEach((cq) => {
-              const c = (cq?.color || "").toString().trim();
-              if (!c) return;
-              const prev = perModelColorTotals.get(c) || 0;
-              perModelColorTotals.set(c, prev + (parseInt(cq?.quantity) || 0));
+              addColorToGroup(cq?.color, cq?.quantity, entryDescription);
             });
           }
         });
       } else if (Array.isArray(model.colorQuantities) && model.colorQuantities.length > 0) {
+        const modelDescription = Array.isArray(model.description)
+          ? model.description
+          : [];
         model.colorQuantities.forEach((cq) => {
-          const c = (cq?.color || "").toString().trim();
-          if (!c) return;
-          perModelColorTotals.set(c, parseInt(cq?.quantity) || 0);
+          addColorToGroup(cq?.color, cq?.quantity, modelDescription);
         });
       } else if (model.colour && model.colour.trim() !== "") {
-        perModelColorTotals.set(model.colour, model.quantity || 0);
+        const modelDescription = Array.isArray(model.description)
+          ? model.description
+          : [];
+        addColorToGroup(model.colour, model.quantity || 0, modelDescription);
       }
-
-      // Apply per-model totals into the group aggregate.
-      perModelColorTotals.forEach((qty, colour) => {
-        const existingColor = grouped[key].colours.find((c) => c.colour === colour);
-        const quantityToAdd = parseInt(qty) || 0;
-        if (existingColor) {
-          existingColor.quantity += quantityToAdd;
-        } else {
-          grouped[key].colours.push({ colour, quantity: quantityToAdd });
-        }
-        grouped[key].totalQuantity += quantityToAdd;
-      });
 
       grouped[key].totalValue +=
         (model.purchasePrice || 0) * (model.quantity || 0);
@@ -1294,6 +1318,32 @@ function AllModels() {
                           >
                             {colorEntry.quantity || 0}
                           </span>
+                          {colorEntry.descriptionQty &&
+                            Object.keys(colorEntry.descriptionQty).length > 0 && (
+                              <div
+                                style={{
+                                  marginTop: "0.5rem",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "0.25rem",
+                                }}
+                              >
+                                {Object.entries(colorEntry.descriptionQty)
+                                  .sort((a, b) => (b[1] || 0) - (a[1] || 0))
+                                  .map(([desc, qty]) => (
+                                    <div
+                                      key={`${colorEntry.colour}-${desc}`}
+                                      style={{
+                                        fontSize: "0.72rem",
+                                        color: "#6b7280",
+                                        lineHeight: 1.25,
+                                      }}
+                                    >
+                                      {desc}: <strong>{qty || 0}</strong>
+                                    </div>
+                                  ))}
+                              </div>
+                            )}
                         </td>
                         <td
                           style={{

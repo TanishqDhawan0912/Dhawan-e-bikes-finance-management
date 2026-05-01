@@ -112,6 +112,55 @@ const style = {
   position: "relative",
 };
 
+const TYRE_SIZE_OPTIONS = [
+  { value: "both-10", label: "Both 10'" },
+  { value: "front-12-rear-10", label: "Front 12' Rear 10'" },
+  { value: "both-12", label: "Both 12'" },
+];
+
+const BRAKE_TYPE_OPTIONS = [
+  { value: "both-drum", label: "Both Drum" },
+  { value: "front-disc-only", label: "Front Disc Only" },
+  { value: "back-disc-only", label: "Back Disc Only" },
+  { value: "both-disc", label: "Both Disc" },
+];
+
+const getOptionLabel = (options, value) =>
+  options.find((opt) => opt.value === value)?.label || "";
+
+const normalizeTag = (tag) => String(tag || "").trim().toLowerCase();
+
+const syncDescriptionWithSpecs = (description, tyreSize, brakeType) => {
+  const autoLabels = new Set(
+    [...TYRE_SIZE_OPTIONS, ...BRAKE_TYPE_OPTIONS].map((opt) =>
+      normalizeTag(opt.label)
+    )
+  );
+  const existing = Array.isArray(description) ? description : [];
+  const manualTags = existing.filter(
+    (tag) => !autoLabels.has(normalizeTag(tag))
+  );
+
+  const tyreLabel = getOptionLabel(TYRE_SIZE_OPTIONS, tyreSize);
+  const brakeLabel = getOptionLabel(BRAKE_TYPE_OPTIONS, brakeType);
+  const next = [...manualTags];
+
+  if (
+    tyreLabel &&
+    !next.some((tag) => normalizeTag(tag) === normalizeTag(tyreLabel))
+  ) {
+    next.push(tyreLabel);
+  }
+  if (
+    brakeLabel &&
+    !next.some((tag) => normalizeTag(tag) === normalizeTag(brakeLabel))
+  ) {
+    next.push(brakeLabel);
+  }
+
+  return next;
+};
+
 function AddMoreStock() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -123,6 +172,8 @@ function AddMoreStock() {
     batteriesPerSet: 5,
     sellingPrice: "",
     purchasePrice: "",
+    tyreSize: "",
+    brakeType: "",
     colorQuantities: [{ color: "", quantity: "" }],
     description: [],
     purchasedInWarranty: false,
@@ -301,10 +352,23 @@ function AddMoreStock() {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setNewStockEntry((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+    const nextValue = type === "checkbox" ? checked : value;
+    setNewStockEntry((prev) => {
+      const next = {
+        ...prev,
+        [name]: nextValue,
+      };
+
+      if (name === "tyreSize" || name === "brakeType") {
+        next.description = syncDescriptionWithSpecs(
+          prev.description,
+          name === "tyreSize" ? nextValue : prev.tyreSize,
+          name === "brakeType" ? nextValue : prev.brakeType
+        );
+      }
+
+      return next;
+    });
   };
 
   // Handle tag input
@@ -349,9 +413,8 @@ function AddMoreStock() {
       newStockEntry.colorQuantities[newStockEntry.colorQuantities.length - 1];
     if (
       !lastEntry.color ||
-      !lastEntry.quantity ||
-      lastEntry.quantity === "" ||
-      parseInt(lastEntry.quantity) <= 0
+      String(lastEntry.quantity ?? "").trim() === "" ||
+      parseInt(lastEntry.quantity, 10) < 0
     ) {
       setColorQuantityError(
         "Please fill both color and quantity before adding a new entry"
@@ -387,8 +450,8 @@ function AddMoreStock() {
       if (
         index === lastIndex &&
         updated[lastIndex].color &&
-        updated[lastIndex].quantity &&
-        parseInt(updated[lastIndex].quantity) > 0
+        String(updated[lastIndex].quantity ?? "").trim() !== "" &&
+        parseInt(updated[lastIndex].quantity, 10) >= 0
       ) {
         setColorQuantityError("");
       }
@@ -401,10 +464,23 @@ function AddMoreStock() {
 
   const handleEditInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setEditingEntry((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+    const nextValue = type === "checkbox" ? checked : value;
+    setEditingEntry((prev) => {
+      const next = {
+        ...prev,
+        [name]: nextValue,
+      };
+
+      if (name === "tyreSize" || name === "brakeType") {
+        next.description = syncDescriptionWithSpecs(
+          prev.description,
+          name === "tyreSize" ? nextValue : prev.tyreSize,
+          name === "brakeType" ? nextValue : prev.brakeType
+        );
+      }
+
+      return next;
+    });
   };
 
   // Edit form tag handlers
@@ -450,9 +526,8 @@ function AddMoreStock() {
       editingEntry.colorQuantities[editingEntry.colorQuantities.length - 1];
     if (
       !lastEntry.color ||
-      !lastEntry.quantity ||
-      lastEntry.quantity === "" ||
-      parseInt(lastEntry.quantity) <= 0
+      String(lastEntry.quantity ?? "").trim() === "" ||
+      parseInt(lastEntry.quantity, 10) < 0
     ) {
       setEditColorQuantityError(
         "Please fill both color and quantity before adding a new entry"
@@ -488,8 +563,8 @@ function AddMoreStock() {
       if (
         index === lastIndex &&
         updated[lastIndex].color &&
-        updated[lastIndex].quantity &&
-        parseInt(updated[lastIndex].quantity) > 0
+        String(updated[lastIndex].quantity ?? "").trim() !== "" &&
+        parseInt(updated[lastIndex].quantity, 10) >= 0
       ) {
         setEditColorQuantityError("");
       }
@@ -543,6 +618,8 @@ function AddMoreStock() {
         batteriesPerSet: parseInt(newStockEntry.batteriesPerSet) || 5,
         sellingPrice: parseFloat(newStockEntry.sellingPrice) || 0,
         purchasePrice: parseFloat(newStockEntry.purchasePrice) || 0,
+        tyreSize: newStockEntry.tyreSize || "",
+        brakeType: newStockEntry.brakeType || "",
         colorQuantities: newStockEntry.colorQuantities
           // Allow 0 so user can explicitly set a colour to zero.
           .filter(
@@ -631,6 +708,8 @@ function AddMoreStock() {
         batteriesPerSet: 5,
         sellingPrice: "",
         purchasePrice: "",
+        tyreSize: "",
+        brakeType: "",
         colorQuantities: [{ color: "", quantity: "" }],
         description: [],
         purchasedInWarranty: false,
@@ -663,6 +742,8 @@ function AddMoreStock() {
       batteriesPerSet: entry.batteriesPerSet || model?.batteriesPerSet || 5,
       sellingPrice: entry.sellingPrice || "",
       purchasePrice: entry.purchasePrice || "",
+      tyreSize: entry.tyreSize || "",
+      brakeType: entry.brakeType || "",
       colorQuantities: colorQuantities,
       description: entry.description || model?.description || [],
       purchasedInWarranty:
@@ -718,6 +799,8 @@ function AddMoreStock() {
         batteriesPerSet: parseInt(editingEntry.batteriesPerSet) || 5,
         sellingPrice: parseFloat(editingEntry.sellingPrice) || 0,
         purchasePrice: parseFloat(editingEntry.purchasePrice) || 0,
+        tyreSize: editingEntry.tyreSize || "",
+        brakeType: editingEntry.brakeType || "",
         colorQuantities: editingEntry.colorQuantities
           // Allow 0 so user can explicitly set a colour to zero.
           .filter(
@@ -826,7 +909,7 @@ function AddMoreStock() {
       );
 
       // Collect all unique colors from remaining stock entries
-      const allColors = new Set();
+      const allColors = new Map();
       updatedStockEntries.forEach((entry) => {
         if (entry.colorQuantities && Array.isArray(entry.colorQuantities)) {
           entry.colorQuantities.forEach((cq) => {
@@ -910,7 +993,7 @@ function AddMoreStock() {
       };
 
       // Collect all unique colors from all stock entries
-      const allColors = new Set();
+      const allColors = new Map();
       updatedStockEntries.forEach((entry) => {
         if (entry.colorQuantities && Array.isArray(entry.colorQuantities)) {
           entry.colorQuantities.forEach((cq) => {
@@ -1706,6 +1789,83 @@ function AddMoreStock() {
                     </button>
                   </div>
                 )}
+              </div>
+
+              {/* Tyre Size & Brake Type */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                  gap: "1rem",
+                  marginBottom: "1.5rem",
+                }}
+              >
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "0.5rem",
+                      color: "#374151",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Tyre Size
+                  </label>
+                  <select
+                    name="tyreSize"
+                    value={newStockEntry.tyreSize || ""}
+                    onChange={handleInputChange}
+                    disabled={isSubmitting}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "0.375rem",
+                      fontSize: "0.875rem",
+                      backgroundColor: "#ffffff",
+                    }}
+                  >
+                    <option value="">Select tyre size</option>
+                    {TYRE_SIZE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "0.5rem",
+                      color: "#374151",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Brake Type
+                  </label>
+                  <select
+                    name="brakeType"
+                    value={newStockEntry.brakeType || ""}
+                    onChange={handleInputChange}
+                    disabled={isSubmitting}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "0.375rem",
+                      fontSize: "0.875rem",
+                      backgroundColor: "#ffffff",
+                    }}
+                  >
+                    <option value="">Select brake type</option>
+                    {BRAKE_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Color & Quantity Section */}
@@ -2582,6 +2742,81 @@ function AddMoreStock() {
                 )}
               </div>
 
+              {/* Tyre Size & Brake Type */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                  gap: "1rem",
+                  marginBottom: "1.5rem",
+                }}
+              >
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "0.5rem",
+                      color: "#374151",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Tyre Size
+                  </label>
+                  <select
+                    name="tyreSize"
+                    value={editingEntry.tyreSize || ""}
+                    onChange={handleEditInputChange}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "0.375rem",
+                      fontSize: "0.875rem",
+                      backgroundColor: "#ffffff",
+                    }}
+                  >
+                    <option value="">Select tyre size</option>
+                    {TYRE_SIZE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "0.5rem",
+                      color: "#374151",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Brake Type
+                  </label>
+                  <select
+                    name="brakeType"
+                    value={editingEntry.brakeType || ""}
+                    onChange={handleEditInputChange}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      border: "1px solid #d1d5db",
+                      borderRadius: "0.375rem",
+                      fontSize: "0.875rem",
+                      backgroundColor: "#ffffff",
+                    }}
+                  >
+                    <option value="">Select brake type</option>
+                    {BRAKE_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               {/* Color & Quantity Section */}
               <div style={{ marginBottom: "1.5rem" }}>
                 <label
@@ -3107,6 +3342,14 @@ function AddMoreStock() {
                   const entryDescription = entry?.description || [];
                   const entryPurchasedInWarranty =
                     entry?.purchasedInWarranty || false;
+                  const entryTyreSizeLabel = getOptionLabel(
+                    TYRE_SIZE_OPTIONS,
+                    entry?.tyreSize || ""
+                  );
+                  const entryBrakeTypeLabel = getOptionLabel(
+                    BRAKE_TYPE_OPTIONS,
+                    entry?.brakeType || ""
+                  );
 
                   const totalQuantity = entryColorQuantities.reduce(
                     (sum, cq) => sum + (parseInt(cq.quantity) || 0),
@@ -3286,6 +3529,16 @@ function AddMoreStock() {
                         <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
                           <strong>Batteries Per Set:</strong>{" "}
                           {entryBatteriesPerSet}
+                        </div>
+                      )}
+                      {entryTyreSizeLabel && (
+                        <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+                          <strong>Tyre Size:</strong> {entryTyreSizeLabel}
+                        </div>
+                      )}
+                      {entryBrakeTypeLabel && (
+                        <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+                          <strong>Brake Type:</strong> {entryBrakeTypeLabel}
                         </div>
                       )}
                         <div

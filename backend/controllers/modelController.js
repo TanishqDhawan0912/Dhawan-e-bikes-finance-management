@@ -106,6 +106,8 @@ exports.createModel = asyncHandler(async (req, res) => {
     purchasePrice,
     sellingPrice,
     batteriesPerSet,
+    tyreSize,
+    brakeType,
     description,
     colorQuantities,
     purchasedInWarranty,
@@ -231,6 +233,9 @@ exports.createModel = asyncHandler(async (req, res) => {
       purchaseDate: formattedDate,
       batteriesPerSet: batteriesPerSet && [5, 6].includes(parseInt(batteriesPerSet)) ? parseInt(batteriesPerSet) : 5,
       sellingPrice: validatePurchasePrice(sellingPrice),
+      purchasePrice: validatePurchasePrice(purchasePrice),
+      tyreSize: typeof tyreSize === "string" ? tyreSize.trim() : "",
+      brakeType: typeof brakeType === "string" ? brakeType.trim() : "",
       colorQuantities: validatedColorQuantities,
       description: Array.isArray(description) ? description.filter(tag => tag && tag.trim()).map(tag => tag.trim()) : [],
       purchasedInWarranty: purchasedInWarranty || false,
@@ -589,6 +594,9 @@ exports.updateModel = asyncHandler(async (req, res) => {
         batteriesPerSet: entry.batteriesPerSet === 6 ? 6 : 5,
         sellingPrice: parseFloat(entry.sellingPrice) || 0,
         purchasePrice: parseFloat(entry.purchasePrice) || 0,
+        tyreSize: typeof entry.tyreSize === "string" ? entry.tyreSize.trim() : "",
+        brakeType:
+          typeof entry.brakeType === "string" ? entry.brakeType.trim() : "",
         colorQuantities: Array.isArray(entry.colorQuantities)
           ? entry.colorQuantities
               .filter((cq) => cq && cq.color && cq.quantity !== undefined)

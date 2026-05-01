@@ -96,6 +96,18 @@ const modelSchema = new mongoose.Schema(
           min: 0,
           default: 0,
         },
+        tyreSize: {
+          type: String,
+          required: false,
+          trim: true,
+          default: "",
+        },
+        brakeType: {
+          type: String,
+          required: false,
+          trim: true,
+          default: "",
+        },
         colorQuantities: [
           {
             color: {
