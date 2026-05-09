@@ -1885,6 +1885,7 @@ function AddMoreStock() {
 
     // Decide whether we should prompt user about missing purchase price
     const hasPurchasePrice =
+      isPurchasePriceUnlocked &&
       newStockEntry.purchasePrice &&
       parseFloat(newStockEntry.purchasePrice) > 0;
 
