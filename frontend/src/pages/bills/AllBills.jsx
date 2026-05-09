@@ -69,6 +69,7 @@ function serviceDateToInput(dateStr) {
   return iso || "";
 }
 
+
 function getModelDisplay(bill) {
   if (!bill) return "—";
   const parts = [bill.modelPurchased, bill.descriptionVariant ? `(${bill.descriptionVariant})` : "", bill.modelColor ? `(${bill.modelColor})` : ""].filter(Boolean);
@@ -352,14 +353,28 @@ export default function AllBills() {
     if (amountToClear <= 0) return;
     if (amountToClear > currentPending) return;
 
-    const history = Array.isArray(bill.paymentHistory)
-      ? [...bill.paymentHistory]
-      : [];
+    const history = Array.isArray(bill.paymentHistory) ? [...bill.paymentHistory] : [];
+    const existingPaidAmount = Number(bill.paidAmount) || 0;
+    // If history is missing, seed first payment with current customer paid.
+    const firstPaymentAmount = Math.max(0, existingPaidAmount);
+    const normalizedHistory =
+      history.length > 0
+        ? history
+        : firstPaymentAmount > 0
+        ? [
+            {
+              amount: firstPaymentAmount,
+              date: bill.billDate || clearPendingDate,
+              time: "",
+              paymentMode: bill.paymentMode || "cash",
+            },
+          ]
+        : [];
 
-    const newPaid = (Number(bill.paidAmount) || 0) + amountToClear;
+    const newPaid = existingPaidAmount + amountToClear;
     const newPending = Math.max(0, currentPending - amountToClear);
     const newPaymentHistory = [
-      ...history,
+      ...normalizedHistory,
       {
         amount: amountToClear,
         date: clearPendingDate,
@@ -444,7 +459,26 @@ export default function AllBills() {
   };
 
   const getPaymentHistory = (bill) => {
-    return Array.isArray(bill.paymentHistory) ? bill.paymentHistory : [];
+    const history = Array.isArray(bill.paymentHistory)
+      ? [...bill.paymentHistory]
+      : [];
+
+    // Ensure first payment history reflects current customer paid when history is absent.
+    if (history.length === 0) {
+      const paid = Number(bill?.paidAmount) || 0;
+      return paid > 0
+        ? [
+            {
+              amount: paid,
+              date: bill?.billDate || "",
+              time: "",
+              paymentMode: bill?.paymentMode || "cash",
+            },
+          ]
+        : [];
+    }
+
+    return history;
   };
 
   const jobcardStyleButtons = {
@@ -586,7 +620,7 @@ export default function AllBills() {
             return (
               <div key={bill._id} id={`bill-card-${bill._id}`} className="bills-card">
                 <div className="bills-card-header">
-                  <h3 className="bills-card-title">Bill No. – {bill.billNo && bill.billNo.trim() ? bill.billNo : "—"}</h3>
+                  <h3 className="bills-card-title">Bill No. – {bill.billNo && bill.billNo.trim() ? bill.billNo : "—"} | Date: {formatDateShort(bill.billDate)}</h3>
                   <div className="bills-card-header-meta">
                     <span className={`bills-badge ${isPaid ? "bills-badge-paid" : "bills-badge-pending"}`}>
                       {isPaid ? "Paid" : "Pending"}
@@ -892,8 +926,7 @@ export default function AllBills() {
               const currentPending = Number(billToClearPending.pendingAmount || 0);
               const amountToClear = Number(clearPendingAmount) || 0;
               const remainingAfter = Math.max(0, currentPending - amountToClear);
-              const totalPaidAfter =
-                (Number(billToClearPending.paidAmount) || 0) + amountToClear;
+              const totalPaidAfter = amountToClear;
               const canClear = amountToClear > 0 && amountToClear <= currentPending;
               return (
                 <div style={{ margin: "0 0 1rem 0" }}>

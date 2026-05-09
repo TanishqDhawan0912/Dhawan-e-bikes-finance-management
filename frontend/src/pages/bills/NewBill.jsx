@@ -138,6 +138,8 @@ export default function NewBill({
   const [sellingPrice, setSellingPrice] = useState("");
   const [paidAmount, setPaidAmount] = useState("");
   const [pendingAmount, setPendingAmount] = useState("");
+  const [netAmountInput, setNetAmountInput] = useState("");
+  const [isEditingNetAmount, setIsEditingNetAmount] = useState(false);
   const [paymentMode, setPaymentMode] = useState("cash");
   const [bankDetail, setBankDetail] = useState("");
   const [bajajDownPayment, setBajajDownPayment] = useState("");
@@ -167,6 +169,7 @@ export default function NewBill({
 
   // Guard so edit prefill values don't get overwritten by "clear fields" effects.
   const prefillInProgressRef = useRef(false);
+  const prevPaymentModeRef = useRef(paymentMode);
 
   // Prevent accidental value changes when user scrolls over focused inputs
   // (e.g., mouse wheel incrementing number fields).
@@ -212,19 +215,39 @@ export default function NewBill({
     }
   }, [shouldShowBankDetail]);
 
-  // Clear mode-specific fields when payment mode switches.
+  // Preserve paid/pending values when payment mode switches.
   useEffect(() => {
+    const prevMode = prevPaymentModeRef.current;
+    const nextMode = paymentMode;
+    const manualPaid = Number(paidAmount) || 0;
+    const splitTotal = (Number(cashPaidAmount) || 0) + (Number(upiPaidAmount) || 0);
+
+    // Moving into split mode: seed cash with current paid (if split values are empty).
+    if (
+      prevMode !== "cash+upi" &&
+      nextMode === "cash+upi" &&
+      splitTotal <= 0 &&
+      manualPaid > 0
+    ) {
+      setCashPaidAmount(String(manualPaid));
+      setUpiPaidAmount("0");
+    }
+
+    // Moving out of split mode: carry split total into paidAmount.
+    if (
+      prevMode === "cash+upi" &&
+      nextMode !== "cash+upi" &&
+      splitTotal > 0
+    ) {
+      setPaidAmount(String(splitTotal));
+    }
+
+    prevPaymentModeRef.current = nextMode;
+
+    // Keep amount fields intact; only reset auxiliary mode-specific fields.
     if (paymentMode !== "bajaj") {
       setBajajDownPayment("");
       setBajajDownPaymentMode("cash");
-    }
-    if (paymentMode !== "cash+upi") {
-      setCashPaidAmount("");
-      setUpiPaidAmount("");
-    }
-    // For split modes we compute paidAmount; keep the manual paidAmount only for cash/upi.
-    if (paymentMode === "cash+upi") {
-      setPaidAmount("");
     }
   }, [paymentMode]);
 
@@ -873,10 +896,57 @@ export default function NewBill({
 
   const oldScootyPriceNumber = Number(oldScootyExchangePrice) || 0;
   const paidNum = Number(effectivePaidAmount) || 0;
+  const pendingNum = Number(pendingAmount) || 0;
   const sellNum = Number(sellingPrice) || 0;
-  // Discount = list price minus (cash paid + trade-in value). Pending is balance due, not part of this sum.
-  const discount = Math.max(0, sellNum - (paidNum + oldScootyPriceNumber));
-  const netAmount = sellNum - discount;
+  const netAmountFromInput =
+    String(netAmountInput ?? "").trim() === ""
+      ? null
+      : Math.max(0, Number(netAmountInput) || 0);
+  // Net amount follows editable net input when present; otherwise falls back to paid + pending.
+  const netAmount =
+    netAmountFromInput !== null ? netAmountFromInput : paidNum + pendingNum;
+  // Discount is derived from selling price and edited/derived net amount.
+  const discount = Math.max(0, sellNum - netAmount);
+
+  useEffect(() => {
+    const hasNet = String(netAmountInput ?? "").trim() !== "";
+    const hasPaid = String(effectivePaidAmount ?? "").trim() !== "";
+    if (!hasNet || !hasPaid) {
+      setPendingAmount("");
+      return;
+    }
+    const computedPending = Math.max(0, netAmount - paidNum);
+    setPendingAmount(String(computedPending));
+  }, [netAmountInput, effectivePaidAmount, netAmount, paidNum]);
+
+  useEffect(() => {
+    if (isEditingNetAmount) return;
+    const hasPaid = String(effectivePaidAmount ?? "").trim() !== "";
+    const hasPending = String(pendingAmount ?? "").trim() !== "";
+    if (!hasPaid || !hasPending) return;
+    setNetAmountInput(String(netAmount));
+  }, [netAmount, isEditingNetAmount, effectivePaidAmount, pendingAmount]);
+
+  const handleNetAmountChange = (value) => {
+    const v = String(value ?? "");
+    if (v === "") {
+      setNetAmountInput("");
+      return;
+    }
+    const nextNet = Math.max(0, Number(v) || 0);
+    setNetAmountInput(String(nextNet));
+  };
+
+  const handleNetAmountBlur = () => {
+    const netRaw = String(netAmountInput ?? "").trim();
+    const paidRaw = String(effectivePaidAmount ?? "").trim();
+    const hasNet = netRaw !== "";
+    const hasPaid = paidRaw !== "";
+
+    if (hasNet) setNetAmountInput(String(Math.max(0, Number(netRaw) || 0)));
+    if (!hasNet || !hasPaid) setPendingAmount("");
+    setIsEditingNetAmount(false);
+  };
 
   const isCustomerDetailsComplete =
     billNo.trim() !== "" &&
@@ -1053,9 +1123,13 @@ export default function NewBill({
 
       const sellP = Number(sellingPrice) || 0;
       const paidP = Number(effectivePaidAmount) || 0;
-      const oldP = Number(oldScootyExchangePrice) || 0;
-      const billDiscount = Math.max(0, sellP - (paidP + oldP));
-      const billNet = sellP - billDiscount;
+      const pendingP = Number(pendingAmount) || 0;
+      const netInputTrimmed = String(netAmountInput ?? "").trim();
+      const billNet =
+        netInputTrimmed === ""
+          ? paidP + pendingP
+          : Math.max(0, Number(netInputTrimmed) || 0);
+      const billDiscount = Math.max(0, sellP - billNet);
 
       const payload = {
         billNo: billNo.trim(),
@@ -2039,10 +2113,13 @@ export default function NewBill({
                 <div className="form-group net-amount-group">
                   <label>Net Amount (₹)</label>
                   <input
-                    type="text"
-                    value={netAmount}
-                    readOnly
-                    className="readonly"
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={netAmountInput}
+                    onChange={(e) => handleNetAmountChange(e.target.value)}
+                    onFocus={() => setIsEditingNetAmount(true)}
+                    onBlur={handleNetAmountBlur}
                   />
                 </div>
               </div>
