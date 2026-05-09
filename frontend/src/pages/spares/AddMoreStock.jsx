@@ -1829,14 +1829,6 @@ function AddMoreStock() {
         return;
       }
 
-      // If user entered a purchase price, it must be > 0
-      if (
-        newStockEntry.purchasePrice &&
-        parseFloat(newStockEntry.purchasePrice) <= 0
-      ) {
-        setFormError("Purchase price must be greater than 0 when provided");
-        return;
-      }
     } else {
       // Color tracking mode validation
       if (
@@ -1875,14 +1867,6 @@ function AddMoreStock() {
         return;
       }
 
-      // If user entered a purchase price, it must be > 0
-      if (
-        newStockEntry.purchasePrice &&
-        parseFloat(newStockEntry.purchasePrice) <= 0
-      ) {
-        setFormError("Purchase price must be greater than 0 when provided");
-        return;
-      }
 
       // Check for duplicate purchase date - prevent creating new entry with existing date
       const newDate = displayDate(newStockEntry.purchaseDate);
