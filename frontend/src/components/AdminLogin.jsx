@@ -30,8 +30,8 @@ export default function AdminLogin() {
       const data = await response.json();
       console.log("Response data:", data);
 
-      if (data.success) {
-        localStorage.setItem("token", data.token);
+      if (data.success && typeof data.token === "string" && data.token.trim()) {
+        localStorage.setItem("token", data.token.trim());
 
         // Preserve existing client-side admin panel session state.
         sessionStorage.setItem("adminAuth", "true");

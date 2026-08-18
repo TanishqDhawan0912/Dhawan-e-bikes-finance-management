@@ -43,6 +43,14 @@ export default function QrScanner({ onClose }) {
             processingRef.current = true;
             setStatus("Verifying QR code...");
             try {
+              const token = localStorage.getItem("token")?.trim();
+              if (!token || token === "undefined" || token === "null") {
+                setError("Please log in to continue.");
+                setStatus("Scan failed");
+                processingRef.current = false;
+                return;
+              }
+
               const response = await fetchWithRetry("/qr/scan", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

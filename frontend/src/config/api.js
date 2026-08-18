@@ -23,10 +23,19 @@ if (import.meta.env.PROD && !envUrl) {
 /** Base URL for all `/api/...` routes. */
 export const API_BASE = `${origin}/api`;
 
+function getStoredToken() {
+  const token = localStorage.getItem("token")?.trim();
+  if (!token || token === "undefined" || token === "null") {
+    if (token) localStorage.removeItem("token");
+    return "";
+  }
+  return token;
+}
+
 export async function fetchWithRetry(endpoint, options = {}, retries = 2) {
   const url = endpoint.startsWith("http") ? endpoint : `${API_BASE}${endpoint}`;
   const headers = new Headers(options.headers);
-  const token = localStorage.getItem("token");
+  const token = getStoredToken();
 
   if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
