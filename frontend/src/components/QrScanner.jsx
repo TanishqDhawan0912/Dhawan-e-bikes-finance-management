@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import {
+  Html5Qrcode,
+  Html5QrcodeSupportedFormats,
+} from "html5-qrcode";
 import { useNavigate } from "react-router-dom";
 import { fetchWithRetry } from "../config/api";
 
@@ -37,14 +40,38 @@ export default function QrScanner({ onClose }) {
         scannerRef.current = scanner;
         await scanner.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1 },
+          {
+            fps: 15,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const size = Math.floor(
+                Math.min(viewfinderWidth, viewfinderHeight) * 0.78,
+              );
+              return { width: size, height: size };
+            },
+            aspectRatio: 4 / 3,
+            formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+            useBarCodeDetectorIfSupported: true,
+            disableFlip: false,
+          },
           async (decodedText) => {
             if (processingRef.current || !decodedText) return;
             processingRef.current = true;
             setStatus("Verifying QR code...");
             try {
+              const qrToken = decodedText.trim();
+              if (import.meta.env.DEV) {
+                console.info("[QR] decoded value", {
+                  qrDecoded: Boolean(qrToken),
+                  valueLength: qrToken.length,
+                  looksLikeUrl: /^https?:\/\//i.test(qrToken),
+                  jwtExists: Boolean(localStorage.getItem("token")?.trim()),
+                });
+              }
               const token = localStorage.getItem("token")?.trim();
               if (!token || token === "undefined" || token === "null") {
+                if (import.meta.env.DEV) {
+                  console.warn("[QR] request skipped: JWT missing");
+                }
                 setError("Please log in to continue.");
                 setStatus("Scan failed");
                 processingRef.current = false;
@@ -54,7 +81,7 @@ export default function QrScanner({ onClose }) {
               const response = await fetchWithRetry("/qr/scan", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ qrToken: decodedText.trim() }),
+                body: JSON.stringify({ qrToken }),
               });
               const data = await response.json();
               if (!response.ok || !data?.success || !data?.customer) {
@@ -65,18 +92,24 @@ export default function QrScanner({ onClose }) {
               setJobcards(Array.isArray(data.jobcards) ? data.jobcards : []);
               setStatus("Customer found");
             } catch (scanError) {
-              if (scanError?.status === 401) {
-                setError("Please log in to continue.");
-              } else if (scanError?.status === 403) {
-                setError("You do not have permission to scan this QR code.");
-              } else if (scanError?.status === 404) {
-                setError("Customer QR code not found.");
-              } else {
-                setError(
-                  "Unable to scan this QR code. Check your connection and try again.",
-                );
+              if (import.meta.env.DEV) {
+                console.warn("[QR] scan request failed", {
+                  status: scanError?.status || "no-response",
+                  responseError: scanError?.responseBody || scanError?.message,
+                });
               }
-              setStatus("Scan failed");
+              if (scanError?.status === 401) {
+                setError("Your login session has expired. Please log in again.");
+              } else if (scanError?.status === 403) {
+                setError("You are not authorized to view this customer.");
+              } else if (scanError?.status === 404) {
+                setError("QR customer not found.");
+              } else if (scanError?.status) {
+                setError("Unable to scan this QR code.");
+              } else {
+                setError("Unable to connect to the server.");
+              }
+              setStatus("Unable to complete QR lookup");
               processingRef.current = false;
             }
           },

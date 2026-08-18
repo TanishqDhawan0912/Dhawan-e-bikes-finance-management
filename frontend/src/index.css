@@ -2292,10 +2292,32 @@ button {
 
 .qr-scanner-reader {
   width: 100%;
-  min-height: 300px;
+  height: min(70vh, 30rem);
+  min-height: 0;
+  aspect-ratio: 4 / 3;
   overflow: hidden;
   border-radius: 10px;
   background: #0f172a;
+}
+
+.qr-scanner-reader > div {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+}
+
+.qr-scanner-reader video {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  object-fit: cover !important;
+}
+
+.qr-scanner-reader canvas {
+  max-width: 100% !important;
+  max-height: 100% !important;
 }
 
 .qr-scanner-status,
@@ -3812,8 +3834,10 @@ textarea {
 }
 
 .customer-qr-image {
-  width: 220px;
-  height: 220px;
+  width: 320px;
+  height: 320px;
+  max-width: 100%;
+  object-fit: contain;
   border: 1px solid #d1d5db;
   border-radius: 0.5rem;
   background: #fff;

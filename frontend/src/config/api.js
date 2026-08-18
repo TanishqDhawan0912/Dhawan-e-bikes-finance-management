@@ -32,6 +32,15 @@ function getStoredToken() {
   return token;
 }
 
+function logQrRequest(endpoint, token, headers) {
+  if (!import.meta.env.DEV || endpoint !== "/qr/scan") return;
+  console.info("[QR] request auth state", {
+    endpoint,
+    jwtExists: Boolean(token),
+    authorizationAttached: headers.has("Authorization"),
+  });
+}
+
 export async function fetchWithRetry(endpoint, options = {}, retries = 2) {
   const url = endpoint.startsWith("http") ? endpoint : `${API_BASE}${endpoint}`;
   const headers = new Headers(options.headers);
@@ -40,12 +49,18 @@ export async function fetchWithRetry(endpoint, options = {}, retries = 2) {
   if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
   }
+  logQrRequest(endpoint, token, headers);
 
   try {
     const res = await fetch(url, { ...options, headers });
     if (!res.ok) {
       const error = new Error(`Request failed: ${res.status}`);
       error.status = res.status;
+      try {
+        error.responseBody = (await res.clone().text()).slice(0, 500);
+      } catch {
+        error.responseBody = "";
+      }
       throw error;
     }
     return res;

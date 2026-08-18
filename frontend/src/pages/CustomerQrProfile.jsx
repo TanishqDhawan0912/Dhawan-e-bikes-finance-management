@@ -43,7 +43,7 @@ export default function CustomerQrProfile() {
 
   const qrImageUrl = useMemo(() => {
     if (!qrToken) return "";
-    return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(qrToken)}`;
+    return `https://api.qrserver.com/v1/create-qr-code/?size=420x420&ecc=H&qzone=2&data=${encodeURIComponent(qrToken)}`;
   }, [qrToken]);
 
   useEffect(() => {
