@@ -31,7 +31,17 @@ export default function AdminLogin() {
       console.log("Response data:", data);
 
       if (data.success && typeof data.token === "string" && data.token.trim()) {
-        localStorage.setItem("token", data.token.trim());
+        const token = data.token.trim();
+        try {
+          localStorage.setItem("token", token);
+          if (localStorage.getItem("token") !== token) {
+            throw new Error("Login token was not persisted");
+          }
+        } catch (storageError) {
+          console.error("Unable to persist login token:", storageError);
+          setError("Unable to save the login session on this device.");
+          return;
+        }
 
         // Preserve existing client-side admin panel session state.
         sessionStorage.setItem("adminAuth", "true");

@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Html5Qrcode,
-  Html5QrcodeSupportedFormats,
-} from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { useNavigate } from "react-router-dom";
 import { fetchWithRetry } from "../config/api";
 
@@ -72,8 +69,8 @@ export default function QrScanner({ onClose }) {
                 if (import.meta.env.DEV) {
                   console.warn("[QR] request skipped: JWT missing");
                 }
-                setError("Please log in to continue.");
-                setStatus("Scan failed");
+                setError("No saved login session on this device. Log in once using Admin.");
+                setStatus("Login required");
                 processingRef.current = false;
                 return;
               }
@@ -99,7 +96,9 @@ export default function QrScanner({ onClose }) {
                 });
               }
               if (scanError?.status === 401) {
-                setError("Your login session has expired. Please log in again.");
+                setError(
+                  "Your login session has expired. Please log in again.",
+                );
               } else if (scanError?.status === 403) {
                 setError("You are not authorized to view this customer.");
               } else if (scanError?.status === 404) {
