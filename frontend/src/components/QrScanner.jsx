@@ -58,7 +58,7 @@ export default function QrScanner({ onClose }) {
               setStatus("Customer found");
             } catch (scanError) {
               if (scanError?.status === 401) {
-                setError("Admin login is required to scan customer QR codes.");
+                setError("Please log in to continue.");
               } else if (scanError?.status === 403) {
                 setError("You do not have permission to scan this QR code.");
               } else if (scanError?.status === 404) {
