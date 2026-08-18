@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { fetchWithRetry } from "../config/api";
 export default function AdminLogin() {
@@ -8,6 +8,7 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
 
   const handleSubmit = async (e) => {
@@ -30,16 +31,17 @@ export default function AdminLogin() {
       console.log("Response data:", data);
 
       if (data.success) {
-        // Store admin authentication and security key in sessionStorage
+        localStorage.setItem("token", data.token);
+
+        // Preserve existing client-side admin panel session state.
         sessionStorage.setItem("adminAuth", "true");
         sessionStorage.setItem("adminSecurityKey", securityKey);
 
         // Check for redirect parameter
-        const redirectUrl = searchParams.get("redirect");
+        const redirectUrl =
+          searchParams.get("redirect") || location.state?.from || "/admin";
         if (redirectUrl) {
           navigate(redirectUrl, { replace: true });
-        } else {
-          navigate("/admin", { replace: true });
         }
       } else {
         setError("Invalid security key");
@@ -141,12 +143,30 @@ export default function AdminLogin() {
                 }}
               >
                 {showPassword ? (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
                     <line x1="1" y1="1" x2="23" y2="23" />
                   </svg>
                 ) : (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                     <circle cx="12" cy="12" r="3" />
                   </svg>

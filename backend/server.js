@@ -161,6 +161,8 @@ setImmediate(() => {
     safeUse("/api/old-charger-scraps", "./routes/oldChargerScrapRoutes");
     safeUse("/api/old-scooties", "./routes/oldScootyRoutes");
     safeUse("/api/jobcards", "./routes/jobcardRoutes");
+    safeUse("/api/customers", "./routes/customerRoutes");
+    safeUse("/api/qr", "./routes/qrRoutes");
     safeUse("/api/bills", "./routes/billRoutes");
     safeUseRouter("./routes/restoreRoutes");
 

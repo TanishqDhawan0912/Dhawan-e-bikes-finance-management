@@ -12,6 +12,7 @@ const Reports = lazy(() => import("./pages/Reports.jsx"));
 const Jobcards = lazy(() => import("./pages/Jobcards.jsx"));
 const Spares = lazy(() => import("./pages/Spares.jsx"));
 const Models = lazy(() => import("./pages/Models.jsx"));
+const CustomerQrProfile = lazy(() => import("./pages/CustomerQrProfile.jsx"));
 const Admin = lazy(() => import("./pages/Admin.jsx"));
 const AdminLogin = lazy(() => import("./components/AdminLogin.jsx"));
 const Batteries = lazy(() => import("./pages/Batteries.jsx"));
@@ -88,8 +89,7 @@ function AppLayout() {
     const isModelsPage = pathname.startsWith("/models");
     const isBillsPage = pathname.startsWith("/bills");
     const isHomePage = pathname === "/";
-    const usesSparesShell =
-      isSparesPage || isBatteriesPage || isChargersPage;
+    const usesSparesShell = isSparesPage || isBatteriesPage || isChargersPage;
 
     return {
       root: `app-root ${isJobcardPage ? "jobcard-root" : ""} ${
@@ -116,6 +116,10 @@ function AppLayout() {
               <Route path="/jobcards/*" element={<Jobcards />} />
               <Route path="/spares/*" element={<Spares />} />
               <Route path="/models/*" element={<Models />} />
+              <Route
+                path="/customer-card/:id"
+                element={<CustomerQrProfile />}
+              />
               <Route path="/admin-login" element={<AdminLogin />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/batteries/*" element={<Batteries />} />

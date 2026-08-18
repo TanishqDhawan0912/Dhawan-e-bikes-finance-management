@@ -11,20 +11,28 @@ function syncSpareQuantityFromLayers(spare) {
   if (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0) {
     spare.quantity = spare.colorQuantity.reduce(
       (sum, cq) => sum + (Number(cq?.quantity) || 0),
-      0
+      0,
     );
-  } else if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
+  } else if (
+    Array.isArray(spare.stockEntries) &&
+    spare.stockEntries.length > 0
+  ) {
     spare.quantity = spare.stockEntries.reduce(
       (sum, e) => sum + (Number(e?.quantity) || 0),
-      0
+      0,
     );
   }
 }
 const Battery = require("../models/Battery");
 const BatteryScrap = require("../models/BatteryScrap");
-const { adjustBatteryStockByUnits } = require("../utils/batteryInventoryAdjust");
-const { adjustChargerStockByUnits } = require("../utils/chargerInventoryAdjust");
+const {
+  adjustBatteryStockByUnits,
+} = require("../utils/batteryInventoryAdjust");
+const {
+  adjustChargerStockByUnits,
+} = require("../utils/chargerInventoryAdjust");
 const Charger = require("../models/Charger");
+const Customer = require("../models/Customer");
 const OldCharger = require("../models/OldCharger");
 const OldChargerSummary = require("../models/OldChargerSummary");
 const OldScooty = require("../models/OldScooty");
@@ -35,6 +43,52 @@ const {
 } = require("../utils/oldChargerSummaryAdjust");
 
 const VALID_OLD_CHARGER_INVENTORY_VOLTAGES = ["48V", "60V", "72V"];
+
+function normalizeMobile(input) {
+  const digits = String(input || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 12 && digits.startsWith("91")) return digits.slice(2);
+  if (digits.length > 10) return digits.slice(-10);
+  return digits;
+}
+
+function cleanText(input) {
+  const value = String(input || "").trim();
+  if (!value) return "";
+  if (value.toUpperCase() === "N/A") return "";
+  return value;
+}
+
+async function upsertCustomerFromJobcardPayload(payload) {
+  const name = cleanText(payload?.customerName);
+  const place = cleanText(payload?.place);
+  const mobile = cleanText(payload?.mobile);
+  const mobileNormalized = normalizeMobile(mobile);
+
+  if (!name || !place || !mobileNormalized) {
+    return null;
+  }
+
+  const customer = await Customer.findOneAndUpdate(
+    { mobileNormalized },
+    {
+      $set: {
+        name,
+        place,
+        mobile,
+        mobileNormalized,
+      },
+    },
+    {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true,
+      runValidators: true,
+    },
+  );
+
+  return customer;
+}
 
 /** Jobcard parts store the battery doc id on spareId (new battery sales); may be populated. */
 function resolveBatteryInventoryIdFromPart(part) {
@@ -64,7 +118,7 @@ function parseVoltageForOldChargerJobcard(v) {
 function isOldChargerStockSalePartPlain(part) {
   if (!part || part.partType !== "sales") return false;
   const nameLooksOld = /^\s*old\s*charger\s*$/i.test(
-    String(part.spareName || "").trim()
+    String(part.spareName || "").trim(),
   );
   const st = (part.salesType || "").toString().toLowerCase();
   if (st !== "charger" && !(part.isCustom && nameLooksOld)) return false;
@@ -156,7 +210,7 @@ function sumOldChargerStockSaleQtyByVoltage(parts) {
 async function restoreOldChargerUnitsFromJobcardSnapshots(
   jobcard,
   voltage,
-  count
+  count,
 ) {
   if (!count || !jobcard) return;
   if (!jobcard.consumedOldChargers) jobcard.consumedOldChargers = [];
@@ -172,13 +226,13 @@ async function restoreOldChargerUnitsFromJobcardSnapshots(
   }
   if (snapshots.length) {
     await OldCharger.insertMany(
-      snapshots.map((snap) => oldChargerSnapshotToRow(snap))
+      snapshots.map((snap) => oldChargerSnapshotToRow(snap)),
     );
   }
   const summaryOnly = count - snapshots.length;
   if (summaryOnly > 0) {
     console.warn(
-      `[jobcard] Old charger restore: re-inserted ${snapshots.length}/${count} for ${voltage}; summary +${summaryOnly} only`
+      `[jobcard] Old charger restore: re-inserted ${snapshots.length}/${count} for ${voltage}; summary +${summaryOnly} only`,
     );
   }
   await adjustOldChargerSummaryDelta(voltage, count);
@@ -186,7 +240,7 @@ async function restoreOldChargerUnitsFromJobcardSnapshots(
 
 async function restoreOldChargerInventoryAfterJobcardEdit(
   existingJobcard,
-  newParts
+  newParts,
 ) {
   if (!existingJobcard || !existingJobcard.inventoryAdjusted) return;
   const beforeMap = sumOldChargerStockSaleQtyByVoltage(existingJobcard.parts);
@@ -199,7 +253,7 @@ async function restoreOldChargerInventoryAfterJobcardEdit(
     await restoreOldChargerUnitsFromJobcardSnapshots(
       existingJobcard,
       voltage,
-      prev - next
+      prev - next,
     );
   }
 }
@@ -274,7 +328,7 @@ const adjustSpareInventoryForJobcard = async (jobcard, mode = "deduct") => {
       part.fifoLinePurchaseCost = totalCost;
       if (deducted < qty) {
         console.warn(
-          `[jobcard] FIFO short spare ${spare._id}: need ${qty}, deducted ${deducted}`
+          `[jobcard] FIFO short spare ${spare._id}: need ${qty}, deducted ${deducted}`,
         );
       }
     } else {
@@ -309,7 +363,9 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
 
   const oldScootyNewBatteryUnits = (part) => {
     // Lead scooty uses 4/5/6 individual batteries; lithium is treated as 1 pack.
-    const chem = String(part?.batteryChemistry || "").trim().toLowerCase();
+    const chem = String(part?.batteryChemistry || "")
+      .trim()
+      .toLowerCase();
     if (chem !== "lead") return 1;
     const v = String(part?.batteryVoltage || "").trim();
     if (v === "48") return 4;
@@ -359,7 +415,10 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
       if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
         spare.markModified("stockEntries");
       }
-      if (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0) {
+      if (
+        Array.isArray(spare.colorQuantity) &&
+        spare.colorQuantity.length > 0
+      ) {
         spare.markModified("colorQuantity");
       }
       await spare.save();
@@ -368,14 +427,22 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
 
     // 3) Restore new-battery and new-charger stock consumed by old-scooty sale lines.
     for (const part of jobcard.parts) {
-      if (!part || part.partType !== "sales" || part.salesType !== "oldScooty") {
+      if (
+        !part ||
+        part.partType !== "sales" ||
+        part.salesType !== "oldScooty"
+      ) {
         continue;
       }
       if (part.batteryType === "newBattery" && part.batteryInventoryId) {
         const batteryId = String(part.batteryInventoryId);
         const battery = await Battery.findById(batteryId);
         if (battery) {
-          adjustBatteryStockByUnits(battery, oldScootyNewBatteryUnits(part), "restore");
+          adjustBatteryStockByUnits(
+            battery,
+            oldScootyNewBatteryUnits(part),
+            "restore",
+          );
           if (
             Array.isArray(battery.stockEntries) &&
             battery.stockEntries.length > 0
@@ -404,10 +471,12 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
   }
 
   // mode === "deduct"
-  if (!Array.isArray(jobcard.consumedOldScooties)) jobcard.consumedOldScooties = [];
+  if (!Array.isArray(jobcard.consumedOldScooties))
+    jobcard.consumedOldScooties = [];
   if (!Array.isArray(jobcard.consumedOldScootySaleSpares))
     jobcard.consumedOldScootySaleSpares = [];
-  if (!Array.isArray(jobcard.consumedOldChargers)) jobcard.consumedOldChargers = [];
+  if (!Array.isArray(jobcard.consumedOldChargers))
+    jobcard.consumedOldChargers = [];
 
   for (const part of jobcard.parts) {
     if (!part || part.partType !== "sales" || part.salesType !== "oldScooty") {
@@ -421,14 +490,17 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
     if (pmcKey) {
       const all = await OldScooty.find({}).lean();
       scooty = all.find(
-        (row) => normalizePmcNoForMatch(row?.pmcNo || "") === pmcKey
+        (row) => normalizePmcNoForMatch(row?.pmcNo || "") === pmcKey,
       );
       if (scooty) {
         await OldScooty.updateOne(
           { _id: scooty._id },
-          { $set: { isDeleted: true } }
+          { $set: { isDeleted: true } },
         );
-        console.log("[soft-delete] OldScooty (jobcard sale):", String(scooty._id));
+        console.log(
+          "[soft-delete] OldScooty (jobcard sale):",
+          String(scooty._id),
+        );
         jobcard.consumedOldScooties.push(scooty);
       }
     }
@@ -462,7 +534,7 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
         }
         if (deducted < qty) {
           console.warn(
-            `[jobcard-oldScooty] FIFO short spare ${spare._id}: need ${qty}, deducted ${deducted}`
+            `[jobcard-oldScooty] FIFO short spare ${spare._id}: need ${qty}, deducted ${deducted}`,
           );
         }
       } else {
@@ -473,7 +545,10 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
       if (Array.isArray(spare.stockEntries) && spare.stockEntries.length > 0) {
         spare.markModified("stockEntries");
       }
-      if (Array.isArray(spare.colorQuantity) && spare.colorQuantity.length > 0) {
+      if (
+        Array.isArray(spare.colorQuantity) &&
+        spare.colorQuantity.length > 0
+      ) {
         spare.markModified("colorQuantity");
       }
 
@@ -519,7 +594,11 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
       const batteryId = String(part.batteryInventoryId);
       const battery = await Battery.findById(batteryId);
       if (battery) {
-        adjustBatteryStockByUnits(battery, oldScootyNewBatteryUnits(part), "restore");
+        adjustBatteryStockByUnits(
+          battery,
+          oldScootyNewBatteryUnits(part),
+          "restore",
+        );
         if (
           Array.isArray(battery.stockEntries) &&
           battery.stockEntries.length > 0
@@ -574,7 +653,9 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
     if (part.chargerType === "oldCharger" && mode === "deduct") {
       const volRaw = String(part.chargerVoltage || "").trim();
       const voltage = parseVoltageForOldChargerJobcard(volRaw || "");
-      const batteryType = normalizeBatteryTypeForOldCharger(part.chargerChemistry);
+      const batteryType = normalizeBatteryTypeForOldCharger(
+        part.chargerChemistry,
+      );
       if (VALID_OLD_CHARGER_INVENTORY_VOLTAGES.includes(voltage)) {
         const row = await OldCharger.findOne({
           voltage,
@@ -586,9 +667,12 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
         if (row) {
           await OldCharger.updateOne(
             { _id: row._id },
-            { $set: { isDeleted: true } }
+            { $set: { isDeleted: true } },
           );
-          console.log("[soft-delete] OldCharger (jobcard sale):", String(row._id));
+          console.log(
+            "[soft-delete] OldCharger (jobcard sale):",
+            String(row._id),
+          );
           jobcard.consumedOldChargers.push({
             voltage: row.voltage,
             batteryType: row.batteryType,
@@ -603,7 +687,7 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
           await adjustOldChargerSummaryByStatusDelta(voltage, "working", -1);
         } else {
           console.warn(
-            `[jobcard-oldScooty] No working old charger row for ${voltage} (${batteryType})`
+            `[jobcard-oldScooty] No working old charger row for ${voltage} (${batteryType})`,
           );
         }
       }
@@ -623,7 +707,7 @@ const adjustOldScootyInventoryForSales = async (jobcard, mode = "deduct") => {
 // mode: "deduct" when applying, "restore" when rolling back (on delete)
 const adjustBatteryInventoryForReplacements = async (
   jobcard,
-  mode = "deduct"
+  mode = "deduct",
 ) => {
   if (!jobcard || !Array.isArray(jobcard.parts) || jobcard.parts.length === 0) {
     return;
@@ -649,7 +733,7 @@ const adjustBatteryInventoryForReplacements = async (
       Number(
         part.selectedQuantity !== undefined && part.selectedQuantity !== null
           ? part.selectedQuantity
-          : part.quantity
+          : part.quantity,
       ) || 0;
     if (qtyUnits <= 0) {
       continue;
@@ -687,7 +771,7 @@ const adjustBatteryInventoryForReplacements = async (
 // Deduct/restore individual battery units, same as replacement logic.
 const adjustBatteryInventoryForNewBatterySales = async (
   jobcard,
-  mode = "deduct"
+  mode = "deduct",
 ) => {
   if (!jobcard || !Array.isArray(jobcard.parts) || jobcard.parts.length === 0) {
     return;
@@ -712,7 +796,7 @@ const adjustBatteryInventoryForNewBatterySales = async (
       Number(
         part.selectedQuantity !== undefined && part.selectedQuantity !== null
           ? part.selectedQuantity
-          : part.quantity
+          : part.quantity,
       ) || 0;
     if (qtyUnits <= 0) continue;
 
@@ -743,7 +827,7 @@ const adjustBatteryInventoryForNewBatterySales = async (
 // Deduct/restore charger stock (FIFO on stockEntries when present).
 const adjustChargerInventoryForReplacements = async (
   jobcard,
-  mode = "deduct"
+  mode = "deduct",
 ) => {
   if (!jobcard || !Array.isArray(jobcard.parts) || jobcard.parts.length === 0) {
     return;
@@ -772,7 +856,7 @@ const adjustChargerInventoryForReplacements = async (
       Number(
         part.quantity !== undefined && part.quantity !== null
           ? part.quantity
-          : part.selectedQuantity
+          : part.selectedQuantity,
       ) || 0;
     if (qty <= 0) continue;
 
@@ -806,7 +890,7 @@ const adjustChargerInventoryForReplacements = async (
 // Deduct/restore charger stock (FIFO on stockEntries when present).
 const adjustChargerInventoryForNewChargerSales = async (
   jobcard,
-  mode = "deduct"
+  mode = "deduct",
 ) => {
   if (!jobcard || !Array.isArray(jobcard.parts) || jobcard.parts.length === 0) {
     return;
@@ -835,7 +919,7 @@ const adjustChargerInventoryForNewChargerSales = async (
       Number(
         part.selectedQuantity !== undefined && part.selectedQuantity !== null
           ? part.selectedQuantity
-          : part.quantity
+          : part.quantity,
       ) || 0;
     if (qty <= 0) continue;
 
@@ -868,7 +952,7 @@ const adjustChargerInventoryForNewChargerSales = async (
 // - Any battery line with scrapAvailable/scrapQuantity: add scrap stock as a new entry
 const adjustBatteryScrapInventoryForOldBatterySales = async (
   jobcard,
-  mode = "deduct"
+  mode = "deduct",
 ) => {
   if (!jobcard || !Array.isArray(jobcard.parts) || jobcard.parts.length === 0) {
     return;
@@ -888,9 +972,12 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
     if (jobcardNumber) {
       await BatteryScrap.updateMany(
         { jobcardNumber },
-        { $set: { isDeleted: true } }
+        { $set: { isDeleted: true } },
       );
-      console.log("[soft-delete] BatteryScrap (jobcard restore):", jobcardNumber);
+      console.log(
+        "[soft-delete] BatteryScrap (jobcard restore):",
+        jobcardNumber,
+      );
     }
 
     // 2) Re-add units that were consumed from existing scrap stock.
@@ -900,7 +987,7 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
         consumed.map((snap) => ({
           quantity: Math.max(1, Number(snap.quantity) || 1),
           entryDate: snap.entryDate ? new Date(snap.entryDate) : new Date(),
-        }))
+        })),
       );
     }
     return;
@@ -914,8 +1001,8 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
       Number(
         part.quantity !== undefined && part.quantity !== null
           ? part.quantity
-          : part.selectedQuantity
-      ) || 1
+          : part.selectedQuantity,
+      ) || 1,
     );
   const getOldScootyBatteryUnitCount = (part) => {
     const baseQty = getPartQty(part);
@@ -933,7 +1020,9 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
     part.salesType === "oldScooty" &&
     String(part.batteryType || "").toLowerCase() === "oldbattery";
   const isBatteryReplacementPart = (part) =>
-    part && part.partType === "replacement" && part.replacementType === "battery";
+    part &&
+    part.partType === "replacement" &&
+    part.replacementType === "battery";
   const isOldBatteryLine = (part) =>
     String(part?.batteryOldNew || "").toLowerCase() === "old";
 
@@ -983,13 +1072,13 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
         if (left <= 0) {
           await BatteryScrap.updateOne(
             { _id: d._id },
-            { $set: { isDeleted: true } }
+            { $set: { isDeleted: true } },
           );
           console.log("[soft-delete] BatteryScrap (consumed):", String(d._id));
         } else {
           await BatteryScrap.updateOne(
             { _id: d._id },
-            { $set: { quantity: left } }
+            { $set: { quantity: left } },
           );
         }
 
@@ -1002,7 +1091,7 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
         console.warn(
           `[jobcard] Battery scrap sale: requested ${soldQty}, consumed ${
             soldQty - remaining
-          } (insufficient stock)`
+          } (insufficient stock)`,
         );
       }
     }
@@ -1028,7 +1117,7 @@ const adjustBatteryScrapInventoryForOldBatterySales = async (
 // - Restore (delete jobcard): remove rows tagged with jobcardNumber; re-insert consumed snapshots; bump summary back.
 const adjustOldChargerEntriesForReplacementChargers = async (
   jobcard,
-  mode = "deduct"
+  mode = "deduct",
 ) => {
   if (!jobcard || !Array.isArray(jobcard.parts) || jobcard.parts.length === 0) {
     return;
@@ -1067,7 +1156,7 @@ const adjustOldChargerEntriesForReplacementChargers = async (
       }
       await OldCharger.updateMany(
         { jobcardNumber },
-        { $set: { isDeleted: true } }
+        { $set: { isDeleted: true } },
       );
       console.log("[soft-delete] OldCharger (jobcard restore):", jobcardNumber);
     }
@@ -1075,11 +1164,13 @@ const adjustOldChargerEntriesForReplacementChargers = async (
     const consumed = jobcard.consumedOldChargers || [];
     if (consumed.length) {
       try {
-        await OldCharger.insertMany(consumed.map((snap) => oldChargerSnapshotToRow(snap)));
+        await OldCharger.insertMany(
+          consumed.map((snap) => oldChargerSnapshotToRow(snap)),
+        );
       } catch (insErr) {
         console.error(
           "[jobcard] Old charger restore insertMany failed:",
-          insErr.message
+          insErr.message,
         );
         throw insErr;
       }
@@ -1092,7 +1183,7 @@ const adjustOldChargerEntriesForReplacementChargers = async (
     // Stock sale may have decreased summary only (no rows / no snapshots). Restore that gap.
     const plainPartsRestore = Array.isArray(jobcard.parts)
       ? jobcard.parts.map((p) =>
-          p && typeof p.toObject === "function" ? p.toObject() : { ...p }
+          p && typeof p.toObject === "function" ? p.toObject() : { ...p },
         )
       : [];
     const soldMap = sumOldChargerStockSaleQtyByVoltage(plainPartsRestore);
@@ -1112,7 +1203,7 @@ const adjustOldChargerEntriesForReplacementChargers = async (
   // mode === "deduct"
 
   const plainParts = jobcard.parts.map((p) =>
-    p && typeof p.toObject === "function" ? p.toObject() : { ...p }
+    p && typeof p.toObject === "function" ? p.toObject() : { ...p },
   );
 
   // 0) Sell old charger from stock: remove working units + summary.
@@ -1125,7 +1216,7 @@ const adjustOldChargerEntriesForReplacementChargers = async (
     if (!volRaw) {
       console.warn(
         "[jobcard] Old charger sale line skipped: missing voltage on part",
-        part.spareName
+        part.spareName,
       );
       continue;
     }
@@ -1144,11 +1235,11 @@ const adjustOldChargerEntriesForReplacementChargers = async (
     if (docs.length) {
       await OldCharger.updateMany(
         { _id: { $in: docs.map((d) => d._id) } },
-        { $set: { isDeleted: true } }
+        { $set: { isDeleted: true } },
       );
       console.log(
         "[soft-delete] OldCharger (stock sale consumed):",
-        docs.length
+        docs.length,
       );
 
       if (!jobcard.consumedOldChargers) jobcard.consumedOldChargers = [];
@@ -1172,11 +1263,11 @@ const adjustOldChargerEntriesForReplacementChargers = async (
       if (dec > 0) {
         await adjustOldChargerSummaryDelta(voltage, -dec);
         console.warn(
-          `[jobcard] Old charger sale: no OldCharger rows for ${voltage}; decreased summary working by ${dec} only`
+          `[jobcard] Old charger sale: no OldCharger rows for ${voltage}; decreased summary working by ${dec} only`,
         );
       } else {
         console.warn(
-          `[jobcard] Old charger sale: no rows and no summary working for ${voltage} (qty ${qty})`
+          `[jobcard] Old charger sale: no rows and no summary working for ${voltage} (qty ${qty})`,
         );
       }
     }
@@ -1283,7 +1374,8 @@ function jobcardPartsAffectStockEqual(oldParts, newParts) {
   const norm = (parts) =>
     JSON.stringify(
       (parts || []).map((p) => {
-        const x = p && typeof p.toObject === "function" ? p.toObject() : { ...p };
+        const x =
+          p && typeof p.toObject === "function" ? p.toObject() : { ...p };
         return {
           spareId: String(x.spareId || ""),
           q: Number(x.quantity) || 1,
@@ -1306,7 +1398,7 @@ function jobcardPartsAffectStockEqual(oldParts, newParts) {
           scrap: Number(x.scrapQuantity) || 0,
           oca: x.oldChargerAvailable,
         };
-      })
+      }),
     );
   return norm(oldParts) === norm(newParts);
 }
@@ -1361,6 +1453,14 @@ const createJobcard = async (req, res) => {
     const jobcardData = { ...req.body };
     delete jobcardData.jobcardNumber;
 
+    const customer = await upsertCustomerFromJobcardPayload(jobcardData);
+    if (customer) {
+      jobcardData.customer = customer._id;
+      jobcardData.customerName = customer.name;
+      jobcardData.place = customer.place;
+      jobcardData.mobile = customer.mobile;
+    }
+
     const totalAmount = Array.isArray(jobcardData.parts)
       ? jobcardData.parts.reduce((sum, part) => {
           if (part.partType === "replacement" || part.replacementType) {
@@ -1400,7 +1500,7 @@ const getJobcards = async (req, res) => {
       // Match jobcards where jobcardType contains the filter (handles "service, replacement" etc.)
       const escaped = String(jobcardType).replace(
         /[.*+?^${}()|[\]\\]/g,
-        "\\$&"
+        "\\$&",
       );
       filter.jobcardType = new RegExp(`\\b${escaped}\\b`, "i");
     }
@@ -1417,7 +1517,8 @@ const getJobcards = async (req, res) => {
 
     const jobcards = await Jobcard.find(filter)
       .sort({ createdAt: -1 })
-      .populate("parts.spareId", "name sku");
+      .populate("parts.spareId", "name sku")
+      .populate("customer", "name place mobile mobileNormalized");
 
     res.json(jobcards);
   } catch (error) {
@@ -1433,8 +1534,11 @@ const getJobcardById = async (req, res) => {
   try {
     const jobcard = await Jobcard.findById(req.params.id).populate(
       "parts.spareId",
-      "name sku price quantity hasColors colorQuantity"
+      "name sku price quantity hasColors colorQuantity",
     );
+    if (jobcard) {
+      await jobcard.populate("customer", "name place mobile mobileNormalized");
+    }
 
     if (!jobcard) {
       return res.status(404).json({ message: "Jobcard not found" });
@@ -1452,11 +1556,28 @@ const getJobcardById = async (req, res) => {
 // @access  Public
 const updateJobcard = async (req, res) => {
   try {
-    const jobcardData = req.body;
+    const jobcardData = { ...req.body };
 
     const existing = await Jobcard.findById(req.params.id);
     if (!existing) {
       return res.status(404).json({ message: "Jobcard not found" });
+    }
+
+    const customer = await upsertCustomerFromJobcardPayload({
+      customerName:
+        jobcardData.customerName !== undefined
+          ? jobcardData.customerName
+          : existing.customerName,
+      place:
+        jobcardData.place !== undefined ? jobcardData.place : existing.place,
+      mobile:
+        jobcardData.mobile !== undefined ? jobcardData.mobile : existing.mobile,
+    });
+    if (customer) {
+      jobcardData.customer = customer._id;
+      jobcardData.customerName = customer.name;
+      jobcardData.place = customer.place;
+      jobcardData.mobile = customer.mobile;
     }
 
     // Calculate total amount from parts if parts are provided
@@ -1503,7 +1624,7 @@ const updateJobcard = async (req, res) => {
       ) {
         await restoreOldChargerInventoryAfterJobcardEdit(
           existing,
-          jobcardData.parts
+          jobcardData.parts,
         );
         jobcardData.consumedOldChargers = existing.consumedOldChargers;
       }
@@ -1512,8 +1633,10 @@ const updateJobcard = async (req, res) => {
     const jobcard = await Jobcard.findByIdAndUpdate(
       req.params.id,
       jobcardData,
-      { new: true, runValidators: true }
-    ).populate("parts.spareId", "name sku");
+      { new: true, runValidators: true },
+    )
+      .populate("parts.spareId", "name sku")
+      .populate("customer", "name place mobile mobileNormalized");
 
     if (!jobcard) {
       return res.status(404).json({ message: "Jobcard not found" });
@@ -1609,7 +1732,7 @@ const finalizeJobcard = async (req, res) => {
         (p) =>
           p.amount === paidAmount &&
           p.date === paymentDateString &&
-          p.paymentMode === (paymentMode || "cash")
+          p.paymentMode === (paymentMode || "cash"),
       );
       // Add initial payment to history if it doesn't exist
       if (!paymentExists) {
@@ -1624,7 +1747,7 @@ const finalizeJobcard = async (req, res) => {
       // Update paidAmount to match total in payment history
       const totalPaid = jobcard.paymentHistory.reduce(
         (sum, payment) => sum + (payment.amount || 0),
-        0
+        0,
       );
       jobcard.paidAmount = totalPaid;
     }
@@ -1647,13 +1770,16 @@ const finalizeJobcard = async (req, res) => {
 
     // Always derive pending amount from bill total - total paid.
     // This prevents drift if older records or frontend sent incorrect pendingAmount.
-    const totalPaidNow = jobcard.paymentHistory?.reduce(
-      (sum, payment) => sum + (payment.amount || 0),
-      0
-    ) || jobcard.paidAmount || 0;
+    const totalPaidNow =
+      jobcard.paymentHistory?.reduce(
+        (sum, payment) => sum + (payment.amount || 0),
+        0,
+      ) ||
+      jobcard.paidAmount ||
+      0;
     jobcard.pendingAmount = Math.max(
       0,
-      (Number(jobcard.totalAmount) || 0) - totalPaidNow
+      (Number(jobcard.totalAmount) || 0) - totalPaidNow,
     );
 
     // Force finalize: mark finalized and clear pending (Option B).
@@ -1715,8 +1841,10 @@ const settleJobcard = async (req, res) => {
     const totalPaidBefore =
       jobcard.paymentHistory?.reduce(
         (sum, payment) => sum + (payment.amount || 0),
-        0
-      ) || jobcard.paidAmount || 0;
+        0,
+      ) ||
+      jobcard.paidAmount ||
+      0;
     const billTotal = calculateBillTotalFromJobcard(jobcard);
     const currentPending = Math.max(0, billTotal - totalPaidBefore);
     if (amount > currentPending) {
@@ -1788,7 +1916,7 @@ const settleJobcard = async (req, res) => {
     // Update total paid amount
     const totalPaid = jobcard.paymentHistory.reduce(
       (sum, payment) => sum + (payment.amount || 0),
-      0
+      0,
     );
     jobcard.paidAmount = totalPaid;
 
@@ -1841,7 +1969,7 @@ const deleteJobcard = async (req, res) => {
       } catch (invErr) {
         console.error(
           "Error restoring inventory while deleting jobcard:",
-          invErr
+          invErr,
         );
         // Continue with delete even if inventory restore fails
       }
@@ -1873,8 +2001,10 @@ const markJobcardSynced = async (req, res) => {
     const jobcard = await Jobcard.findByIdAndUpdate(
       req.params.id,
       { lastSyncedAt: ts },
-      { new: true, runValidators: true }
-    ).populate("parts.spareId", "name sku");
+      { new: true, runValidators: true },
+    )
+      .populate("parts.spareId", "name sku")
+      .populate("customer", "name place mobile mobileNormalized");
 
     if (!jobcard) {
       return res.status(404).json({ message: "Jobcard not found" });
@@ -1902,9 +2032,7 @@ const setJobcardPartManualUnitCost = async (req, res) => {
       return res.status(404).json({ message: "Jobcard not found" });
     }
 
-    const part = Array.isArray(jobcard.parts)
-      ? jobcard.parts.id(partId)
-      : null;
+    const part = Array.isArray(jobcard.parts) ? jobcard.parts.id(partId) : null;
     if (!part) {
       return res.status(404).json({ message: "Jobcard part not found" });
     }
@@ -1913,7 +2041,12 @@ const setJobcardPartManualUnitCost = async (req, res) => {
     jobcard.markModified("parts");
     await jobcard.save();
 
-    res.json({ success: true, jobcardId, partId, manualUnitPurchaseCost: nextCost });
+    res.json({
+      success: true,
+      jobcardId,
+      partId,
+      manualUnitPurchaseCost: nextCost,
+    });
   } catch (error) {
     console.error("Error setting manual unit purchase cost:", error);
     res.status(500).json({ message: "Server error", error: error.message });

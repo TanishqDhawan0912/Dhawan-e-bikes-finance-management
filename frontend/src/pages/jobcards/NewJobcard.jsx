@@ -26,9 +26,13 @@ const isValidObjectId = (id) => {
 const OLD_CHARGER_SALE_VOLTAGES = ["48V", "60V", "72V"];
 
 function chargerMatchesOldScootyChemistry(charger, chemistry) {
-  const want = String(chemistry || "").trim().toLowerCase();
+  const want = String(chemistry || "")
+    .trim()
+    .toLowerCase();
   if (!want) return false;
-  const got = String(charger?.batteryType || "").trim().toLowerCase();
+  const got = String(charger?.batteryType || "")
+    .trim()
+    .toLowerCase();
   return got === want;
 }
 
@@ -36,10 +40,11 @@ function chargerMatchesOldScootyChemistry(charger, chemistry) {
 function chargerVoltageMatchesScootyNominal(chargerVoltageStr, scootyDigit) {
   const target = parseInt(String(scootyDigit || ""), 10);
   if (!Number.isFinite(target) || target <= 0) return true;
-  const raw = String(chargerVoltageStr || "").trim().toLowerCase();
+  const raw = String(chargerVoltageStr || "")
+    .trim()
+    .toLowerCase();
   if (!raw) return false;
-  const ok = (n) =>
-    Number.isFinite(n) && Math.round(Number(n)) === target;
+  const ok = (n) => Number.isFinite(n) && Math.round(Number(n)) === target;
   const m1 = raw.match(/^(\d+(?:\.\d+)?)/);
   if (m1 && ok(parseFloat(m1[1]))) return true;
   const m2 = raw.match(/(\d+(?:\.\d+)?)\s*v\b/);
@@ -48,9 +53,13 @@ function chargerVoltageMatchesScootyNominal(chargerVoltageStr, scootyDigit) {
 }
 
 function batteryMatchesOldScootyChemistry(battery, chemistry) {
-  const want = String(chemistry || "").trim().toLowerCase();
+  const want = String(chemistry || "")
+    .trim()
+    .toLowerCase();
   if (!want) return false;
-  const got = String(battery?.batteryType || "").trim().toLowerCase();
+  const got = String(battery?.batteryType || "")
+    .trim()
+    .toLowerCase();
   return got === want;
 }
 
@@ -89,7 +98,7 @@ function mergeOldChargerStockStats(entries, summaryData) {
     (v) =>
       (summaryData[v]?.total ?? 0) === 0 &&
       (summaryData[v]?.working ?? 0) === 0 &&
-      (summaryData[v]?.notWorking ?? 0) === 0
+      (summaryData[v]?.notWorking ?? 0) === 0,
   );
   if (allZero) return computed;
   return {
@@ -104,6 +113,7 @@ export default function NewJobcard() {
   const navigate = useNavigate();
   const location = useLocation();
   const editJobcard = location.state?.editJobcard || null;
+  const prefillCustomer = location.state?.prefillCustomer || null;
   const isEditMode = Boolean(editJobcard && editJobcard._id);
   const scrollToAddPartsFromPending =
     Boolean(location.state?.scrollToAddParts) && isEditMode;
@@ -197,12 +207,12 @@ export default function NewJobcard() {
     const displayValue = isBatterySaleTotal
       ? getPartTotal(part) // total line amount (net, after scrap deduction)
       : isBatteryReplacementTotal
-      ? (Number(part.price) || 0) * qty // total for qty
-      : Number(part.price);
+        ? (Number(part.price) || 0) * qty // total for qty
+        : Number(part.price);
     setEditingPriceValue(
       displayValue != null && !isNaN(Number(displayValue))
         ? String(displayValue)
-        : "0"
+        : "0",
     );
   };
   const cancelEditPrice = () => {
@@ -252,7 +262,7 @@ export default function NewJobcard() {
               // Default: user edits unit price.
               return { ...p, price: next };
             })()
-          : p
+          : p,
       ),
     }));
     cancelEditPrice();
@@ -369,7 +379,7 @@ export default function NewJobcard() {
   const [oldScootySpareColor, setOldScootySpareColor] = useState("");
   const [allSparesForOldScooty, setAllSparesForOldScooty] = useState([]);
   const [oldScootySpareSuggestions, setOldScootySpareSuggestions] = useState(
-    []
+    [],
   );
   const [showOldScootySpareSuggestions, setShowOldScootySpareSuggestions] =
     useState(false);
@@ -453,8 +463,8 @@ export default function NewJobcard() {
       const resolvedId = part?.isCustom
         ? `custom-${part?._id || index}`
         : typeof part?.spareId === "object" && part?.spareId !== null
-        ? part.spareId._id || part.spareId.id || `part-${index}`
-        : part?.spareId || `part-${index}`;
+          ? part.spareId._id || part.spareId.id || `part-${index}`
+          : part?.spareId || `part-${index}`;
 
       grouped[mappedType].push({
         lineId:
@@ -539,6 +549,21 @@ export default function NewJobcard() {
     setSelectedSalesType(null);
   }, [isEditMode, editJobcard, today]);
 
+  // Prefill customer fields when arriving from customer profile / QR page.
+  useEffect(() => {
+    if (isEditMode || !prefillCustomer) return;
+    setFormData((prev) => ({
+      ...prev,
+      customerName:
+        String(prefillCustomer.customerName || "").trim() || prev.customerName,
+      place: String(prefillCustomer.place || "").trim() || prev.place,
+      mobile:
+        String(prefillCustomer.mobile || "")
+          .replace(/\D/g, "")
+          .slice(-10) || prev.mobile,
+    }));
+  }, [isEditMode, prefillCustomer]);
+
   useEffect(() => {
     didScrollToAddItemsRef.current = false;
   }, [editJobcard?._id]);
@@ -598,7 +623,7 @@ export default function NewJobcard() {
         selectedParts.replacement && selectedParts.replacement.length > 0;
       if (replacementHasParts) {
         const confirmed = window.confirm(
-          "Replacement section has items. Switching to No Warranty will remove all replacement items from the jobcard. Do you want to continue?"
+          "Replacement section has items. Switching to No Warranty will remove all replacement items from the jobcard. Do you want to continue?",
         );
         if (!confirmed) {
           // Cancel: don't change warranty type (form stays as before, so warranty type is reverted)
@@ -690,10 +715,7 @@ export default function NewJobcard() {
   };
 
   const handlePartSelect = (part, opts = {}) => {
-    const requestedQty = Math.max(
-      1,
-      Math.floor(Number(opts.quantity) || 1)
-    );
+    const requestedQty = Math.max(1, Math.floor(Number(opts.quantity) || 1));
     const hasColors =
       part.hasColors || (part.colorQuantity && part.colorQuantity.length > 0);
 
@@ -746,8 +768,8 @@ export default function NewJobcard() {
         part._id != null
           ? String(part._id)
           : part.id != null
-          ? String(part.id)
-          : undefined;
+            ? String(part.id)
+            : undefined;
       const partData = {
         ...part,
         lineId: newPartLineId(),
@@ -797,7 +819,7 @@ export default function NewJobcard() {
       const colorEntry = part.colorQuantity.find(
         (cq) =>
           String(cq.color).toLowerCase().trim() ===
-          String(part.selectedColor).toLowerCase().trim()
+          String(part.selectedColor).toLowerCase().trim(),
       );
       if (colorEntry && colorEntry.quantity !== undefined) {
         return colorEntry.quantity;
@@ -805,7 +827,9 @@ export default function NewJobcard() {
     }
     // IMPORTANT: `part.quantity` is the selected quantity on saved jobcards, not the available stock.
     // Only use `inventoryQuantity` / `colorQuantity` as stock limit; otherwise allow.
-    return typeof part.inventoryQuantity === "number" ? part.inventoryQuantity : 999;
+    return typeof part.inventoryQuantity === "number"
+      ? part.inventoryQuantity
+      : 999;
   };
 
   // Total for a part (battery sales with scrap: gross - scrap deduction)
@@ -844,7 +868,7 @@ export default function NewJobcard() {
             const colorEntry = part.colorQuantity.find(
               (cq) =>
                 String(cq.color).toLowerCase().trim() ===
-                String(color).toLowerCase().trim()
+                String(color).toLowerCase().trim(),
             );
             if (colorEntry && colorEntry.quantity !== undefined) {
               newInventoryQuantity = colorEntry.quantity;
@@ -866,7 +890,9 @@ export default function NewJobcard() {
   const removePart = (lineKey, partType) => {
     setSelectedParts((prev) => ({
       ...prev,
-      [partType]: prev[partType].filter((part) => getPartLineKey(part) !== lineKey),
+      [partType]: prev[partType].filter(
+        (part) => getPartLineKey(part) !== lineKey,
+      ),
     }));
   };
 
@@ -990,18 +1016,19 @@ export default function NewJobcard() {
   const oldChargerSaleVoltageOptions = useMemo(() => {
     if (!oldChargerStockStats) return [];
     return OLD_CHARGER_SALE_VOLTAGES.filter(
-      (v) => (oldChargerStockStats[v]?.working ?? 0) > 0
+      (v) => (oldChargerStockStats[v]?.working ?? 0) > 0,
     );
   }, [oldChargerStockStats]);
 
   /** When old-scooty uses an old charger from stock, disable voltages with no working units (matches sales old-charger). */
   const oldScootyOldChargerVoltageDisabled = useMemo(() => {
     const noStock = (invKey) =>
-      !oldChargerStockStats || (oldChargerStockStats[invKey]?.working ?? 0) <= 0;
+      !oldChargerStockStats ||
+      (oldChargerStockStats[invKey]?.working ?? 0) <= 0;
     return {
-      "48": noStock("48V"),
-      "60": noStock("60V"),
-      "72": noStock("72V"),
+      48: noStock("48V"),
+      60: noStock("60V"),
+      72: noStock("72V"),
     };
   }, [oldChargerStockStats]);
 
@@ -1053,7 +1080,7 @@ export default function NewJobcard() {
     ) {
       return;
     }
-    const map = { "48": "48V", "60": "60V", "72": "72V" };
+    const map = { 48: "48V", 60: "60V", 72: "72V" };
     const key = map[oldScootyData.chargerVoltage];
     if (!key) return;
     if ((oldChargerStockStats[key]?.working ?? 0) > 0) return;
@@ -1063,13 +1090,13 @@ export default function NewJobcard() {
       ["72", "72V"],
     ];
     const pick = order.find(
-      ([, k]) => (oldChargerStockStats[k]?.working ?? 0) > 0
+      ([, k]) => (oldChargerStockStats[k]?.working ?? 0) > 0,
     );
     const nextVolt = pick ? pick[0] : "";
     setOldScootyData((prev) =>
       prev.chargerType !== "oldCharger"
         ? prev
-        : { ...prev, chargerVoltage: nextVolt }
+        : { ...prev, chargerVoltage: nextVolt },
     );
   }, [
     oldScootyData.chargerChemistry,
@@ -1087,7 +1114,7 @@ export default function NewJobcard() {
     }
 
     const filtered = batteries.filter((battery) =>
-      battery.name?.toLowerCase().includes(batterySearchTerm.toLowerCase())
+      battery.name?.toLowerCase().includes(batterySearchTerm.toLowerCase()),
     );
 
     setBatterySearchResults(filtered.slice(0, 10)); // Limit to 10 results
@@ -1117,7 +1144,7 @@ export default function NewJobcard() {
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setSelectedBatteryIndex((prev) =>
-        prev < batterySearchResults.length - 1 ? prev + 1 : prev
+        prev < batterySearchResults.length - 1 ? prev + 1 : prev,
       );
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
@@ -1213,8 +1240,8 @@ export default function NewJobcard() {
       selectedBattery.ampereValue.trim() !== ""
         ? selectedBattery.ampereValue.trim()
         : selectedBattery.ampereValue && selectedBattery.ampereValue !== ""
-        ? String(selectedBattery.ampereValue)
-        : null;
+          ? String(selectedBattery.ampereValue)
+          : null;
 
     // Calculate price per individual battery
     // sellingPrice is for a battery set, so divide by batteriesPerSet to get price per battery
@@ -1411,7 +1438,7 @@ export default function NewJobcard() {
     }
 
     const matches = (allSparesForControllerMotor || []).filter((spare) =>
-      (spare.name || "").toLowerCase().includes(term)
+      (spare.name || "").toLowerCase().includes(term),
     );
     const sliced = matches.slice(0, 5);
     setControllerSuggestions(sliced);
@@ -1424,9 +1451,7 @@ export default function NewJobcard() {
       ...prev,
       name: spare.name || prev.name,
       price:
-        spare.sellingPrice != null
-          ? String(spare.sellingPrice)
-          : prev.price,
+        spare.sellingPrice != null ? String(spare.sellingPrice) : prev.price,
     }));
     setControllerSuggestions([]);
     setControllerSelectedIndex(-1);
@@ -1452,11 +1477,13 @@ export default function NewJobcard() {
         return prev - 1;
       });
     } else if (e.key === "Enter") {
-      if (controllerSelectedIndex >= 0 &&
-          controllerSelectedIndex < controllerSuggestions.length) {
+      if (
+        controllerSelectedIndex >= 0 &&
+        controllerSelectedIndex < controllerSuggestions.length
+      ) {
         e.preventDefault();
         handleSelectControllerSuggestion(
-          controllerSuggestions[controllerSelectedIndex]
+          controllerSuggestions[controllerSelectedIndex],
         );
       }
     } else if (e.key === "Escape") {
@@ -1482,7 +1509,7 @@ export default function NewJobcard() {
     }
 
     const matches = (allSparesForControllerMotor || []).filter((spare) =>
-      (spare.name || "").toLowerCase().includes(term)
+      (spare.name || "").toLowerCase().includes(term),
     );
     const sliced = matches.slice(0, 5);
     setMotorSuggestions(sliced);
@@ -1495,9 +1522,7 @@ export default function NewJobcard() {
       ...prev,
       name: spare.name || prev.name,
       price:
-        spare.sellingPrice != null
-          ? String(spare.sellingPrice)
-          : prev.price,
+        spare.sellingPrice != null ? String(spare.sellingPrice) : prev.price,
     }));
     setMotorSuggestions([]);
     setMotorSelectedIndex(-1);
@@ -1523,8 +1548,10 @@ export default function NewJobcard() {
         return prev - 1;
       });
     } else if (e.key === "Enter") {
-      if (motorSelectedIndex >= 0 &&
-          motorSelectedIndex < motorSuggestions.length) {
+      if (
+        motorSelectedIndex >= 0 &&
+        motorSelectedIndex < motorSuggestions.length
+      ) {
         e.preventDefault();
         handleSelectMotorSuggestion(motorSuggestions[motorSelectedIndex]);
       }
@@ -1666,7 +1693,7 @@ export default function NewJobcard() {
       name: salesCharger.name,
       price: getSalesChargerPrice(
         salesChargerWarrantyStatus,
-        salesCharger.sellingPrice || 0
+        salesCharger.sellingPrice || 0,
       ),
       selectedQuantity: qty,
       hasColors: false,
@@ -1719,7 +1746,7 @@ export default function NewJobcard() {
     const workingAvail = oldChargerStockStats?.[voltage]?.working ?? 0;
     if (workingAvail <= 0) {
       alert(
-        "No working stock for this voltage. Add or mark working units in Old chargers."
+        "No working stock for this voltage. Add or mark working units in Old chargers.",
       );
       return;
     }
@@ -1737,7 +1764,7 @@ export default function NewJobcard() {
     }
     if (qty > workingAvail) {
       alert(
-        `Quantity cannot exceed working stock for ${voltage}. In stock: ${workingAvail}.`
+        `Quantity cannot exceed working stock for ${voltage}. In stock: ${workingAvail}.`,
       );
       return;
     }
@@ -1885,23 +1912,30 @@ export default function NewJobcard() {
       pmcNo: part.pmcNo || "",
       name: part.name || "",
       price:
-        part.price !== undefined && part.price !== null ? String(part.price) : "",
+        part.price !== undefined && part.price !== null
+          ? String(part.price)
+          : "",
       quantity: String(part.selectedQuantity || 1),
       batteryChemistry: part.batteryChemistry || "lead",
       batteryVoltage:
         part.batteryChemistry === "lithium"
-          ? part.batteryVoltage != null && String(part.batteryVoltage).trim() !== ""
+          ? part.batteryVoltage != null &&
+            String(part.batteryVoltage).trim() !== ""
             ? String(part.batteryVoltage)
             : ""
           : part.batteryVoltage || "48",
       batteryType: part.batteryType || "oldBattery",
       batteryInventoryId:
-        part.batteryInventoryId != null ? String(part.batteryInventoryId) : null,
+        part.batteryInventoryId != null
+          ? String(part.batteryInventoryId)
+          : null,
       chargerType: part.chargerType || "oldCharger",
       chargerChemistry: part.chargerChemistry || "lead",
       chargerVoltage: part.chargerVoltage || "48",
       chargerInventoryId:
-        part.chargerInventoryId != null ? String(part.chargerInventoryId) : null,
+        part.chargerInventoryId != null
+          ? String(part.chargerInventoryId)
+          : null,
       warrantyStatus: part.warrantyStatus || "withoutWarranty",
       chargerWarrantyStatus: part.chargerWarrantyStatus || "noWarranty",
       sparesUsed: Array.isArray(part.sparesUsed) ? part.sparesUsed : [],
@@ -1962,16 +1996,13 @@ export default function NewJobcard() {
         return;
       }
       const voltKey = {
-        "48": "48V",
-        "60": "60V",
-        "72": "72V",
+        48: "48V",
+        60: "60V",
+        72: "72V",
       }[oldScootyData.chargerVoltage];
-      if (
-        !voltKey ||
-        (oldChargerStockStats[voltKey]?.working ?? 0) <= 0
-      ) {
+      if (!voltKey || (oldChargerStockStats[voltKey]?.working ?? 0) <= 0) {
         alert(
-          "Choose a charger voltage that has at least one working unit in Old chargers inventory."
+          "Choose a charger voltage that has at least one working unit in Old chargers inventory.",
         );
         return;
       }
@@ -2001,7 +2032,7 @@ export default function NewJobcard() {
             ? oldScootyData.batteryType === "newBattery" &&
               oldScootySelectedBattery
               ? batteriesPerSetToScootyVoltageDigit(
-                  oldScootySelectedBattery.batteriesPerSet
+                  oldScootySelectedBattery.batteriesPerSet,
                 ) || ""
               : ""
             : oldScootyData.batteryVoltage,
@@ -2054,7 +2085,7 @@ export default function NewJobcard() {
       };
       const nextSales = editingOldScootyPartId
         ? sales.map((p) =>
-            getPartLineKey(p) === editingOldScootyPartId ? oldScootyPart : p
+            getPartLineKey(p) === editingOldScootyPartId ? oldScootyPart : p,
           )
         : [oldScootyPart, ...sales];
       return { ...prev, sales: nextSales };
@@ -2124,7 +2155,7 @@ export default function NewJobcard() {
       if (chem === "lithium") return true;
       return chargerVoltageMatchesScootyNominal(
         c.voltage,
-        oldScootyData.chargerVoltage
+        oldScootyData.chargerVoltage,
       );
     });
   }, [
@@ -2163,7 +2194,7 @@ export default function NewJobcard() {
   const oldScootyFilteredNewBatteries = useMemo(() => {
     const chem = oldScootyData.batteryChemistry;
     return oldScootyBatteries.filter((b) =>
-      batteryMatchesOldScootyChemistry(b, chem)
+      batteryMatchesOldScootyChemistry(b, chem),
     );
   }, [oldScootyBatteries, oldScootyData.batteryChemistry]);
 
@@ -2196,11 +2227,7 @@ export default function NewJobcard() {
 
   useEffect(() => {
     const w = oldScootyData.chargerWarrantyStatus;
-    if (
-      w !== "noWarranty" &&
-      w !== "6months" &&
-      w !== "1year"
-    ) {
+    if (w !== "noWarranty" && w !== "6months" && w !== "1year") {
       setOldScootyData((prev) => ({
         ...prev,
         chargerWarrantyStatus: "noWarranty",
@@ -2219,13 +2246,13 @@ export default function NewJobcard() {
     const filtered = allSparesForOldScooty.filter(
       (s) =>
         s.name?.toLowerCase().includes(term) ||
-        s.supplierName?.toLowerCase().includes(term)
+        s.supplierName?.toLowerCase().includes(term),
     );
     const sliced = filtered.slice(0, 3);
     setOldScootySpareSuggestions(sliced);
     // Don't show suggestions when input exactly matches any suggestion (user just selected it)
     const exactMatch = sliced.some(
-      (s) => s.name?.trim().toLowerCase() === term
+      (s) => s.name?.trim().toLowerCase() === term,
     );
     setShowOldScootySpareSuggestions(sliced.length > 0 && !exactMatch);
     setOldScootySpareSelectedIndex(-1);
@@ -2306,8 +2333,7 @@ export default function NewJobcard() {
 
     const cid = `custom-${Date.now()}`;
     const totalEntered = parseFloat(customSpareData.price);
-    const unitPrice =
-      qtyNumber > 0 ? totalEntered / qtyNumber : totalEntered;
+    const unitPrice = qtyNumber > 0 ? totalEntered / qtyNumber : totalEntered;
     const customPart = {
       id: cid,
       lineId: cid,
@@ -2389,9 +2415,7 @@ export default function NewJobcard() {
     }
     setFormData((prev) => ({
       ...prev,
-      details: prev.details.map((d, i) =>
-        i === editingDetailIndex ? t : d
-      ),
+      details: prev.details.map((d, i) => (i === editingDetailIndex ? t : d)),
     }));
     setEditingDetailIndex(null);
     setEditingDetailText("");
@@ -2451,8 +2475,8 @@ export default function NewJobcard() {
     const primaryType = typesPresent.has("service")
       ? "service"
       : typesPresent.has("replacement")
-      ? "replacement"
-      : "sales";
+        ? "replacement"
+        : "sales";
 
     try {
       // Prepare form data with N/A for empty fields (except customer name)
@@ -2461,6 +2485,9 @@ export default function NewJobcard() {
         customerName: formData.customerName.trim(),
         place: formData.place.trim() || "N/A",
         mobile: formData.mobile.trim() || "N/A",
+        ...(prefillCustomer?.source === "qr" && prefillCustomer?.customerId
+          ? { customerId: prefillCustomer.customerId }
+          : {}),
         charger: formData.charger || "no",
         date: formData.date || today,
         warrantyType: formData.warrantyType || "none",
@@ -2546,13 +2573,15 @@ export default function NewJobcard() {
           if (part.pmcNo) basePart.pmcNo = part.pmcNo;
           if (part.batteryChemistry)
             basePart.batteryChemistry = part.batteryChemistry;
-          if (part.batteryVoltage) basePart.batteryVoltage = part.batteryVoltage;
+          if (part.batteryVoltage)
+            basePart.batteryVoltage = part.batteryVoltage;
           if (part.batteryName) basePart.batteryName = part.batteryName;
           if (part.chargerType) basePart.chargerType = part.chargerType;
           if (part.chargerName) basePart.chargerName = part.chargerName;
           if (part.chargerChemistry)
             basePart.chargerChemistry = part.chargerChemistry;
-          if (part.chargerVoltage) basePart.chargerVoltage = part.chargerVoltage;
+          if (part.chargerVoltage)
+            basePart.chargerVoltage = part.chargerVoltage;
           if (part.chargerWarrantyStatus)
             basePart.chargerWarrantyStatus = part.chargerWarrantyStatus;
           if (Array.isArray(part.sparesUsed) && part.sparesUsed.length) {
@@ -2615,7 +2644,9 @@ export default function NewJobcard() {
         const errorData = await response.json();
         throw new Error(
           errorData.message ||
-            (isEditMode ? "Failed to update jobcard" : "Failed to save jobcard")
+            (isEditMode
+              ? "Failed to update jobcard"
+              : "Failed to save jobcard"),
         );
       }
 
@@ -2626,16 +2657,15 @@ export default function NewJobcard() {
       alert(
         isEditMode
           ? "Jobcard updated successfully!"
-          : "Jobcard saved successfully! It has been added to Pending Jobcards."
+          : "Jobcard saved successfully! It has been added to Pending Jobcards.",
       );
 
       // Pending: return to pending list; finalized edit: return to all jobcards
       const jobcardId = isEditMode ? editJobcard._id : savedJobcard?._id;
-      const isFinalizedEdit =
-        isEditMode && editJobcard?.status === "finalized";
+      const isFinalizedEdit = isEditMode && editJobcard?.status === "finalized";
       navigate(
         isFinalizedEdit ? "/jobcards/all" : "/jobcards/pending",
-        jobcardId ? { state: { editedJobcardId: jobcardId } } : {}
+        jobcardId ? { state: { editedJobcardId: jobcardId } } : {},
       );
 
       if (!isEditMode) {
@@ -2672,10 +2702,10 @@ export default function NewJobcard() {
     } catch (error) {
       console.error(
         isEditMode ? "Error updating jobcard:" : "Error saving jobcard:",
-        error
+        error,
       );
       alert(
-        `Error ${isEditMode ? "updating" : "saving"} jobcard: ${error.message}`
+        `Error ${isEditMode ? "updating" : "saving"} jobcard: ${error.message}`,
       );
     }
   };
@@ -2701,7 +2731,7 @@ export default function NewJobcard() {
     return (
       selectedParts.replacement &&
       selectedParts.replacement.some(
-        (part) => part.replacementType === replacementType
+        (part) => part.replacementType === replacementType,
       )
     );
   };
@@ -3002,7 +3032,9 @@ export default function NewJobcard() {
                     fontSize: "0.875rem",
                   }}
                 />
-                <VoiceWorkDetailsAssistant onAddDetails={addWorkDetailsFromVoice} />
+                <VoiceWorkDetailsAssistant
+                  onAddDetails={addWorkDetailsFromVoice}
+                />
               </div>
               {formData.details.length > 0 && (
                 <div
@@ -3058,7 +3090,9 @@ export default function NewJobcard() {
                             <input
                               type="text"
                               value={editingDetailText}
-                              onChange={(e) => setEditingDetailText(e.target.value)}
+                              onChange={(e) =>
+                                setEditingDetailText(e.target.value)
+                              }
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") {
                                   e.preventDefault();
@@ -3080,7 +3114,9 @@ export default function NewJobcard() {
                               }}
                             />
                           ) : (
-                            <span style={{ wordBreak: "break-word" }}>{detail}</span>
+                            <span style={{ wordBreak: "break-word" }}>
+                              {detail}
+                            </span>
                           )}
                         </div>
                         <div
@@ -3226,20 +3262,20 @@ export default function NewJobcard() {
                       activeTab === "service"
                         ? "2px solid #3b82f6"
                         : hasParts("service")
-                        ? "2px solid #10b981"
-                        : "2px solid #d1d5db",
+                          ? "2px solid #10b981"
+                          : "2px solid #d1d5db",
                     backgroundColor:
                       activeTab === "service"
                         ? "#eff6ff"
                         : hasParts("service")
-                        ? "#d1fae5"
-                        : "#ffffff",
+                          ? "#d1fae5"
+                          : "#ffffff",
                     color:
                       activeTab === "service"
                         ? "#3b82f6"
                         : hasParts("service")
-                        ? "#065f46"
-                        : "#374151",
+                          ? "#065f46"
+                          : "#374151",
                     cursor: "pointer",
                     transition: "all 0.2s ease",
                     textTransform: "capitalize",
@@ -3295,26 +3331,26 @@ export default function NewJobcard() {
                       formData.warrantyType === "none"
                         ? "2px solid #e5e7eb"
                         : activeTab === "replacement"
-                        ? "2px solid #3b82f6"
-                        : hasParts("replacement")
-                        ? "2px solid #10b981"
-                        : "2px solid #d1d5db",
+                          ? "2px solid #3b82f6"
+                          : hasParts("replacement")
+                            ? "2px solid #10b981"
+                            : "2px solid #d1d5db",
                     backgroundColor:
                       formData.warrantyType === "none"
                         ? "#f3f4f6"
                         : activeTab === "replacement"
-                        ? "#eff6ff"
-                        : hasParts("replacement")
-                        ? "#d1fae5"
-                        : "#ffffff",
+                          ? "#eff6ff"
+                          : hasParts("replacement")
+                            ? "#d1fae5"
+                            : "#ffffff",
                     color:
                       formData.warrantyType === "none"
                         ? "#9ca3af"
                         : activeTab === "replacement"
-                        ? "#3b82f6"
-                        : hasParts("replacement")
-                        ? "#065f46"
-                        : "#374151",
+                          ? "#3b82f6"
+                          : hasParts("replacement")
+                            ? "#065f46"
+                            : "#374151",
                     cursor:
                       formData.warrantyType === "none"
                         ? "not-allowed"
@@ -3375,20 +3411,20 @@ export default function NewJobcard() {
                       activeTab === "sales"
                         ? "2px solid #3b82f6"
                         : hasParts("sales")
-                        ? "2px solid #10b981"
-                        : "2px solid #d1d5db",
+                          ? "2px solid #10b981"
+                          : "2px solid #d1d5db",
                     backgroundColor:
                       activeTab === "sales"
                         ? "#eff6ff"
                         : hasParts("sales")
-                        ? "#d1fae5"
-                        : "#ffffff",
+                          ? "#d1fae5"
+                          : "#ffffff",
                     color:
                       activeTab === "sales"
                         ? "#3b82f6"
                         : hasParts("sales")
-                        ? "#065f46"
-                        : "#374151",
+                          ? "#065f46"
+                          : "#374151",
                     cursor: "pointer",
                     transition: "all 0.2s ease",
                     textTransform: "capitalize",
@@ -3473,20 +3509,20 @@ export default function NewJobcard() {
                           selectedReplacementType === "battery"
                             ? "#3b82f6"
                             : hasReplacementType("battery")
-                            ? "#d1fae5"
-                            : "#ffffff",
+                              ? "#d1fae5"
+                              : "#ffffff",
                         color:
                           selectedReplacementType === "battery"
                             ? "#ffffff"
                             : hasReplacementType("battery")
-                            ? "#065f46"
-                            : "#374151",
+                              ? "#065f46"
+                              : "#374151",
                         border: `2px solid ${
                           selectedReplacementType === "battery"
                             ? "#3b82f6"
                             : hasReplacementType("battery")
-                            ? "#10b981"
-                            : "#d1d5db"
+                              ? "#10b981"
+                              : "#d1d5db"
                         }`,
                       }}
                     >
@@ -3505,20 +3541,20 @@ export default function NewJobcard() {
                           selectedReplacementType === "charger"
                             ? "#3b82f6"
                             : hasReplacementType("charger")
-                            ? "#d1fae5"
-                            : "#ffffff",
+                              ? "#d1fae5"
+                              : "#ffffff",
                         color:
                           selectedReplacementType === "charger"
                             ? "#ffffff"
                             : hasReplacementType("charger")
-                            ? "#065f46"
-                            : "#374151",
+                              ? "#065f46"
+                              : "#374151",
                         border: `2px solid ${
                           selectedReplacementType === "charger"
                             ? "#3b82f6"
                             : hasReplacementType("charger")
-                            ? "#10b981"
-                            : "#d1d5db"
+                              ? "#10b981"
+                              : "#d1d5db"
                         }`,
                       }}
                     >
@@ -3537,20 +3573,20 @@ export default function NewJobcard() {
                           selectedReplacementType === "controller"
                             ? "#3b82f6"
                             : hasReplacementType("controller")
-                            ? "#d1fae5"
-                            : "#ffffff",
+                              ? "#d1fae5"
+                              : "#ffffff",
                         color:
                           selectedReplacementType === "controller"
                             ? "#ffffff"
                             : hasReplacementType("controller")
-                            ? "#065f46"
-                            : "#374151",
+                              ? "#065f46"
+                              : "#374151",
                         border: `2px solid ${
                           selectedReplacementType === "controller"
                             ? "#3b82f6"
                             : hasReplacementType("controller")
-                            ? "#10b981"
-                            : "#d1d5db"
+                              ? "#10b981"
+                              : "#d1d5db"
                         }`,
                       }}
                     >
@@ -3569,20 +3605,20 @@ export default function NewJobcard() {
                           selectedReplacementType === "motor"
                             ? "#3b82f6"
                             : hasReplacementType("motor")
-                            ? "#d1fae5"
-                            : "#ffffff",
+                              ? "#d1fae5"
+                              : "#ffffff",
                         color:
                           selectedReplacementType === "motor"
                             ? "#ffffff"
                             : hasReplacementType("motor")
-                            ? "#065f46"
-                            : "#374151",
+                              ? "#065f46"
+                              : "#374151",
                         border: `2px solid ${
                           selectedReplacementType === "motor"
                             ? "#3b82f6"
                             : hasReplacementType("motor")
-                            ? "#10b981"
-                            : "#d1d5db"
+                              ? "#10b981"
+                              : "#d1d5db"
                         }`,
                       }}
                     >
@@ -3598,17 +3634,17 @@ export default function NewJobcard() {
 
               {/* Sales-specific buttons */}
               {activeTab === "sales" && (
-              <div style={{ marginBottom: "1.5rem" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    gap: "0.75rem",
-                    marginBottom: "1rem",
-                    flexWrap: "wrap",
-                  }}
-                >
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      gap: "0.75rem",
+                      marginBottom: "1rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => handleSalesTypeClick("battery")}
@@ -3621,14 +3657,14 @@ export default function NewJobcard() {
                           selectedSalesType === "battery"
                             ? "#2563eb"
                             : hasSalesType("battery")
-                            ? "#e0f2fe"
-                            : "#ffffff",
+                              ? "#e0f2fe"
+                              : "#ffffff",
                         color:
                           selectedSalesType === "battery"
                             ? "#ffffff"
                             : hasSalesType("battery")
-                            ? "#1e3a8a"
-                            : "#111827",
+                              ? "#1e3a8a"
+                              : "#111827",
                         borderRadius: "9999px",
                         border:
                           selectedSalesType === "battery"
@@ -3661,14 +3697,14 @@ export default function NewJobcard() {
                           selectedSalesType === "charger"
                             ? "#2563eb"
                             : hasSalesType("charger")
-                            ? "#e0f2fe"
-                            : "#ffffff",
+                              ? "#e0f2fe"
+                              : "#ffffff",
                         color:
                           selectedSalesType === "charger"
                             ? "#ffffff"
                             : hasSalesType("charger")
-                            ? "#1e3a8a"
-                            : "#111827",
+                              ? "#1e3a8a"
+                              : "#111827",
                         borderRadius: "9999px",
                         border:
                           selectedSalesType === "charger"
@@ -3701,14 +3737,14 @@ export default function NewJobcard() {
                           selectedSalesType === "oldScooty"
                             ? "#2563eb"
                             : hasSalesType("oldScooty")
-                            ? "#e0f2fe"
-                            : "#ffffff",
+                              ? "#e0f2fe"
+                              : "#ffffff",
                         color:
                           selectedSalesType === "oldScooty"
                             ? "#ffffff"
                             : hasSalesType("oldScooty")
-                            ? "#1e3a8a"
-                            : "#111827",
+                              ? "#1e3a8a"
+                              : "#111827",
                         borderRadius: "9999px",
                         border:
                           selectedSalesType === "oldScooty"
@@ -3898,12 +3934,11 @@ export default function NewJobcard() {
                               const list = replacementBatteryType
                                 ? batteries.filter(
                                     (b) =>
-                                      b.batteryType ===
-                                      replacementBatteryType
+                                      b.batteryType === replacementBatteryType,
                                   )
                                 : batteries;
                               const battery = list.find(
-                                (b) => b._id === e.target.value
+                                (b) => b._id === e.target.value,
                               );
                               setSelectedBattery(battery || null);
                             }}
@@ -3926,7 +3961,7 @@ export default function NewJobcard() {
                               ? batteries.filter(
                                   (battery) =>
                                     battery.batteryType ===
-                                    replacementBatteryType
+                                    replacementBatteryType,
                                 )
                               : []
                             ).map((battery) => (
@@ -4155,11 +4190,11 @@ export default function NewJobcard() {
                                 ? chargers.filter(
                                     (c) =>
                                       c.batteryType ===
-                                      replacementChargerBatteryType
+                                      replacementChargerBatteryType,
                                   )
                                 : chargers;
                               const charger = list.find(
-                                (c) => c._id === e.target.value
+                                (c) => c._id === e.target.value,
                               );
                               setSelectedCharger(charger || null);
                             }}
@@ -4180,7 +4215,7 @@ export default function NewJobcard() {
                               ? chargers.filter(
                                   (charger) =>
                                     charger.batteryType ===
-                                    replacementChargerBatteryType
+                                    replacementChargerBatteryType,
                                 )
                               : []
                             ).map((charger) => (
@@ -4294,7 +4329,7 @@ export default function NewJobcard() {
                                         checked={oldChargerVoltageOption === v}
                                         onChange={(e) => {
                                           setOldChargerVoltageOption(
-                                            e.target.value
+                                            e.target.value,
                                           );
                                           setOldChargerVoltage(e.target.value);
                                         }}
@@ -4323,10 +4358,10 @@ export default function NewJobcard() {
                                       }
                                       onChange={(e) => {
                                         setOldChargerVoltageOption(
-                                          e.target.value
+                                          e.target.value,
                                         );
                                         setOldChargerVoltage(
-                                          oldChargerVoltageOther.trim()
+                                          oldChargerVoltageOther.trim(),
                                         );
                                       }}
                                       style={{
@@ -4770,7 +4805,9 @@ export default function NewJobcard() {
                         <input
                           type="text"
                           value={motorData.name}
-                          onChange={(e) => handleMotorNameChange(e.target.value)}
+                          onChange={(e) =>
+                            handleMotorNameChange(e.target.value)
+                          }
                           onKeyDown={handleMotorKeyDown}
                           placeholder="Enter motor name"
                           style={{
@@ -4801,18 +4838,18 @@ export default function NewJobcard() {
                                 onClick={() =>
                                   handleSelectMotorSuggestion(spare)
                                 }
-                              style={{
-                                padding: "0.4rem 0.6rem",
-                                cursor: "pointer",
-                                fontSize: "0.85rem",
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "0.1rem",
-                                backgroundColor:
-                                  index === motorSelectedIndex
-                                    ? "#eff6ff"
-                                    : "#ffffff",
-                              }}
+                                style={{
+                                  padding: "0.4rem 0.6rem",
+                                  cursor: "pointer",
+                                  fontSize: "0.85rem",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "0.1rem",
+                                  backgroundColor:
+                                    index === motorSelectedIndex
+                                      ? "#eff6ff"
+                                      : "#ffffff",
+                                }}
                               >
                                 <span
                                   style={{
@@ -5304,7 +5341,7 @@ export default function NewJobcard() {
                           value={salesBattery?._id || ""}
                           onChange={(e) => {
                             const battery = batteries.find(
-                              (b) => b._id === e.target.value
+                              (b) => b._id === e.target.value,
                             );
                             setSalesBattery(battery || null);
                           }}
@@ -5405,7 +5442,7 @@ export default function NewJobcard() {
                                 checked={salesBatteryScrapAvailable}
                                 onChange={(e) =>
                                   setSalesBatteryScrapAvailable(
-                                    e.target.checked
+                                    e.target.checked,
                                   )
                                 }
                                 style={{
@@ -5869,14 +5906,15 @@ export default function NewJobcard() {
                               parseInt(salesOldChargerQuantity, 10) || 1;
                             if (q > oldChargerWorkingInStock) {
                               setSalesOldChargerQuantity(
-                                String(oldChargerWorkingInStock)
+                                String(oldChargerWorkingInStock),
                               );
                             }
                           }}
                           placeholder="1"
                           min={1}
                           max={
-                            salesOldChargerVoltage && oldChargerWorkingInStock > 0
+                            salesOldChargerVoltage &&
+                            oldChargerWorkingInStock > 0
                               ? oldChargerWorkingInStock
                               : undefined
                           }
@@ -5954,7 +5992,7 @@ export default function NewJobcard() {
                             checked={salesOldChargerOldChargerAvailable}
                             onChange={(e) =>
                               setSalesOldChargerOldChargerAvailable(
-                                e.target.checked
+                                e.target.checked,
                               )
                             }
                             style={{
@@ -6009,10 +6047,10 @@ export default function NewJobcard() {
                                     }
                                     onChange={(e) => {
                                       setSalesOldChargerOldChargerVoltageOption(
-                                        e.target.value
+                                        e.target.value,
                                       );
                                       setSalesOldChargerOldChargerVoltage(
-                                        e.target.value
+                                        e.target.value,
                                       );
                                     }}
                                     style={{
@@ -6042,10 +6080,10 @@ export default function NewJobcard() {
                                   }
                                   onChange={(e) => {
                                     setSalesOldChargerOldChargerVoltageOption(
-                                      e.target.value
+                                      e.target.value,
                                     );
                                     setSalesOldChargerOldChargerVoltage(
-                                      salesOldChargerOldChargerVoltageOther.trim()
+                                      salesOldChargerOldChargerVoltageOther.trim(),
                                     );
                                   }}
                                   style={{ width: "0.9rem", height: "0.9rem" }}
@@ -6061,7 +6099,7 @@ export default function NewJobcard() {
                                 onChange={(e) => {
                                   const value = e.target.value;
                                   setSalesOldChargerOldChargerVoltageOther(
-                                    value
+                                    value,
                                   );
                                   setSalesOldChargerOldChargerVoltage(value);
                                 }}
@@ -6114,7 +6152,7 @@ export default function NewJobcard() {
                                   }
                                   onChange={(e) =>
                                     setSalesOldChargerOldChargerWorking(
-                                      e.target.value
+                                      e.target.value,
                                     )
                                   }
                                   style={{ width: "0.9rem", height: "0.9rem" }}
@@ -6140,7 +6178,7 @@ export default function NewJobcard() {
                                   }
                                   onChange={(e) =>
                                     setSalesOldChargerOldChargerWorking(
-                                      e.target.value
+                                      e.target.value,
                                     )
                                   }
                                   style={{ width: "0.9rem", height: "0.9rem" }}
@@ -6352,11 +6390,11 @@ export default function NewJobcard() {
                             const list = salesChargerBatteryType
                               ? chargers.filter(
                                   (c) =>
-                                    c.batteryType === salesChargerBatteryType
+                                    c.batteryType === salesChargerBatteryType,
                                 )
                               : [];
                             const candidate = list.find(
-                              (c) => c._id === e.target.value
+                              (c) => c._id === e.target.value,
                             );
                             setSalesCharger(candidate || null);
                           }}
@@ -6382,7 +6420,8 @@ export default function NewJobcard() {
                           </option>
                           {(salesChargerBatteryType
                             ? chargers.filter(
-                                (c) => c.batteryType === salesChargerBatteryType
+                                (c) =>
+                                  c.batteryType === salesChargerBatteryType,
                               )
                             : []
                           ).map((charger) => (
@@ -6468,8 +6507,8 @@ export default function NewJobcard() {
                                 {(salesChargerWarrantyStatus === "noWarranty"
                                   ? 1100
                                   : salesChargerWarrantyStatus === "6months"
-                                  ? 1600
-                                  : salesCharger?.sellingPrice || 0
+                                    ? 1600
+                                    : salesCharger?.sellingPrice || 0
                                 ).toFixed(2)}
                               </span>
                             </div>
@@ -6490,7 +6529,7 @@ export default function NewJobcard() {
                                 checked={salesChargerOldChargerAvailable}
                                 onChange={(e) =>
                                   setSalesChargerOldChargerAvailable(
-                                    e.target.checked
+                                    e.target.checked,
                                   )
                                 }
                                 style={{
@@ -6551,10 +6590,10 @@ export default function NewJobcard() {
                                           }
                                           onChange={(e) => {
                                             setSalesChargerOldChargerVoltageOption(
-                                              e.target.value
+                                              e.target.value,
                                             );
                                             setSalesChargerOldChargerVoltage(
-                                              e.target.value
+                                              e.target.value,
                                             );
                                           }}
                                           style={{
@@ -6583,10 +6622,10 @@ export default function NewJobcard() {
                                         }
                                         onChange={(e) => {
                                           setSalesChargerOldChargerVoltageOption(
-                                            e.target.value
+                                            e.target.value,
                                           );
                                           setSalesChargerOldChargerVoltage(
-                                            salesChargerOldChargerVoltageOther.trim()
+                                            salesChargerOldChargerVoltageOther.trim(),
                                           );
                                         }}
                                         style={{
@@ -6605,7 +6644,7 @@ export default function NewJobcard() {
                                       onChange={(e) => {
                                         const value = e.target.value;
                                         setSalesChargerOldChargerVoltageOther(
-                                          value
+                                          value,
                                         );
                                         setSalesChargerOldChargerVoltage(value);
                                       }}
@@ -6636,7 +6675,7 @@ export default function NewJobcard() {
                                   value={salesChargerOldChargerWorking}
                                   onChange={(e) =>
                                     setSalesChargerOldChargerWorking(
-                                      e.target.value
+                                      e.target.value,
                                     )
                                   }
                                   style={{
@@ -7077,126 +7116,126 @@ export default function NewJobcard() {
                               marginBottom: "1rem",
                             }}
                           >
-                        <label
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            cursor: "pointer",
-                            padding: "0.5rem 0.75rem",
-                            borderRadius: "0.375rem",
-                            border: `2px solid ${
-                              oldScootyData.batteryVoltage === "48"
-                                ? "#0ea5e9"
-                                : "#e5e7eb"
-                            }`,
-                            backgroundColor:
-                              oldScootyData.batteryVoltage === "48"
-                                ? "#f0f9ff"
-                                : "#fff",
-                            fontSize: "0.875rem",
-                            fontWeight: 500,
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name="oldScootyBatteryVoltage"
-                            value="48"
-                            checked={oldScootyData.batteryVoltage === "48"}
-                            onChange={(e) =>
-                              setOldScootyData((prev) => ({
-                                ...prev,
-                                batteryVoltage: e.target.value,
-                              }))
-                            }
-                            style={{
-                              width: "1rem",
-                              height: "1rem",
-                              accentColor: "#0ea5e9",
-                            }}
-                          />
-                          48V (4 battery)
-                        </label>
-                        <label
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            cursor: "pointer",
-                            padding: "0.5rem 0.75rem",
-                            borderRadius: "0.375rem",
-                            border: `2px solid ${
-                              oldScootyData.batteryVoltage === "60"
-                                ? "#0ea5e9"
-                                : "#e5e7eb"
-                            }`,
-                            backgroundColor:
-                              oldScootyData.batteryVoltage === "60"
-                                ? "#f0f9ff"
-                                : "#fff",
-                            fontSize: "0.875rem",
-                            fontWeight: 500,
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name="oldScootyBatteryVoltage"
-                            value="60"
-                            checked={oldScootyData.batteryVoltage === "60"}
-                            onChange={(e) =>
-                              setOldScootyData((prev) => ({
-                                ...prev,
-                                batteryVoltage: e.target.value,
-                              }))
-                            }
-                            style={{
-                              width: "1rem",
-                              height: "1rem",
-                              accentColor: "#0ea5e9",
-                            }}
-                          />
-                          60V (5 battery)
-                        </label>
-                        <label
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            cursor: "pointer",
-                            padding: "0.5rem 0.75rem",
-                            borderRadius: "0.375rem",
-                            border: `2px solid ${
-                              oldScootyData.batteryVoltage === "72"
-                                ? "#0ea5e9"
-                                : "#e5e7eb"
-                            }`,
-                            backgroundColor:
-                              oldScootyData.batteryVoltage === "72"
-                                ? "#f0f9ff"
-                                : "#fff",
-                            fontSize: "0.875rem",
-                            fontWeight: 500,
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name="oldScootyBatteryVoltage"
-                            value="72"
-                            checked={oldScootyData.batteryVoltage === "72"}
-                            onChange={(e) =>
-                              setOldScootyData((prev) => ({
-                                ...prev,
-                                batteryVoltage: e.target.value,
-                              }))
-                            }
-                            style={{
-                              width: "1rem",
-                              height: "1rem",
-                              accentColor: "#0ea5e9",
-                            }}
-                          />
-                          72V (6 battery)
-                        </label>
+                            <label
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                cursor: "pointer",
+                                padding: "0.5rem 0.75rem",
+                                borderRadius: "0.375rem",
+                                border: `2px solid ${
+                                  oldScootyData.batteryVoltage === "48"
+                                    ? "#0ea5e9"
+                                    : "#e5e7eb"
+                                }`,
+                                backgroundColor:
+                                  oldScootyData.batteryVoltage === "48"
+                                    ? "#f0f9ff"
+                                    : "#fff",
+                                fontSize: "0.875rem",
+                                fontWeight: 500,
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name="oldScootyBatteryVoltage"
+                                value="48"
+                                checked={oldScootyData.batteryVoltage === "48"}
+                                onChange={(e) =>
+                                  setOldScootyData((prev) => ({
+                                    ...prev,
+                                    batteryVoltage: e.target.value,
+                                  }))
+                                }
+                                style={{
+                                  width: "1rem",
+                                  height: "1rem",
+                                  accentColor: "#0ea5e9",
+                                }}
+                              />
+                              48V (4 battery)
+                            </label>
+                            <label
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                cursor: "pointer",
+                                padding: "0.5rem 0.75rem",
+                                borderRadius: "0.375rem",
+                                border: `2px solid ${
+                                  oldScootyData.batteryVoltage === "60"
+                                    ? "#0ea5e9"
+                                    : "#e5e7eb"
+                                }`,
+                                backgroundColor:
+                                  oldScootyData.batteryVoltage === "60"
+                                    ? "#f0f9ff"
+                                    : "#fff",
+                                fontSize: "0.875rem",
+                                fontWeight: 500,
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name="oldScootyBatteryVoltage"
+                                value="60"
+                                checked={oldScootyData.batteryVoltage === "60"}
+                                onChange={(e) =>
+                                  setOldScootyData((prev) => ({
+                                    ...prev,
+                                    batteryVoltage: e.target.value,
+                                  }))
+                                }
+                                style={{
+                                  width: "1rem",
+                                  height: "1rem",
+                                  accentColor: "#0ea5e9",
+                                }}
+                              />
+                              60V (5 battery)
+                            </label>
+                            <label
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                cursor: "pointer",
+                                padding: "0.5rem 0.75rem",
+                                borderRadius: "0.375rem",
+                                border: `2px solid ${
+                                  oldScootyData.batteryVoltage === "72"
+                                    ? "#0ea5e9"
+                                    : "#e5e7eb"
+                                }`,
+                                backgroundColor:
+                                  oldScootyData.batteryVoltage === "72"
+                                    ? "#f0f9ff"
+                                    : "#fff",
+                                fontSize: "0.875rem",
+                                fontWeight: 500,
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name="oldScootyBatteryVoltage"
+                                value="72"
+                                checked={oldScootyData.batteryVoltage === "72"}
+                                onChange={(e) =>
+                                  setOldScootyData((prev) => ({
+                                    ...prev,
+                                    batteryVoltage: e.target.value,
+                                  }))
+                                }
+                                style={{
+                                  width: "1rem",
+                                  height: "1rem",
+                                  accentColor: "#0ea5e9",
+                                }}
+                              />
+                              72V (6 battery)
+                            </label>
                           </div>
                         </>
                       )}
@@ -7339,7 +7378,7 @@ export default function NewJobcard() {
                                 value={oldScootySelectedBattery?._id || ""}
                                 onChange={(e) => {
                                   const b = oldScootyFilteredNewBatteries.find(
-                                    (x) => String(x._id) === e.target.value
+                                    (x) => String(x._id) === e.target.value,
                                   );
                                   setOldScootySelectedBattery(b || null);
                                 }}
@@ -7638,232 +7677,232 @@ export default function NewJobcard() {
                           >
                             Charger voltage
                           </span>
-                      <span
-                        style={{
-                          display: "block",
-                          marginBottom: "0.5rem",
-                          fontSize: "0.75rem",
-                          color: "#64748b",
-                        }}
-                      >
-                        48V = 4 battery, 60V = 5 battery, 72V = 6 battery
-                      </span>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "1rem",
-                          flexWrap: "wrap",
-                          marginBottom: "1rem",
-                        }}
-                      >
-                        <label
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            cursor:
-                              oldScootyData.chargerType === "oldCharger" &&
-                              oldScootyOldChargerVoltageDisabled["48"]
-                                ? "not-allowed"
-                                : "pointer",
-                            padding: "0.5rem 0.75rem",
-                            borderRadius: "0.375rem",
-                            border: `2px solid ${
-                              oldScootyData.chargerVoltage === "48"
-                                ? "#64748b"
-                                : "#e2e8f0"
-                            }`,
-                            backgroundColor:
-                              oldScootyData.chargerVoltage === "48"
-                                ? "#f1f5f9"
-                                : "#fff",
-                            fontSize: "0.875rem",
-                            fontWeight: 500,
-                            opacity:
-                              oldScootyData.chargerType === "oldCharger" &&
-                              oldScootyOldChargerVoltageDisabled["48"]
-                                ? 0.55
-                                : 1,
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name="oldScootyChargerVoltage"
-                            value="48"
-                            checked={oldScootyData.chargerVoltage === "48"}
-                            disabled={
-                              oldScootyData.chargerType === "oldCharger" &&
-                              oldScootyOldChargerVoltageDisabled["48"]
-                            }
-                            onChange={(e) =>
-                              setOldScootyData((prev) => ({
-                                ...prev,
-                                chargerVoltage: e.target.value,
-                              }))
-                            }
+                          <span
                             style={{
-                              width: "1rem",
-                              height: "1rem",
-                              accentColor: "#64748b",
-                            }}
-                          />
-                          48V (4 battery)
-                        </label>
-                        <label
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            cursor:
-                              oldScootyData.chargerType === "oldCharger" &&
-                              oldScootyOldChargerVoltageDisabled["60"]
-                                ? "not-allowed"
-                                : "pointer",
-                            padding: "0.5rem 0.75rem",
-                            borderRadius: "0.375rem",
-                            border: `2px solid ${
-                              oldScootyData.chargerVoltage === "60"
-                                ? "#64748b"
-                                : "#e2e8f0"
-                            }`,
-                            backgroundColor:
-                              oldScootyData.chargerVoltage === "60"
-                                ? "#f1f5f9"
-                                : "#fff",
-                            fontSize: "0.875rem",
-                            fontWeight: 500,
-                            opacity:
-                              oldScootyData.chargerType === "oldCharger" &&
-                              oldScootyOldChargerVoltageDisabled["60"]
-                                ? 0.55
-                                : 1,
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name="oldScootyChargerVoltage"
-                            value="60"
-                            checked={oldScootyData.chargerVoltage === "60"}
-                            disabled={
-                              oldScootyData.chargerType === "oldCharger" &&
-                              oldScootyOldChargerVoltageDisabled["60"]
-                            }
-                            onChange={(e) =>
-                              setOldScootyData((prev) => ({
-                                ...prev,
-                                chargerVoltage: e.target.value,
-                              }))
-                            }
-                            style={{
-                              width: "1rem",
-                              height: "1rem",
-                              accentColor: "#64748b",
-                            }}
-                          />
-                          60V (5 battery)
-                        </label>
-                        <label
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            cursor:
-                              oldScootyData.chargerType === "oldCharger" &&
-                              oldScootyOldChargerVoltageDisabled["72"]
-                                ? "not-allowed"
-                                : "pointer",
-                            padding: "0.5rem 0.75rem",
-                            borderRadius: "0.375rem",
-                            border: `2px solid ${
-                              oldScootyData.chargerVoltage === "72"
-                                ? "#64748b"
-                                : "#e2e8f0"
-                            }`,
-                            backgroundColor:
-                              oldScootyData.chargerVoltage === "72"
-                                ? "#f1f5f9"
-                                : "#fff",
-                            fontSize: "0.875rem",
-                            fontWeight: 500,
-                            opacity:
-                              oldScootyData.chargerType === "oldCharger" &&
-                              oldScootyOldChargerVoltageDisabled["72"]
-                                ? 0.55
-                                : 1,
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name="oldScootyChargerVoltage"
-                            value="72"
-                            checked={oldScootyData.chargerVoltage === "72"}
-                            disabled={
-                              oldScootyData.chargerType === "oldCharger" &&
-                              oldScootyOldChargerVoltageDisabled["72"]
-                            }
-                            onChange={(e) =>
-                              setOldScootyData((prev) => ({
-                                ...prev,
-                                chargerVoltage: e.target.value,
-                              }))
-                            }
-                            style={{
-                              width: "1rem",
-                              height: "1rem",
-                              accentColor: "#64748b",
-                            }}
-                          />
-                          72V (6 battery)
-                        </label>
-                      </div>
-                      {oldScootyData.chargerType === "oldCharger" &&
-                        oldChargerStockStats === null && (
-                          <p
-                            style={{
+                              display: "block",
+                              marginBottom: "0.5rem",
                               fontSize: "0.75rem",
-                              color: "#6b7280",
-                              marginTop: "-0.5rem",
-                              marginBottom: "0.75rem",
-                              lineHeight: 1.4,
+                              color: "#64748b",
                             }}
                           >
-                            Loading old charger availability…
-                          </p>
-                        )}
-                      {oldScootyData.chargerType === "oldCharger" &&
-                        oldChargerStockStats &&
-                        OLD_CHARGER_SALE_VOLTAGES.every(
-                          (v) =>
-                            (oldChargerStockStats[v]?.working ?? 0) <= 0
-                        ) && (
-                          <>
-                            <p
+                            48V = 4 battery, 60V = 5 battery, 72V = 6 battery
+                          </span>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "1rem",
+                              flexWrap: "wrap",
+                              marginBottom: "1rem",
+                            }}
+                          >
+                            <label
                               style={{
-                                fontSize: "0.75rem",
-                                color: "#6b7280",
-                                marginTop: "-0.5rem",
-                                marginBottom: "0.25rem",
-                                lineHeight: 1.4,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                cursor:
+                                  oldScootyData.chargerType === "oldCharger" &&
+                                  oldScootyOldChargerVoltageDisabled["48"]
+                                    ? "not-allowed"
+                                    : "pointer",
+                                padding: "0.5rem 0.75rem",
+                                borderRadius: "0.375rem",
+                                border: `2px solid ${
+                                  oldScootyData.chargerVoltage === "48"
+                                    ? "#64748b"
+                                    : "#e2e8f0"
+                                }`,
+                                backgroundColor:
+                                  oldScootyData.chargerVoltage === "48"
+                                    ? "#f1f5f9"
+                                    : "#fff",
+                                fontSize: "0.875rem",
+                                fontWeight: 500,
+                                opacity:
+                                  oldScootyData.chargerType === "oldCharger" &&
+                                  oldScootyOldChargerVoltageDisabled["48"]
+                                    ? 0.55
+                                    : 1,
                               }}
                             >
-                              No working old chargers in stock for 48V, 60V, or
-                              72V.
-                            </p>
-                            <p
+                              <input
+                                type="radio"
+                                name="oldScootyChargerVoltage"
+                                value="48"
+                                checked={oldScootyData.chargerVoltage === "48"}
+                                disabled={
+                                  oldScootyData.chargerType === "oldCharger" &&
+                                  oldScootyOldChargerVoltageDisabled["48"]
+                                }
+                                onChange={(e) =>
+                                  setOldScootyData((prev) => ({
+                                    ...prev,
+                                    chargerVoltage: e.target.value,
+                                  }))
+                                }
+                                style={{
+                                  width: "1rem",
+                                  height: "1rem",
+                                  accentColor: "#64748b",
+                                }}
+                              />
+                              48V (4 battery)
+                            </label>
+                            <label
                               style={{
-                                fontSize: "0.75rem",
-                                color: "#6b7280",
-                                marginBottom: "0.75rem",
-                                lineHeight: 1.4,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                cursor:
+                                  oldScootyData.chargerType === "oldCharger" &&
+                                  oldScootyOldChargerVoltageDisabled["60"]
+                                    ? "not-allowed"
+                                    : "pointer",
+                                padding: "0.5rem 0.75rem",
+                                borderRadius: "0.375rem",
+                                border: `2px solid ${
+                                  oldScootyData.chargerVoltage === "60"
+                                    ? "#64748b"
+                                    : "#e2e8f0"
+                                }`,
+                                backgroundColor:
+                                  oldScootyData.chargerVoltage === "60"
+                                    ? "#f1f5f9"
+                                    : "#fff",
+                                fontSize: "0.875rem",
+                                fontWeight: 500,
+                                opacity:
+                                  oldScootyData.chargerType === "oldCharger" &&
+                                  oldScootyOldChargerVoltageDisabled["60"]
+                                    ? 0.55
+                                    : 1,
                               }}
                             >
-                              Only voltages with at least one{" "}
-                              <strong>working</strong> unit in{" "}
-                              <strong>Old chargers</strong> can be selected when
-                              attaching an old charger.
-                            </p>
-                          </>
-                        )}
+                              <input
+                                type="radio"
+                                name="oldScootyChargerVoltage"
+                                value="60"
+                                checked={oldScootyData.chargerVoltage === "60"}
+                                disabled={
+                                  oldScootyData.chargerType === "oldCharger" &&
+                                  oldScootyOldChargerVoltageDisabled["60"]
+                                }
+                                onChange={(e) =>
+                                  setOldScootyData((prev) => ({
+                                    ...prev,
+                                    chargerVoltage: e.target.value,
+                                  }))
+                                }
+                                style={{
+                                  width: "1rem",
+                                  height: "1rem",
+                                  accentColor: "#64748b",
+                                }}
+                              />
+                              60V (5 battery)
+                            </label>
+                            <label
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                cursor:
+                                  oldScootyData.chargerType === "oldCharger" &&
+                                  oldScootyOldChargerVoltageDisabled["72"]
+                                    ? "not-allowed"
+                                    : "pointer",
+                                padding: "0.5rem 0.75rem",
+                                borderRadius: "0.375rem",
+                                border: `2px solid ${
+                                  oldScootyData.chargerVoltage === "72"
+                                    ? "#64748b"
+                                    : "#e2e8f0"
+                                }`,
+                                backgroundColor:
+                                  oldScootyData.chargerVoltage === "72"
+                                    ? "#f1f5f9"
+                                    : "#fff",
+                                fontSize: "0.875rem",
+                                fontWeight: 500,
+                                opacity:
+                                  oldScootyData.chargerType === "oldCharger" &&
+                                  oldScootyOldChargerVoltageDisabled["72"]
+                                    ? 0.55
+                                    : 1,
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name="oldScootyChargerVoltage"
+                                value="72"
+                                checked={oldScootyData.chargerVoltage === "72"}
+                                disabled={
+                                  oldScootyData.chargerType === "oldCharger" &&
+                                  oldScootyOldChargerVoltageDisabled["72"]
+                                }
+                                onChange={(e) =>
+                                  setOldScootyData((prev) => ({
+                                    ...prev,
+                                    chargerVoltage: e.target.value,
+                                  }))
+                                }
+                                style={{
+                                  width: "1rem",
+                                  height: "1rem",
+                                  accentColor: "#64748b",
+                                }}
+                              />
+                              72V (6 battery)
+                            </label>
+                          </div>
+                          {oldScootyData.chargerType === "oldCharger" &&
+                            oldChargerStockStats === null && (
+                              <p
+                                style={{
+                                  fontSize: "0.75rem",
+                                  color: "#6b7280",
+                                  marginTop: "-0.5rem",
+                                  marginBottom: "0.75rem",
+                                  lineHeight: 1.4,
+                                }}
+                              >
+                                Loading old charger availability…
+                              </p>
+                            )}
+                          {oldScootyData.chargerType === "oldCharger" &&
+                            oldChargerStockStats &&
+                            OLD_CHARGER_SALE_VOLTAGES.every(
+                              (v) =>
+                                (oldChargerStockStats[v]?.working ?? 0) <= 0,
+                            ) && (
+                              <>
+                                <p
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    color: "#6b7280",
+                                    marginTop: "-0.5rem",
+                                    marginBottom: "0.25rem",
+                                    lineHeight: 1.4,
+                                  }}
+                                >
+                                  No working old chargers in stock for 48V, 60V,
+                                  or 72V.
+                                </p>
+                                <p
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    color: "#6b7280",
+                                    marginBottom: "0.75rem",
+                                    lineHeight: 1.4,
+                                  }}
+                                >
+                                  Only voltages with at least one{" "}
+                                  <strong>working</strong> unit in{" "}
+                                  <strong>Old chargers</strong> can be selected
+                                  when attaching an old charger.
+                                </p>
+                              </>
+                            )}
                         </>
                       )}
                       <span
@@ -8006,8 +8045,7 @@ export default function NewJobcard() {
                                 value={oldScootySelectedCharger?._id || ""}
                                 onChange={(e) => {
                                   const c = oldScootyFilteredNewChargers.find(
-                                    (x) =>
-                                      String(x._id) === e.target.value
+                                    (x) => String(x._id) === e.target.value,
                                   );
                                   setOldScootySelectedCharger(c || null);
                                 }}
@@ -8023,8 +8061,7 @@ export default function NewJobcard() {
                                 <option value="">Select a charger</option>
                                 {oldScootyFilteredNewChargers.map((c) => (
                                   <option key={c._id} value={c._id}>
-                                    {c.name}{" "}
-                                    {c.voltage ? `(${c.voltage})` : ""}
+                                    {c.name} {c.voltage ? `(${c.voltage})` : ""}
                                   </option>
                                 ))}
                               </select>
@@ -8075,141 +8112,141 @@ export default function NewJobcard() {
                               flexWrap: "wrap",
                             }}
                           >
-                                <label
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "0.5rem",
-                                    cursor: "pointer",
-                                    padding: "0.5rem 0.75rem",
-                                    borderRadius: "0.375rem",
-                                    border: `2px solid ${
-                                      oldScootyData.chargerWarrantyStatus ===
-                                      "noWarranty"
-                                        ? "#059669"
-                                        : "#e2e8f0"
-                                    }`,
-                                    backgroundColor:
-                                      oldScootyData.chargerWarrantyStatus ===
-                                      "noWarranty"
-                                        ? "#ecfdf5"
-                                        : "#fff",
-                                    fontSize: "0.875rem",
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  <input
-                                    type="radio"
-                                    name="oldScootyChargerWarranty"
-                                    value="noWarranty"
-                                    checked={
-                                      oldScootyData.chargerWarrantyStatus ===
-                                      "noWarranty"
-                                    }
-                                    onChange={(e) =>
-                                      setOldScootyData((prev) => ({
-                                        ...prev,
-                                        chargerWarrantyStatus: e.target.value,
-                                      }))
-                                    }
-                                    style={{
-                                      width: "1rem",
-                                      height: "1rem",
-                                      accentColor: "#059669",
-                                    }}
-                                  />
-                                  No warranty
-                                </label>
-                                <label
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "0.5rem",
-                                    cursor: "pointer",
-                                    padding: "0.5rem 0.75rem",
-                                    borderRadius: "0.375rem",
-                                    border: `2px solid ${
-                                      oldScootyData.chargerWarrantyStatus ===
-                                      "6months"
-                                        ? "#059669"
-                                        : "#e2e8f0"
-                                    }`,
-                                    backgroundColor:
-                                      oldScootyData.chargerWarrantyStatus ===
-                                      "6months"
-                                        ? "#ecfdf5"
-                                        : "#fff",
-                                    fontSize: "0.875rem",
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  <input
-                                    type="radio"
-                                    name="oldScootyChargerWarranty"
-                                    value="6months"
-                                    checked={
-                                      oldScootyData.chargerWarrantyStatus ===
-                                      "6months"
-                                    }
-                                    onChange={(e) =>
-                                      setOldScootyData((prev) => ({
-                                        ...prev,
-                                        chargerWarrantyStatus: e.target.value,
-                                      }))
-                                    }
-                                    style={{
-                                      width: "1rem",
-                                      height: "1rem",
-                                      accentColor: "#059669",
-                                    }}
-                                  />
-                                  6 months
-                                </label>
-                                <label
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "0.5rem",
-                                    cursor: "pointer",
-                                    padding: "0.5rem 0.75rem",
-                                    borderRadius: "0.375rem",
-                                    border: `2px solid ${
-                                      oldScootyData.chargerWarrantyStatus ===
-                                      "1year"
-                                        ? "#059669"
-                                        : "#e2e8f0"
-                                    }`,
-                                    backgroundColor:
-                                      oldScootyData.chargerWarrantyStatus ===
-                                      "1year"
-                                        ? "#ecfdf5"
-                                        : "#fff",
-                                    fontSize: "0.875rem",
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  <input
-                                    type="radio"
-                                    name="oldScootyChargerWarranty"
-                                    value="1year"
-                                    checked={
-                                      oldScootyData.chargerWarrantyStatus ===
-                                      "1year"
-                                    }
-                                    onChange={(e) =>
-                                      setOldScootyData((prev) => ({
-                                        ...prev,
-                                        chargerWarrantyStatus: e.target.value,
-                                      }))
-                                    }
-                                    style={{
-                                      width: "1rem",
-                                      height: "1rem",
-                                      accentColor: "#059669",
-                                    }}
-                                  />
+                            <label
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                cursor: "pointer",
+                                padding: "0.5rem 0.75rem",
+                                borderRadius: "0.375rem",
+                                border: `2px solid ${
+                                  oldScootyData.chargerWarrantyStatus ===
+                                  "noWarranty"
+                                    ? "#059669"
+                                    : "#e2e8f0"
+                                }`,
+                                backgroundColor:
+                                  oldScootyData.chargerWarrantyStatus ===
+                                  "noWarranty"
+                                    ? "#ecfdf5"
+                                    : "#fff",
+                                fontSize: "0.875rem",
+                                fontWeight: 500,
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name="oldScootyChargerWarranty"
+                                value="noWarranty"
+                                checked={
+                                  oldScootyData.chargerWarrantyStatus ===
+                                  "noWarranty"
+                                }
+                                onChange={(e) =>
+                                  setOldScootyData((prev) => ({
+                                    ...prev,
+                                    chargerWarrantyStatus: e.target.value,
+                                  }))
+                                }
+                                style={{
+                                  width: "1rem",
+                                  height: "1rem",
+                                  accentColor: "#059669",
+                                }}
+                              />
+                              No warranty
+                            </label>
+                            <label
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                cursor: "pointer",
+                                padding: "0.5rem 0.75rem",
+                                borderRadius: "0.375rem",
+                                border: `2px solid ${
+                                  oldScootyData.chargerWarrantyStatus ===
+                                  "6months"
+                                    ? "#059669"
+                                    : "#e2e8f0"
+                                }`,
+                                backgroundColor:
+                                  oldScootyData.chargerWarrantyStatus ===
+                                  "6months"
+                                    ? "#ecfdf5"
+                                    : "#fff",
+                                fontSize: "0.875rem",
+                                fontWeight: 500,
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name="oldScootyChargerWarranty"
+                                value="6months"
+                                checked={
+                                  oldScootyData.chargerWarrantyStatus ===
+                                  "6months"
+                                }
+                                onChange={(e) =>
+                                  setOldScootyData((prev) => ({
+                                    ...prev,
+                                    chargerWarrantyStatus: e.target.value,
+                                  }))
+                                }
+                                style={{
+                                  width: "1rem",
+                                  height: "1rem",
+                                  accentColor: "#059669",
+                                }}
+                              />
+                              6 months
+                            </label>
+                            <label
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                cursor: "pointer",
+                                padding: "0.5rem 0.75rem",
+                                borderRadius: "0.375rem",
+                                border: `2px solid ${
+                                  oldScootyData.chargerWarrantyStatus ===
+                                  "1year"
+                                    ? "#059669"
+                                    : "#e2e8f0"
+                                }`,
+                                backgroundColor:
+                                  oldScootyData.chargerWarrantyStatus ===
+                                  "1year"
+                                    ? "#ecfdf5"
+                                    : "#fff",
+                                fontSize: "0.875rem",
+                                fontWeight: 500,
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name="oldScootyChargerWarranty"
+                                value="1year"
+                                checked={
+                                  oldScootyData.chargerWarrantyStatus ===
+                                  "1year"
+                                }
+                                onChange={(e) =>
+                                  setOldScootyData((prev) => ({
+                                    ...prev,
+                                    chargerWarrantyStatus: e.target.value,
+                                  }))
+                                }
+                                style={{
+                                  width: "1rem",
+                                  height: "1rem",
+                                  accentColor: "#059669",
+                                }}
+                              />
                               1 year
-                                </label>
+                            </label>
                           </div>
                         </div>
                       )}
@@ -8264,7 +8301,7 @@ export default function NewJobcard() {
                             onFocus={() =>
                               oldScootySpareName.trim() &&
                               setShowOldScootySpareSuggestions(
-                                oldScootySpareSuggestions.length > 0
+                                oldScootySpareSuggestions.length > 0,
                               )
                             }
                             onKeyDown={(e) => {
@@ -8278,12 +8315,12 @@ export default function NewJobcard() {
                                 setOldScootySpareSelectedIndex((i) =>
                                   i < oldScootySpareSuggestions.length - 1
                                     ? i + 1
-                                    : -1
+                                    : -1,
                                 );
                               } else if (e.key === "ArrowUp") {
                                 e.preventDefault();
                                 setOldScootySpareSelectedIndex((i) =>
-                                  i <= 0 ? -1 : i - 1
+                                  i <= 0 ? -1 : i - 1,
                                 );
                               } else if (
                                 e.key === "Enter" &&
@@ -8296,7 +8333,7 @@ export default function NewJobcard() {
                                 selectOldScootySpareSuggestion(
                                   oldScootySpareSuggestions[
                                     oldScootySpareSelectedIndex
-                                  ]
+                                  ],
                                 );
                               } else if (e.key === "Escape") {
                                 setShowOldScootySpareSuggestions(false);
@@ -8390,7 +8427,7 @@ export default function NewJobcard() {
                         />
                         {selectedSpareForOldScooty?.hasColors &&
                           Array.isArray(
-                            selectedSpareForOldScooty?.colorQuantity
+                            selectedSpareForOldScooty?.colorQuantity,
                           ) &&
                           selectedSpareForOldScooty.colorQuantity.length >
                             0 && (
@@ -8416,7 +8453,7 @@ export default function NewJobcard() {
                                   >
                                     {cq.color || "—"}
                                   </option>
-                                )
+                                ),
                               )}
                             </select>
                           )}
@@ -8464,7 +8501,7 @@ export default function NewJobcard() {
                                 (typeof s.quantity === "number"
                                   ? s.quantity
                                   : parseInt(s.quantity, 10) || 0),
-                              0
+                              0,
                             )}
                             )
                           </span>
@@ -8561,7 +8598,9 @@ export default function NewJobcard() {
                           fontWeight: 500,
                         }}
                       >
-                        {editingOldScootyPartId ? "Update Old Scooty" : "Add to Jobcard"}
+                        {editingOldScootyPartId
+                          ? "Update Old Scooty"
+                          : "Add to Jobcard"}
                       </button>
                     </div>
                   </div>
@@ -8573,10 +8612,12 @@ export default function NewJobcard() {
                   <SparePartsSearch
                     onSelectPart={handlePartSelect}
                     onVoiceCustomSpare={handleVoiceCustomSpare}
-                    reservedById={Object.values(selectedParts || {}).flat().reduce(
-                      (acc, p) => {
+                    reservedById={Object.values(selectedParts || {})
+                      .flat()
+                      .reduce((acc, p) => {
                         if (!p || p.isCustom) return acc;
-                        const qty = Number(p.selectedQuantity ?? p.quantity ?? 0) || 0;
+                        const qty =
+                          Number(p.selectedQuantity ?? p.quantity ?? 0) || 0;
                         if (qty <= 0) return acc;
                         const keys = [
                           p._id,
@@ -8590,9 +8631,7 @@ export default function NewJobcard() {
                           acc[k] = (acc[k] || 0) + qty;
                         }
                         return acc;
-                      },
-                      {}
-                    )}
+                      }, {})}
                   />
                 </div>
               )}
@@ -8873,22 +8912,24 @@ export default function NewJobcard() {
                                       part.replacementType === "battery"
                                         ? "#dbeafe"
                                         : part.replacementType === "charger"
-                                        ? "#fef3c7"
-                                        : part.replacementType === "controller"
-                                        ? "#e0e7ff"
-                                        : part.replacementType === "motor"
-                                        ? "#fce7f3"
-                                        : "#f3f4f6",
+                                          ? "#fef3c7"
+                                          : part.replacementType ===
+                                              "controller"
+                                            ? "#e0e7ff"
+                                            : part.replacementType === "motor"
+                                              ? "#fce7f3"
+                                              : "#f3f4f6",
                                     color:
                                       part.replacementType === "battery"
                                         ? "#1e40af"
                                         : part.replacementType === "charger"
-                                        ? "#92400e"
-                                        : part.replacementType === "controller"
-                                        ? "#3730a3"
-                                        : part.replacementType === "motor"
-                                        ? "#9f1239"
-                                        : "#374151",
+                                          ? "#92400e"
+                                          : part.replacementType ===
+                                              "controller"
+                                            ? "#3730a3"
+                                            : part.replacementType === "motor"
+                                              ? "#9f1239"
+                                              : "#374151",
                                     borderRadius: "4px",
                                     fontWeight: 600,
                                     textTransform: "capitalize",
@@ -8897,12 +8938,13 @@ export default function NewJobcard() {
                                       part.replacementType === "battery"
                                         ? "#93c5fd"
                                         : part.replacementType === "charger"
-                                        ? "#fde68a"
-                                        : part.replacementType === "controller"
-                                        ? "#c7d2fe"
-                                        : part.replacementType === "motor"
-                                        ? "#fbcfe8"
-                                        : "#d1d5db",
+                                          ? "#fde68a"
+                                          : part.replacementType ===
+                                              "controller"
+                                            ? "#c7d2fe"
+                                            : part.replacementType === "motor"
+                                              ? "#fbcfe8"
+                                              : "#d1d5db",
                                   }}
                                 >
                                   {part.replacementType}
@@ -8917,22 +8959,22 @@ export default function NewJobcard() {
                                       part.salesType === "battery"
                                         ? "#dbeafe"
                                         : part.salesType === "charger"
-                                        ? "#fef3c7"
-                                        : part.salesType === "oldScooty"
-                                        ? "#fce7f3"
-                                        : part.salesType === "spare"
-                                        ? "#e0e7ff"
-                                        : "#f3f4f6",
+                                          ? "#fef3c7"
+                                          : part.salesType === "oldScooty"
+                                            ? "#fce7f3"
+                                            : part.salesType === "spare"
+                                              ? "#e0e7ff"
+                                              : "#f3f4f6",
                                     color:
                                       part.salesType === "battery"
                                         ? "#1e40af"
                                         : part.salesType === "charger"
-                                        ? "#92400e"
-                                        : part.salesType === "oldScooty"
-                                        ? "#9f1239"
-                                        : part.salesType === "spare"
-                                        ? "#3730a3"
-                                        : "#374151",
+                                          ? "#92400e"
+                                          : part.salesType === "oldScooty"
+                                            ? "#9f1239"
+                                            : part.salesType === "spare"
+                                              ? "#3730a3"
+                                              : "#374151",
                                     borderRadius: "4px",
                                     fontWeight: 600,
                                     textTransform: "capitalize",
@@ -8941,12 +8983,12 @@ export default function NewJobcard() {
                                       part.salesType === "battery"
                                         ? "#93c5fd"
                                         : part.salesType === "charger"
-                                        ? "#fde68a"
-                                        : part.salesType === "oldScooty"
-                                        ? "#fbcfe8"
-                                        : part.salesType === "spare"
-                                        ? "#c7d2fe"
-                                        : "#d1d5db",
+                                          ? "#fde68a"
+                                          : part.salesType === "oldScooty"
+                                            ? "#fbcfe8"
+                                            : part.salesType === "spare"
+                                              ? "#c7d2fe"
+                                              : "#d1d5db",
                                   }}
                                 >
                                   {part.salesType === "oldScooty"
@@ -9325,11 +9367,12 @@ export default function NewJobcard() {
                                             "noWarranty"
                                               ? "No warranty"
                                               : part.warrantyStatus ===
-                                                "6months"
-                                              ? "6 months"
-                                              : part.warrantyStatus === "1year"
-                                              ? "1 year"
-                                              : part.warrantyStatus}
+                                                  "6months"
+                                                ? "6 months"
+                                                : part.warrantyStatus ===
+                                                    "1year"
+                                                  ? "1 year"
+                                                  : part.warrantyStatus}
                                           </span>
                                         </span>
                                       )}
@@ -9434,11 +9477,11 @@ export default function NewJobcard() {
                                         >
                                           {String(part.pmcNo).replace(
                                             /^PMC-?/i,
-                                            ""
+                                            "",
                                           )
                                             ? `PMC-${String(part.pmcNo).replace(
                                                 /^PMC-?/i,
-                                                ""
+                                                "",
                                               )}`
                                             : part.pmcNo}
                                         </span>
@@ -9460,15 +9503,15 @@ export default function NewJobcard() {
                                               ? part.batteryChemistry === "lead"
                                                 ? "Lead"
                                                 : part.batteryChemistry ===
-                                                  "lithium"
-                                                ? "Lithium"
-                                                : part.batteryChemistry
+                                                    "lithium"
+                                                  ? "Lithium"
+                                                  : part.batteryChemistry
                                               : part.batteryType === "lead" ||
-                                                part.batteryType === "lithium"
-                                              ? part.batteryType === "lead"
-                                                ? "Lead"
-                                                : "Lithium"
-                                              : null,
+                                                  part.batteryType === "lithium"
+                                                ? part.batteryType === "lead"
+                                                  ? "Lead"
+                                                  : "Lithium"
+                                                : null,
                                             part.batteryVoltage
                                               ? `${part.batteryVoltage}V`
                                               : null,
@@ -9533,25 +9576,25 @@ export default function NewJobcard() {
                                             part.chargerType === "oldCharger"
                                               ? "Old Charger"
                                               : part.chargerType ===
-                                                "newCharger"
-                                              ? "New Charger"
-                                              : part.chargerType,
+                                                  "newCharger"
+                                                ? "New Charger"
+                                                : part.chargerType,
                                             part.chargerChemistry
                                               ? part.chargerChemistry === "lead"
                                                 ? "Lead"
                                                 : part.chargerChemistry ===
-                                                  "lithium"
-                                                ? "Lithium"
-                                                : part.chargerChemistry
+                                                    "lithium"
+                                                  ? "Lithium"
+                                                  : part.chargerChemistry
                                               : null,
                                             part.chargerVoltage
                                               ? `${part.chargerVoltage}V (${
                                                   part.chargerVoltage === "48"
                                                     ? "4"
                                                     : part.chargerVoltage ===
-                                                      "60"
-                                                    ? "5"
-                                                    : "6"
+                                                        "60"
+                                                      ? "5"
+                                                      : "6"
                                                 } battery)`
                                               : null,
                                           ]
@@ -9588,12 +9631,12 @@ export default function NewJobcard() {
                                             "noWarranty"
                                               ? "No warranty"
                                               : part.chargerWarrantyStatus ===
-                                                "6months"
-                                              ? "6 months"
-                                              : part.chargerWarrantyStatus ===
-                                                "1year"
-                                              ? "1 year"
-                                              : part.chargerWarrantyStatus}
+                                                  "6months"
+                                                ? "6 months"
+                                                : part.chargerWarrantyStatus ===
+                                                    "1year"
+                                                  ? "1 year"
+                                                  : part.chargerWarrantyStatus}
                                           </span>
                                         </span>
                                       )}
@@ -9602,7 +9645,7 @@ export default function NewJobcard() {
                                       (() => {
                                         const total = part.sparesUsed.reduce(
                                           (sum, s) => sum + (s.quantity || 0),
-                                          0
+                                          0,
                                         );
                                         return (
                                           <span style={{ fontWeight: 500 }}>
@@ -9629,7 +9672,7 @@ export default function NewJobcard() {
                                                       s.color
                                                         ? ` (${s.color})`
                                                         : ""
-                                                    } × ${s.quantity || 1}`
+                                                    } × ${s.quantity || 1}`,
                                                 )
                                                 .join(", ")}
                                               )
@@ -9713,7 +9756,7 @@ export default function NewJobcard() {
                                         handleColorChange(
                                           getPartLineKey(part),
                                           e.target.value,
-                                          activeTab
+                                          activeTab,
                                         )
                                       }
                                       style={{
@@ -9742,7 +9785,7 @@ export default function NewJobcard() {
                                           <option key={index} value={color}>
                                             {color}
                                           </option>
-                                        )
+                                        ),
                                       )}
                                     </select>
                                     {part.selectedColor && (
@@ -9753,15 +9796,15 @@ export default function NewJobcard() {
                                           borderRadius: "6px",
                                           border: "2px solid #d1d5db",
                                           backgroundColor: getColorHex(
-                                            part.selectedColor
+                                            part.selectedColor,
                                           ).includes("gradient")
                                             ? "transparent"
                                             : getColorHex(part.selectedColor),
                                           background: getColorHex(
-                                            part.selectedColor
+                                            part.selectedColor,
                                           ),
                                           backgroundImage: getColorHex(
-                                            part.selectedColor
+                                            part.selectedColor,
                                           ).includes("gradient")
                                             ? getColorHex(part.selectedColor)
                                             : "none",
@@ -9934,7 +9977,10 @@ export default function NewJobcard() {
                                     if ((part.selectedQuantity || 1) <= 1) {
                                       alert("Quantity cannot be less than 1");
                                     } else {
-                                      decreaseQuantity(getPartLineKey(part), activeTab);
+                                      decreaseQuantity(
+                                        getPartLineKey(part),
+                                        activeTab,
+                                      );
                                     }
                                   }}
                                   disabled={(part.selectedQuantity || 1) <= 1}
@@ -10018,10 +10064,13 @@ export default function NewJobcard() {
                                       (part.selectedQuantity || 1) >= maxQty
                                     ) {
                                       alert(
-                                        `Maximum quantity reached. Available: ${maxQty}`
+                                        `Maximum quantity reached. Available: ${maxQty}`,
                                       );
                                     } else {
-                                      increaseQuantity(getPartLineKey(part), activeTab);
+                                      increaseQuantity(
+                                        getPartLineKey(part),
+                                        activeTab,
+                                      );
                                     }
                                   }}
                                   disabled={
@@ -10032,7 +10081,7 @@ export default function NewJobcard() {
                                     (part.selectedQuantity || 1) >=
                                     getMaxQuantity(part)
                                       ? `Maximum quantity reached. Available: ${getMaxQuantity(
-                                          part
+                                          part,
                                         )}`
                                       : ""
                                   }
@@ -10098,7 +10147,9 @@ export default function NewJobcard() {
                             <button
                               className="jobcard-part-remove"
                               type="button"
-                              onClick={() => removePart(getPartLineKey(part), activeTab)}
+                              onClick={() =>
+                                removePart(getPartLineKey(part), activeTab)
+                              }
                               style={{
                                 padding: "0.5rem 1rem",
                                 fontSize: "0.875rem",
@@ -10261,14 +10312,14 @@ export default function NewJobcard() {
                                         part.replacementType === "battery"
                                           ? "#dbeafe"
                                           : part.replacementType === "charger"
-                                          ? "#fef3c7"
-                                          : "#e0e7ff",
+                                            ? "#fef3c7"
+                                            : "#e0e7ff",
                                       color:
                                         part.replacementType === "battery"
                                           ? "#1e40af"
                                           : part.replacementType === "charger"
-                                          ? "#92400e"
-                                          : "#3730a3",
+                                            ? "#92400e"
+                                            : "#3730a3",
                                       borderRadius: "4px",
                                       fontWeight: 600,
                                       textTransform: "capitalize",
@@ -10286,18 +10337,18 @@ export default function NewJobcard() {
                                         part.salesType === "battery"
                                           ? "#dbeafe"
                                           : part.salesType === "charger"
-                                          ? "#fef3c7"
-                                          : part.salesType === "oldScooty"
-                                          ? "#fce7f3"
-                                          : "#e0e7ff",
+                                            ? "#fef3c7"
+                                            : part.salesType === "oldScooty"
+                                              ? "#fce7f3"
+                                              : "#e0e7ff",
                                       color:
                                         part.salesType === "battery"
                                           ? "#1e40af"
                                           : part.salesType === "charger"
-                                          ? "#92400e"
-                                          : part.salesType === "oldScooty"
-                                          ? "#9f1239"
-                                          : "#3730a3",
+                                            ? "#92400e"
+                                            : part.salesType === "oldScooty"
+                                              ? "#9f1239"
+                                              : "#3730a3",
                                       borderRadius: "4px",
                                       fontWeight: 600,
                                       textTransform: "capitalize",
@@ -10328,7 +10379,8 @@ export default function NewJobcard() {
                                       gap: "0.5rem",
                                     }}
                                   >
-                                    {editingPrice?.lineKey === getPartLineKey(part) &&
+                                    {editingPrice?.lineKey ===
+                                      getPartLineKey(part) &&
                                     editingPrice?.cat === cat ? (
                                       <>
                                         <span>₹</span>
@@ -10393,7 +10445,9 @@ export default function NewJobcard() {
                                       </>
                                     ) : (
                                       <>
-                                        <span>₹{getPartTotal(part).toFixed(2)}</span>
+                                        <span>
+                                          ₹{getPartTotal(part).toFixed(2)}
+                                        </span>
                                         <button
                                           type="button"
                                           onClick={() =>
@@ -10453,7 +10507,10 @@ export default function NewJobcard() {
                                       if ((part.selectedQuantity || 1) <= 1) {
                                         alert("Quantity cannot be less than 1");
                                       } else {
-                                        decreaseQuantity(getPartLineKey(part), cat);
+                                        decreaseQuantity(
+                                          getPartLineKey(part),
+                                          cat,
+                                        );
                                       }
                                     }}
                                     disabled={(part.selectedQuantity || 1) <= 1}
@@ -10500,10 +10557,13 @@ export default function NewJobcard() {
                                         (part.selectedQuantity || 1) >= maxQty
                                       ) {
                                         alert(
-                                          `Maximum quantity reached. Available: ${maxQty}`
+                                          `Maximum quantity reached. Available: ${maxQty}`,
                                         );
                                       } else {
-                                        increaseQuantity(getPartLineKey(part), cat);
+                                        increaseQuantity(
+                                          getPartLineKey(part),
+                                          cat,
+                                        );
                                       }
                                     }}
                                     disabled={
@@ -10539,7 +10599,9 @@ export default function NewJobcard() {
                               <button
                                 className="jobcard-part-remove"
                                 type="button"
-                                onClick={() => removePart(getPartLineKey(part), cat)}
+                                onClick={() =>
+                                  removePart(getPartLineKey(part), cat)
+                                }
                                 style={{
                                   padding: "0.4rem 0.75rem",
                                   fontSize: "0.8125rem",
@@ -10564,7 +10626,7 @@ export default function NewJobcard() {
                         ))}
                       </div>
                     </div>
-                  )
+                  ),
               )}
               <div
                 style={{
@@ -10714,14 +10776,14 @@ export default function NewJobcard() {
                                         part.replacementType === "battery"
                                           ? "#dbeafe"
                                           : part.replacementType === "charger"
-                                          ? "#fef3c7"
-                                          : "#e0e7ff",
+                                            ? "#fef3c7"
+                                            : "#e0e7ff",
                                       color:
                                         part.replacementType === "battery"
                                           ? "#1e40af"
                                           : part.replacementType === "charger"
-                                          ? "#92400e"
-                                          : "#3730a3",
+                                            ? "#92400e"
+                                            : "#3730a3",
                                       borderRadius: "4px",
                                       fontWeight: 600,
                                       textTransform: "capitalize",
@@ -10739,18 +10801,18 @@ export default function NewJobcard() {
                                         part.salesType === "battery"
                                           ? "#dbeafe"
                                           : part.salesType === "charger"
-                                          ? "#fef3c7"
-                                          : part.salesType === "oldScooty"
-                                          ? "#fce7f3"
-                                          : "#e0e7ff",
+                                            ? "#fef3c7"
+                                            : part.salesType === "oldScooty"
+                                              ? "#fce7f3"
+                                              : "#e0e7ff",
                                       color:
                                         part.salesType === "battery"
                                           ? "#1e40af"
                                           : part.salesType === "charger"
-                                          ? "#92400e"
-                                          : part.salesType === "oldScooty"
-                                          ? "#9f1239"
-                                          : "#3730a3",
+                                            ? "#92400e"
+                                            : part.salesType === "oldScooty"
+                                              ? "#9f1239"
+                                              : "#3730a3",
                                       borderRadius: "4px",
                                       fontWeight: 600,
                                       textTransform: "capitalize",
@@ -10781,7 +10843,8 @@ export default function NewJobcard() {
                                       gap: "0.5rem",
                                     }}
                                   >
-                                    {editingPrice?.lineKey === getPartLineKey(part) &&
+                                    {editingPrice?.lineKey ===
+                                      getPartLineKey(part) &&
                                     editingPrice?.cat === cat ? (
                                       <>
                                         <span>₹</span>
@@ -10846,7 +10909,9 @@ export default function NewJobcard() {
                                       </>
                                     ) : (
                                       <>
-                                        <span>₹{getPartTotal(part).toFixed(2)}</span>
+                                        <span>
+                                          ₹{getPartTotal(part).toFixed(2)}
+                                        </span>
                                         <button
                                           type="button"
                                           onClick={() =>
@@ -10906,7 +10971,10 @@ export default function NewJobcard() {
                                       if ((part.selectedQuantity || 1) <= 1) {
                                         alert("Quantity cannot be less than 1");
                                       } else {
-                                        decreaseQuantity(getPartLineKey(part), cat);
+                                        decreaseQuantity(
+                                          getPartLineKey(part),
+                                          cat,
+                                        );
                                       }
                                     }}
                                     disabled={(part.selectedQuantity || 1) <= 1}
@@ -10953,10 +11021,13 @@ export default function NewJobcard() {
                                         (part.selectedQuantity || 1) >= maxQty
                                       ) {
                                         alert(
-                                          `Maximum quantity reached. Available: ${maxQty}`
+                                          `Maximum quantity reached. Available: ${maxQty}`,
                                         );
                                       } else {
-                                        increaseQuantity(getPartLineKey(part), cat);
+                                        increaseQuantity(
+                                          getPartLineKey(part),
+                                          cat,
+                                        );
                                       }
                                     }}
                                     disabled={
@@ -10991,7 +11062,9 @@ export default function NewJobcard() {
                               )}
                               <button
                                 type="button"
-                                onClick={() => removePart(getPartLineKey(part), cat)}
+                                onClick={() =>
+                                  removePart(getPartLineKey(part), cat)
+                                }
                                 style={{
                                   padding: "0.4rem 0.75rem",
                                   fontSize: "0.8125rem",
@@ -11016,7 +11089,7 @@ export default function NewJobcard() {
                         ))}
                       </div>
                     </div>
-                  )
+                  ),
               )}
               <div
                 style={{

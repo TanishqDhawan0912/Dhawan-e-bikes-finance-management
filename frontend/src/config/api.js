@@ -11,14 +11,12 @@ const DEPLOYED_API_ORIGIN =
 // In local dev, prefer the local backend so new routes work immediately.
 // (You can still point to a remote API by setting VITE_API_URL to localhost/127.0.0.1 explicitly.)
 const origin = (
-  import.meta.env.DEV
-    ? LOCAL_DEV_ORIGIN
-    : (envUrl || DEPLOYED_API_ORIGIN)
+  import.meta.env.DEV ? LOCAL_DEV_ORIGIN : envUrl || DEPLOYED_API_ORIGIN
 ).replace(/\/$/, "");
 
 if (import.meta.env.PROD && !envUrl) {
   console.warn(
-    "[api] VITE_API_URL was not set at build time; using Render API URL fallback. Set VITE_API_URL in Vercel to https://dhawan-e-bikes-finance-management.onrender.com for explicit configuration."
+    "[api] VITE_API_URL was not set at build time; using Render API URL fallback. Set VITE_API_URL in Vercel to https://dhawan-e-bikes-finance-management.onrender.com for explicit configuration.",
   );
 }
 
@@ -26,15 +24,26 @@ if (import.meta.env.PROD && !envUrl) {
 export const API_BASE = `${origin}/api`;
 
 export async function fetchWithRetry(endpoint, options = {}, retries = 2) {
-  const url = endpoint.startsWith("http")
-    ? endpoint
-    : `${API_BASE}${endpoint}`;
+  const url = endpoint.startsWith("http") ? endpoint : `${API_BASE}${endpoint}`;
+  const headers = new Headers(options.headers);
+  const token = localStorage.getItem("token");
+
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
 
   try {
-    const res = await fetch(url, options);
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+    const res = await fetch(url, { ...options, headers });
+    if (!res.ok) {
+      const error = new Error(`Request failed: ${res.status}`);
+      error.status = res.status;
+      throw error;
+    }
     return res;
   } catch (err) {
+    if (err?.status === 401) {
+      throw err;
+    }
     if (retries > 0) {
       await new Promise((r) => setTimeout(r, 3000));
       return fetchWithRetry(endpoint, options, retries - 1);

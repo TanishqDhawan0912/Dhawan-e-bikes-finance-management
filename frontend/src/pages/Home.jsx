@@ -1,5 +1,7 @@
 import { FaMotorcycle } from "react-icons/fa";
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import QrScanner from "../components/QrScanner.jsx";
 
 function FeatureCard({ icon, title, description }) {
   return (
@@ -12,6 +14,8 @@ function FeatureCard({ icon, title, description }) {
 }
 
 export default function Home() {
+  const [showScanner, setShowScanner] = useState(false);
+
   return (
     <div className="home-root">
       <nav className="home-navbar">
@@ -27,9 +31,18 @@ export default function Home() {
               </p>
             </span>
           </Link>
-          <Link to="/admin" className="home-navbar-admin-btn">
-            Admin
-          </Link>
+          <div className="home-navbar-actions">
+            <button
+              type="button"
+              className="home-navbar-scan-btn"
+              onClick={() => setShowScanner(true)}
+            >
+              📷 Scan QR
+            </button>
+            <Link to="/admin" className="home-navbar-admin-btn">
+              Admin
+            </Link>
+          </div>
         </div>
       </nav>
 
@@ -53,8 +66,12 @@ export default function Home() {
           <Link to="/bills" className="home-menu-button">
             Bills
           </Link>
+          <Link to="/customers" className="home-menu-button">
+            Customers
+          </Link>
         </div>
       </div>
+      {showScanner ? <QrScanner onClose={() => setShowScanner(false)} /> : null}
     </div>
   );
 }

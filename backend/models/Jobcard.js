@@ -4,9 +4,7 @@
  */
 const mongoose = require("mongoose");
 const softDeletePlugin = require("./plugins/softDelete");
-const {
-  allocateNextJobcardSuffix,
-} = require("../utils/allocateJobcardSuffix");
+const { allocateNextJobcardSuffix } = require("../utils/allocateJobcardSuffix");
 
 const jobcardPartSchema = new mongoose.Schema({
   // For normal parts this references a Spare document.
@@ -236,6 +234,12 @@ const jobcardSchema = new mongoose.Schema(
       required: true,
       // Can be single type or comma-separated: "service", "service, replacement", "service, replacement, sales"
     },
+    customer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Customer",
+      default: null,
+      index: true,
+    },
     customerName: {
       type: String,
       default: "N/A",
@@ -408,13 +412,14 @@ const jobcardSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 jobcardSchema.plugin(softDeletePlugin);
 
 jobcardSchema.index({ createdAt: 1 });
 jobcardSchema.index({ updatedAt: 1 });
+jobcardSchema.index({ customer: 1, createdAt: -1 });
 
 // Assign jobcard number via atomic per-day sequence (see allocateJobcardSuffix.js).
 jobcardSchema.pre("save", async function (next) {
@@ -437,4 +442,3 @@ const Jobcard =
 
 module.exports = Jobcard;
 module.exports.jobcardSchema = jobcardSchema;
-
