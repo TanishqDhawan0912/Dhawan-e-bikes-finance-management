@@ -15,6 +15,7 @@
     "install:all": "npm install && npm run install:frontend",
     "migrate:purchase-dates": "node scripts/runMigration.js",
     "migrate:created-at": "node scripts/backfillCreatedAt.js",
+    "migrate:customer-identity": "node scripts/backfillCustomerNameNormalized.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {

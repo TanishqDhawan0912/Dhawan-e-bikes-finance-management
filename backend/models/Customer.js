@@ -17,22 +17,35 @@ const customerSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    // Digits-only normalized phone for stable matching and uniqueness.
+    // Digits-only normalized phone for stable matching.
     mobileNormalized: {
       type: String,
       required: true,
       trim: true,
-      unique: true,
+      index: true,
+    },
+    // Lowercased, trimmed name used with mobileNormalized to uniquely identify a customer
+    // (two different people can share a mobile number, e.g. a family landline).
+    nameNormalized: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true,
       index: true,
     },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 customerSchema.index({ name: 1, place: 1 });
 customerSchema.index({ createdAt: -1 });
+// A customer's identity is the combination of mobile number and name.
+customerSchema.index(
+  { mobileNormalized: 1, nameNormalized: 1 },
+  { unique: true },
+);
 
 const Customer =
   mongoose.models.Customer || mongoose.model("Customer", customerSchema);

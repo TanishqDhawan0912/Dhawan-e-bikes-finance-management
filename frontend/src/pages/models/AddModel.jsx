@@ -150,14 +150,14 @@ function SuggestionsPortal({
                     {inputName === "modelName"
                       ? "Model"
                       : inputName === "company"
-                      ? "Company"
-                      : inputName === "name"
-                      ? "Spare"
-                      : inputName === "modelSearch"
-                      ? "Model"
-                      : inputName === "supplierName"
-                      ? "Supplier"
-                      : inputName}
+                        ? "Company"
+                        : inputName === "name"
+                          ? "Spare"
+                          : inputName === "modelSearch"
+                            ? "Model"
+                            : inputName === "supplierName"
+                              ? "Supplier"
+                              : inputName}
                   </span>
                 )}
               </>
@@ -255,13 +255,13 @@ export default function AddModel() {
 
     try {
       const checkUrl = `/models/check-purchase-price?modelName=${encodeURIComponent(
-        currentFormData.modelName
+        currentFormData.modelName,
       )}&company=${encodeURIComponent(
-        currentFormData.company
+        currentFormData.company,
       )}&purchaseDate=${encodeURIComponent(
-        parseDate(currentFormData.purchaseDate)
+        parseDate(currentFormData.purchaseDate),
       )}&purchasedInWarranty=${encodeURIComponent(
-        currentFormData.purchasedInWarranty
+        currentFormData.purchasedInWarranty,
       )}`;
 
       const response = await fetchWithRetry(checkUrl);
@@ -276,7 +276,7 @@ export default function AddModel() {
       if (data.hasPrice && data.purchasePrice) {
         setAutoAppliedPrice(data.purchasePrice);
         setReferenceModel(
-          data.referenceModel ? { ...data.referenceModel } : null
+          data.referenceModel ? { ...data.referenceModel } : null,
         );
         console.log(`Auto-applied purchase price: ${data.purchasePrice}`);
         console.log(
@@ -286,7 +286,7 @@ export default function AddModel() {
             data.referenceModel?.purchasedInWarranty
               ? "In Warranty"
               : "Out of Warranty"
-          }`
+          }`,
         );
       } else {
         setAutoAppliedPrice(null);
@@ -304,9 +304,7 @@ export default function AddModel() {
       setIsAddingColorVariant(true);
       const fetchModelData = async () => {
         try {
-          const response = await fetchWithRetry(
-            `/models/${modelId}`
-          );
+          const response = await fetchWithRetry(`/models/${modelId}`);
           const data = await response.json();
 
           if (!response.ok) {
@@ -324,9 +322,10 @@ export default function AddModel() {
             sellingPrice: data.data.sellingPrice || "",
             batteriesPerSet: data.data.batteriesPerSet || 5,
             description: data.data.description || [],
-            colorQuantities: data.data.colorQuantities && data.data.colorQuantities.length > 0
-              ? data.data.colorQuantities
-              : [{ color: "", quantity: "" }],
+            colorQuantities:
+              data.data.colorQuantities && data.data.colorQuantities.length > 0
+                ? data.data.colorQuantities
+                : [{ color: "", quantity: "" }],
             purchasedInWarranty: data.data.purchasedInWarranty || false,
             purchaseDate: getTodayFormatted(),
           };
@@ -382,7 +381,7 @@ export default function AddModel() {
       { value: "silver", label: "Silver", hex: "#C0C0C0" },
       { value: "yellow", label: "Yellow", hex: "#FFFF00" },
     ],
-    []
+    [],
   );
 
   // Date validation and parsing functions
@@ -459,7 +458,11 @@ export default function AddModel() {
         }));
       }
       setTagInput("");
-    } else if (e.key === "Backspace" && !tagInput && formData.description.length > 0) {
+    } else if (
+      e.key === "Backspace" &&
+      !tagInput &&
+      formData.description.length > 0
+    ) {
       // Remove last tag if input is empty and backspace is pressed
       setFormData((prev) => ({
         ...prev,
@@ -478,9 +481,24 @@ export default function AddModel() {
   // Handle color-quantity entries
   const addColorQuantityEntry = () => {
     // Check if the last entry has both color and quantity filled
-    const lastEntry = formData.colorQuantities[formData.colorQuantities.length - 1];
-    if (!lastEntry.color || !lastEntry.quantity || lastEntry.quantity === "" || parseInt(lastEntry.quantity) <= 0) {
-      setColorQuantityError("Please fill both color and quantity before adding a new entry");
+    const lastEntry =
+      formData.colorQuantities[formData.colorQuantities.length - 1];
+    if (
+      !lastEntry.color ||
+      !lastEntry.quantity ||
+      lastEntry.quantity === "" ||
+      parseInt(lastEntry.quantity) <= 0
+    ) {
+      setColorQuantityError(
+        "Please fill both color and quantity before adding a new entry",
+      );
+      setTimeout(() => setColorQuantityError(""), 3000);
+      return;
+    }
+    if (lastEntry.color === "other" && !lastEntry.customColor?.trim()) {
+      setColorQuantityError(
+        "Please enter a custom color name before adding a new entry",
+      );
       setTimeout(() => setColorQuantityError(""), 3000);
       return;
     }
@@ -509,7 +527,12 @@ export default function AddModel() {
       };
       // Clear error if both fields are now filled for the last entry
       const lastIndex = updated.length - 1;
-      if (index === lastIndex && updated[lastIndex].color && updated[lastIndex].quantity && parseInt(updated[lastIndex].quantity) > 0) {
+      if (
+        index === lastIndex &&
+        updated[lastIndex].color &&
+        updated[lastIndex].quantity &&
+        parseInt(updated[lastIndex].quantity) > 0
+      ) {
         setColorQuantityError("");
       }
       return {
@@ -562,11 +585,11 @@ export default function AddModel() {
 
       console.log(
         "Proceeding to fetch suggestions for stored search string:",
-        value.trim()
+        value.trim(),
       );
       console.log(
         "This will search for models containing stored string:",
-        value.trim()
+        value.trim(),
       );
 
       setShowSuggestions(false); // Hide suggestions immediately
@@ -578,18 +601,18 @@ export default function AddModel() {
         const currentSearchString = value.trim();
         console.log(
           "YOUR WAY - Using current search string:",
-          currentSearchString
+          currentSearchString,
         );
         console.log("YOUR WAY - modelSearchString state:", modelSearchString);
 
         if (currentSearchString.length >= 1) {
           console.log(
             "YOUR WAY - Fetching model suggestions for current search string:",
-            currentSearchString
+            currentSearchString,
           );
           console.log(
             "YOUR WAY - This will find models containing:",
-            `"${currentSearchString}"`
+            `"${currentSearchString}"`,
           );
           fetchModelSuggestions(currentSearchString);
         } else {
@@ -627,15 +650,15 @@ export default function AddModel() {
         // Force immediate clearing of all states
         console.log(
           "CLEARING - Before clear - companySuggestions:",
-          companySuggestions.length
+          companySuggestions.length,
         );
         console.log(
           "CLEARING - Before clear - showCompanySuggestions:",
-          showCompanySuggestions
+          showCompanySuggestions,
         );
         console.log(
           "CLEARING - Before clear - companySuggestionsLoading:",
-          companySuggestionsLoading
+          companySuggestionsLoading,
         );
 
         setCompanySuggestions([]);
@@ -658,14 +681,14 @@ export default function AddModel() {
       console.log("Proceeding to fetch company suggestions for:", value.trim());
       console.log(
         "This will search for companies starting with:",
-        value.trim()
+        value.trim(),
       );
       console.log("Previous company value:", formData.company);
       console.log(
-        "This works for both typing and backspace - same behavior as model name"
+        "This works for both typing and backspace - same behavior as model name",
       );
       console.log(
-        "GOOGLE-STYLE PREFIX MATCHING: Each key input will find company suggestions starting with the input string"
+        "GOOGLE-STYLE PREFIX MATCHING: Each key input will find company suggestions starting with the input string",
       );
 
       // Show loading immediately when user starts typing (including backspace)
@@ -679,17 +702,17 @@ export default function AddModel() {
         console.log("STORED STRING CHECK - Current input value:", currentValue);
         console.log(
           "STORED STRING CHECK - formData.company (old state):",
-          formData.company
+          formData.company,
         );
 
         if (currentValue.length >= 1) {
           console.log(
             "STORED STRING - Fetching company suggestions for current input string:",
-            currentValue
+            currentValue,
           );
           console.log(
             "STORED STRING - This will find companies containing:",
-            `"${currentValue}"`
+            `"${currentValue}"`,
           );
           fetchCompanySuggestions(currentValue);
         } else {
@@ -746,15 +769,11 @@ export default function AddModel() {
       console.log("Making API call to suggestions endpoint");
       console.log(
         "API URL:",
-        `/models/suggestions?search=${encodeURIComponent(
-          searchTerm.trim()
-        )}`
+        `/models/suggestions?search=${encodeURIComponent(searchTerm.trim())}`,
       );
 
       const response = await fetchWithRetry(
-        `/models/suggestions?search=${encodeURIComponent(
-          searchTerm.trim()
-        )}`
+        `/models/suggestions?search=${encodeURIComponent(searchTerm.trim())}`,
       );
 
       console.log("API Response status:", response.status);
@@ -821,20 +840,20 @@ export default function AddModel() {
 
     try {
       console.log(
-        "Making API call to fetch companies using BULLETPROOF endpoint"
+        "Making API call to fetch companies using BULLETPROOF endpoint",
       );
       console.log(
         "API URL:",
         `/models/company-suggestions?search=${encodeURIComponent(
-          searchTerm.trim()
-        )}`
+          searchTerm.trim(),
+        )}`,
       );
 
       // Use the dedicated company suggestions endpoint with bulletproof logic
       const response = await fetchWithRetry(
         `/models/company-suggestions?search=${encodeURIComponent(
-          searchTerm.trim()
-        )}`
+          searchTerm.trim(),
+        )}`,
       );
 
       console.log("API Response status:", response.status);
@@ -881,7 +900,7 @@ export default function AddModel() {
       if (
         modelNameInputRef.current &&
         !modelNameInputRef.current.contains(event.target) &&
-        !event.target.closest('[data-suggestion-portal]')
+        !event.target.closest("[data-suggestion-portal]")
       ) {
         // Only hide if not clicking on the input field itself or suggestion portal
         if (event.target.name !== "modelName") {
@@ -896,10 +915,10 @@ export default function AddModel() {
       if (
         companyInputRef.current &&
         !companyInputRef.current.contains(event.target) &&
-        !event.target.closest('[data-suggestion-portal]')
+        !event.target.closest("[data-suggestion-portal]")
       ) {
-      if (event.target.name !== "company") {
-        setShowCompanySuggestions(false);
+        if (event.target.name !== "company") {
+          setShowCompanySuggestions(false);
           setCompanySuggestions([]);
           setSelectedCompanySuggestionIndex(-1);
           setCompanyPosition(null);
@@ -916,10 +935,10 @@ export default function AddModel() {
   // Handle suggestion selection
   const handleSuggestionSelect = (suggestion) => {
     // Don't select if it's a loading indicator
-    if (suggestion && typeof suggestion === 'object' && suggestion.loading) {
+    if (suggestion && typeof suggestion === "object" && suggestion.loading) {
       return;
     }
-    
+
     setFormData((prev) => ({
       ...prev,
       modelName: suggestion || "",
@@ -931,7 +950,7 @@ export default function AddModel() {
   };
 
   const handleCompanySuggestionSelect = (company) => {
-    if (company && typeof company === 'object' && company.loading) {
+    if (company && typeof company === "object" && company.loading) {
       return; // Don't select loading items
     }
     setFormData((prev) => ({
@@ -970,11 +989,11 @@ export default function AddModel() {
 
       // Build the duplicate check URL (only checks model name, company, and warranty)
       const checkUrl = `/models/check-duplicate?modelName=${encodeURIComponent(
-        formData.modelName
+        formData.modelName,
       )}&company=${encodeURIComponent(
-        formData.company
+        formData.company,
       )}&purchasedInWarranty=${encodeURIComponent(
-        formData.purchasedInWarranty
+        formData.purchasedInWarranty,
       )}`;
 
       console.log("Calling duplicate check URL:", checkUrl);
@@ -1005,7 +1024,7 @@ export default function AddModel() {
         console.log("=== DUPLICATE FOUND - BLOCKING CREATION ===");
         console.log(
           "Backend found duplicate with same purchase date:",
-          data.model
+          data.model,
         );
 
         // Backend already checked dates, so just block if exists: true
@@ -1013,9 +1032,7 @@ export default function AddModel() {
           exists: true,
           message: `A model with the same details (Model: ${
             formData.modelName
-          }, Company: ${
-            formData.company
-          }, Warranty Status: ${
+          }, Company: ${formData.company}, Warranty Status: ${
             data.model.purchasedInWarranty ? "In Warranty" : "Out of Warranty"
           }) already exists. Each combination of name, company, and warranty status should be unique.`,
           existingModel: data.model,
@@ -1027,7 +1044,7 @@ export default function AddModel() {
     } catch (err) {
       console.error("=== DUPLICATE CHECK ERROR ===", err);
       setError(
-        "Network error while checking duplicates. Please check your connection."
+        "Network error while checking duplicates. Please check your connection.",
       );
       return { exists: false }; // Allow creation if check fails
     }
@@ -1045,6 +1062,15 @@ export default function AddModel() {
 
     if (parseFloat(formData.sellingPrice) <= 0) {
       setError("Selling price must be greater than 0");
+      return;
+    }
+
+    // Custom color name is required when "Other" is selected
+    const missingCustomColor = formData.colorQuantities.some(
+      (entry) => entry.color === "other" && !entry.customColor?.trim(),
+    );
+    if (missingCustomColor) {
+      setError("Please enter a custom color name for the 'Other' color option");
       return;
     }
 
@@ -1076,7 +1102,12 @@ export default function AddModel() {
           colorQuantities: formData.colorQuantities
             .filter((entry) => entry.color && entry.quantity)
             .map((entry) => ({
-              color: entry.color,
+              color:
+                entry.color === "other"
+                  ? entry.customColor
+                    ? entry.customColor.trim()
+                    : ""
+                  : entry.color,
               quantity: parseInt(entry.quantity) || 0,
             })),
           purchasedInWarranty: formData.purchasedInWarranty,
@@ -1231,14 +1262,21 @@ export default function AddModel() {
                         e.preventDefault();
                         // Select the highlighted suggestion (skip loading items)
                         if (selectedSuggestionIndex >= 0) {
-                          const selected = modelSuggestions[selectedSuggestionIndex];
-                          if (!(selected && typeof selected === 'object' && selected.loading)) {
+                          const selected =
+                            modelSuggestions[selectedSuggestionIndex];
+                          if (
+                            !(
+                              selected &&
+                              typeof selected === "object" &&
+                              selected.loading
+                            )
+                          ) {
                             handleSuggestionSelect(selected);
                           }
                         } else if (modelSuggestions.length > 0) {
                           // If no suggestion is highlighted, select the first non-loading one
                           const firstNonLoading = modelSuggestions.find(
-                            s => !(s && typeof s === 'object' && s.loading)
+                            (s) => !(s && typeof s === "object" && s.loading),
                           );
                           if (firstNonLoading) {
                             handleSuggestionSelect(firstNonLoading);
@@ -1267,8 +1305,8 @@ export default function AddModel() {
                       position={suggestionPosition}
                       inputName="modelName"
                     />,
-                    document.body
-                )}
+                    document.body,
+                  )}
               </div>
             </div>
 
@@ -1335,14 +1373,21 @@ export default function AddModel() {
                         e.preventDefault();
                         // Select the highlighted suggestion (skip loading items)
                         if (selectedCompanySuggestionIndex >= 0) {
-                          const selected = companySuggestions[selectedCompanySuggestionIndex];
-                          if (!(selected && typeof selected === 'object' && selected.loading)) {
+                          const selected =
+                            companySuggestions[selectedCompanySuggestionIndex];
+                          if (
+                            !(
+                              selected &&
+                              typeof selected === "object" &&
+                              selected.loading
+                            )
+                          ) {
                             handleCompanySuggestionSelect(selected);
                           }
                         } else if (companySuggestions.length > 0) {
                           // If no suggestion is highlighted, select the first non-loading one
                           const firstNonLoading = companySuggestions.find(
-                            s => !(s && typeof s === 'object' && s.loading)
+                            (s) => !(s && typeof s === "object" && s.loading),
                           );
                           if (firstNonLoading) {
                             handleCompanySuggestionSelect(firstNonLoading);
@@ -1371,12 +1416,11 @@ export default function AddModel() {
                       position={companyPosition}
                       inputName="company"
                     />,
-                    document.body
-                )}
+                    document.body,
+                  )}
               </div>
             </div>
           </div>
-
 
           <div className="form-row">
             <div className="form-group">
@@ -1400,7 +1444,9 @@ export default function AddModel() {
             </div>
 
             <div className="form-group">
-              <label>Selling Price ({formData.batteriesPerSet} batteries) *</label>
+              <label>
+                Selling Price ({formData.batteriesPerSet} batteries) *
+              </label>
               <input
                 type="number"
                 name="sellingPrice"
@@ -1490,7 +1536,7 @@ export default function AddModel() {
                         const [year, month, day] = isoValue.split("-");
                         const formatted = `${day.padStart(
                           2,
-                          "0"
+                          "0",
                         )}/${month.padStart(2, "0")}/${year}`;
                         setFormData((prev) => ({
                           ...prev,
@@ -1603,13 +1649,23 @@ export default function AddModel() {
                   }}
                 >
                   <div className="form-group" style={{ flex: 1 }}>
-                    <label style={{ fontSize: "0.875rem", marginBottom: "0.25rem", display: "block" }}>
+                    <label
+                      style={{
+                        fontSize: "0.875rem",
+                        marginBottom: "0.25rem",
+                        display: "block",
+                      }}
+                    >
                       Color
                     </label>
                     <select
                       value={entry.color}
                       onChange={(e) =>
-                        handleColorQuantityChange(index, "color", e.target.value)
+                        handleColorQuantityChange(
+                          index,
+                          "color",
+                          e.target.value,
+                        )
                       }
                       disabled={isSubmitting}
                       style={{
@@ -1624,28 +1680,34 @@ export default function AddModel() {
                       {colorOptions.map((color) => {
                         // Get all selected colors except the current entry
                         const selectedColors = formData.colorQuantities
-                          .map((e, i) => i !== index ? e.color : "")
-                          .filter(c => c && c !== "");
+                          .map((e, i) => (i !== index ? e.color : ""))
+                          .filter((c) => c && c !== "");
                         const isDisabled = selectedColors.includes(color.value);
                         return (
-                          <option 
-                            key={color.value} 
+                          <option
+                            key={color.value}
                             value={color.value}
                             disabled={isDisabled}
                           >
-                            {color.label} {isDisabled ? "(already selected)" : ""}
+                            {color.label}{" "}
+                            {isDisabled ? "(already selected)" : ""}
                           </option>
                         );
                       })}
-                      <option 
+                      <option
                         value="other"
-                        disabled={formData.colorQuantities
-                          .map((e, i) => i !== index ? e.color : "")
-                          .filter(c => c === "other").length > 0}
+                        disabled={
+                          formData.colorQuantities
+                            .map((e, i) => (i !== index ? e.color : ""))
+                            .filter((c) => c === "other").length > 0
+                        }
                       >
-                        Other (specify) {formData.colorQuantities
-                          .map((e, i) => i !== index ? e.color : "")
-                          .filter(c => c === "other").length > 0 ? "(already selected)" : ""}
+                        Other (specify){" "}
+                        {formData.colorQuantities
+                          .map((e, i) => (i !== index ? e.color : ""))
+                          .filter((c) => c === "other").length > 0
+                          ? "(already selected)"
+                          : ""}
                       </option>
                     </select>
                     {/* Color Preview */}
@@ -1735,7 +1797,7 @@ export default function AddModel() {
                                 entry.color === "other" || !entry.color
                                   ? "#f5f5f5"
                                   : colorOptions.find(
-                                      (c) => c.value === entry.color
+                                      (c) => c.value === entry.color,
                                     )?.hex || "#f5f5f5",
                             }}
                           />
@@ -1748,23 +1810,52 @@ export default function AddModel() {
                                 entry.color === "yellow"
                                   ? "#000"
                                   : entry.color && entry.color !== "other"
-                                  ? "#fff"
-                                  : "#666",
+                                    ? "#fff"
+                                    : "#666",
                             }}
                           >
                             {entry.color && entry.color !== "other"
-                              ? colorOptions.find((c) => c.value === entry.color)
-                                  ?.label
+                              ? colorOptions.find(
+                                  (c) => c.value === entry.color,
+                                )?.label
                               : entry.color === "other"
-                              ? "Custom"
-                              : "No color"}
+                                ? entry.customColor?.trim() || "Custom"
+                                : "No color"}
                           </span>
                         </>
                       )}
                     </div>
+                    {entry.color === "other" && (
+                      <input
+                        type="text"
+                        placeholder="Enter custom color name"
+                        value={entry.customColor || ""}
+                        onChange={(e) =>
+                          handleColorQuantityChange(
+                            index,
+                            "customColor",
+                            e.target.value,
+                          )
+                        }
+                        disabled={isSubmitting}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          border: "1px solid #ccc",
+                          borderRadius: "4px",
+                          marginTop: "0.5rem",
+                        }}
+                      />
+                    )}
                   </div>
                   <div className="form-group" style={{ flex: 1 }}>
-                    <label style={{ fontSize: "0.875rem", marginBottom: "0.25rem", display: "block" }}>
+                    <label
+                      style={{
+                        fontSize: "0.875rem",
+                        marginBottom: "0.25rem",
+                        display: "block",
+                      }}
+                    >
                       Quantity
                     </label>
                     <input
@@ -1774,7 +1865,7 @@ export default function AddModel() {
                         handleColorQuantityChange(
                           index,
                           "quantity",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       placeholder="Quantity"
@@ -1815,7 +1906,14 @@ export default function AddModel() {
                   )}
                 </div>
               ))}
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.5rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  marginTop: "0.5rem",
+                }}
+              >
                 <button
                   type="button"
                   onClick={addColorQuantityEntry}
@@ -1937,7 +2035,8 @@ export default function AddModel() {
                   fontSize: "0.8rem",
                 }}
               >
-                Press Enter to add a tag. Press Backspace to remove the last tag.
+                Press Enter to add a tag. Press Backspace to remove the last
+                tag.
               </small>
             </div>
           </div>
@@ -2024,10 +2123,10 @@ export default function AddModel() {
               isAddingColorVariant && isAdminAdd
                 ? navigate("/admin?section=models")
                 : isAddingColorVariant
-                ? navigate("/models/all")
-                : isAdminAdd
-                ? navigate("/admin?section=models")
-                : navigate("/models/all")
+                  ? navigate("/models/all")
+                  : isAdminAdd
+                    ? navigate("/admin?section=models")
+                    : navigate("/models/all")
             }
           >
             Cancel

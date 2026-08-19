@@ -69,7 +69,9 @@ export default function QrScanner({ onClose }) {
                 if (import.meta.env.DEV) {
                   console.warn("[QR] request skipped: JWT missing");
                 }
-                setError("No saved login session on this device. Log in once using Admin.");
+                setError(
+                  "No saved login session on this device. Log in once using Admin.",
+                );
                 setStatus("Login required");
                 processingRef.current = false;
                 return;

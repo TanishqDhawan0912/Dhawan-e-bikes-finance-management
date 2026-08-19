@@ -59,24 +59,36 @@ function cleanText(input) {
   return value;
 }
 
+// Lowercased/whitespace-collapsed name paired with mobile to uniquely identify a customer.
+function normalizeName(input) {
+  return String(input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 async function upsertCustomerFromJobcardPayload(payload) {
   const name = cleanText(payload?.customerName);
   const place = cleanText(payload?.place);
   const mobile = cleanText(payload?.mobile);
   const mobileNormalized = normalizeMobile(mobile);
+  const nameNormalized = normalizeName(name);
 
   if (!name || !place || !mobileNormalized) {
     return null;
   }
 
+  // Match on both name and mobile so different people sharing a mobile
+  // number (e.g. a family) are kept as distinct customer records.
   const customer = await Customer.findOneAndUpdate(
-    { mobileNormalized },
+    { mobileNormalized, nameNormalized },
     {
       $set: {
         name,
         place,
         mobile,
         mobileNormalized,
+        nameNormalized,
       },
     },
     {

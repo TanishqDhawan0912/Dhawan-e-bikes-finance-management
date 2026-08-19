@@ -292,6 +292,7 @@ export default function NewJobcard() {
   const [oldChargerWorking, setOldChargerWorking] = useState("working"); // replacement charger old unit status
   const [loadingBatteries, setLoadingBatteries] = useState(false);
   const [loadingChargers, setLoadingChargers] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Sales states
   const [salesBattery, setSalesBattery] = useState(null);
@@ -2438,6 +2439,9 @@ export default function NewJobcard() {
   };
 
   const handleSubmit = async () => {
+    // Prevent duplicate jobcards from double-clicks or a slow server response
+    if (isSubmitting) return;
+
     // Validate customer name is required
     if (!formData.customerName || formData.customerName.trim() === "") {
       setValidationError("Customer Name is required");
@@ -2455,6 +2459,8 @@ export default function NewJobcard() {
 
     // Clear any previous validation errors
     setValidationError("");
+
+    setIsSubmitting(true);
 
     // Combine all parts from all types
     const allParts = [
@@ -2707,6 +2713,8 @@ export default function NewJobcard() {
       alert(
         `Error ${isEditMode ? "updating" : "saving"} jobcard: ${error.message}`,
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -11115,8 +11123,15 @@ export default function NewJobcard() {
             type="button"
             className="btn btn-primary"
             onClick={handleSubmit}
+            disabled={isSubmitting}
           >
-            {isEditMode ? "Update Jobcard" : "Save Jobcard"}
+            {isSubmitting
+              ? isEditMode
+                ? "Updating..."
+                : "Saving..."
+              : isEditMode
+                ? "Update Jobcard"
+                : "Save Jobcard"}
           </button>
           <button
             type="button"

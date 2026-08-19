@@ -128,17 +128,20 @@ const BRAKE_TYPE_OPTIONS = [
 const getOptionLabel = (options, value) =>
   options.find((opt) => opt.value === value)?.label || "";
 
-const normalizeTag = (tag) => String(tag || "").trim().toLowerCase();
+const normalizeTag = (tag) =>
+  String(tag || "")
+    .trim()
+    .toLowerCase();
 
 const syncDescriptionWithSpecs = (description, tyreSize, brakeType) => {
   const autoLabels = new Set(
     [...TYRE_SIZE_OPTIONS, ...BRAKE_TYPE_OPTIONS].map((opt) =>
-      normalizeTag(opt.label)
-    )
+      normalizeTag(opt.label),
+    ),
   );
   const existing = Array.isArray(description) ? description : [];
   const manualTags = existing.filter(
-    (tag) => !autoLabels.has(normalizeTag(tag))
+    (tag) => !autoLabels.has(normalizeTag(tag)),
   );
 
   const tyreLabel = getOptionLabel(TYRE_SIZE_OPTIONS, tyreSize);
@@ -347,7 +350,7 @@ function AddMoreStock() {
       { value: "silver", label: "Silver", hex: "#C0C0C0" },
       { value: "yellow", label: "Yellow", hex: "#FFFF00" },
     ],
-    []
+    [],
   );
 
   const handleInputChange = (e) => {
@@ -363,7 +366,7 @@ function AddMoreStock() {
         next.description = syncDescriptionWithSpecs(
           prev.description,
           name === "tyreSize" ? nextValue : prev.tyreSize,
-          name === "brakeType" ? nextValue : prev.brakeType
+          name === "brakeType" ? nextValue : prev.brakeType,
         );
       }
 
@@ -417,7 +420,14 @@ function AddMoreStock() {
       parseInt(lastEntry.quantity, 10) < 0
     ) {
       setColorQuantityError(
-        "Please fill both color and quantity before adding a new entry"
+        "Please fill both color and quantity before adding a new entry",
+      );
+      setTimeout(() => setColorQuantityError(""), 3000);
+      return;
+    }
+    if (lastEntry.color === "other" && !lastEntry.customColor?.trim()) {
+      setColorQuantityError(
+        "Please enter a custom color name before adding a new entry",
       );
       setTimeout(() => setColorQuantityError(""), 3000);
       return;
@@ -475,7 +485,7 @@ function AddMoreStock() {
         next.description = syncDescriptionWithSpecs(
           prev.description,
           name === "tyreSize" ? nextValue : prev.tyreSize,
-          name === "brakeType" ? nextValue : prev.brakeType
+          name === "brakeType" ? nextValue : prev.brakeType,
         );
       }
 
@@ -530,7 +540,14 @@ function AddMoreStock() {
       parseInt(lastEntry.quantity, 10) < 0
     ) {
       setEditColorQuantityError(
-        "Please fill both color and quantity before adding a new entry"
+        "Please fill both color and quantity before adding a new entry",
+      );
+      setTimeout(() => setEditColorQuantityError(""), 3000);
+      return;
+    }
+    if (lastEntry.color === "other" && !lastEntry.customColor?.trim()) {
+      setEditColorQuantityError(
+        "Please enter a custom color name before adding a new entry",
       );
       setTimeout(() => setEditColorQuantityError(""), 3000);
       return;
@@ -607,7 +624,11 @@ function AddMoreStock() {
           return dateB - dateA;
         });
         const latestEntry = sortedEntries[0];
-        if (latestEntry && latestEntry.description && latestEntry.description.length > 0) {
+        if (
+          latestEntry &&
+          latestEntry.description &&
+          latestEntry.description.length > 0
+        ) {
           finalDescription = [...latestEntry.description];
         }
       }
@@ -628,10 +649,15 @@ function AddMoreStock() {
               entry.color.toString().trim() !== "" &&
               entry.quantity !== undefined &&
               entry.quantity !== null &&
-              entry.quantity !== ""
+              entry.quantity !== "",
           )
           .map((entry) => ({
-            color: entry.color,
+            color:
+              entry.color === "other"
+                ? entry.customColor
+                  ? entry.customColor.trim()
+                  : ""
+                : entry.color,
             quantity: parseInt(entry.quantity) || 0,
           })),
         description: finalDescription,
@@ -649,7 +675,7 @@ function AddMoreStock() {
               const prev = colorTotals.get(cq.color) || 0;
               colorTotals.set(
                 cq.color,
-                prev + (parseInt(cq.quantity, 10) || 0)
+                prev + (parseInt(cq.quantity, 10) || 0),
               );
             }
           });
@@ -661,7 +687,7 @@ function AddMoreStock() {
         ([color, quantity]) => ({
           color,
           quantity,
-        })
+        }),
       );
 
       // Prepare update data
@@ -699,7 +725,7 @@ function AddMoreStock() {
       window.dispatchEvent(
         new CustomEvent("modelDataUpdated", {
           detail: { modelId: id, reason: "addStockEntry" },
-        })
+        }),
       );
 
       // Reset form
@@ -752,7 +778,7 @@ function AddMoreStock() {
           : model?.purchasedInWarranty || false,
     });
     setEditTagInput("");
-    
+
     // Scroll to edit form after state is updated
     setTimeout(() => {
       editFormSectionRef.current?.scrollIntoView({
@@ -773,7 +799,7 @@ function AddMoreStock() {
     try {
       const currentStockEntries = model?.stockEntries || [];
       const filteredEntries = currentStockEntries.filter(
-        (_, idx) => idx !== editingEntryIndex
+        (_, idx) => idx !== editingEntryIndex,
       );
 
       // NOTE: we allow multiple stockEntries with the same purchase date.
@@ -788,7 +814,11 @@ function AddMoreStock() {
           return dateB - dateA;
         });
         const latestEntry = sortedEntries[0];
-        if (latestEntry && latestEntry.description && latestEntry.description.length > 0) {
+        if (
+          latestEntry &&
+          latestEntry.description &&
+          latestEntry.description.length > 0
+        ) {
           finalDescription = [...latestEntry.description];
         }
       }
@@ -809,10 +839,15 @@ function AddMoreStock() {
               entry.color.toString().trim() !== "" &&
               entry.quantity !== undefined &&
               entry.quantity !== null &&
-              entry.quantity !== ""
+              entry.quantity !== "",
           )
           .map((entry) => ({
-            color: entry.color,
+            color:
+              entry.color === "other"
+                ? entry.customColor
+                  ? entry.customColor.trim()
+                  : ""
+                : entry.color,
             quantity: parseInt(entry.quantity) || 0,
           })),
         description: finalDescription,
@@ -828,7 +863,7 @@ function AddMoreStock() {
               const prev = colorTotals.get(cq.color) || 0;
               colorTotals.set(
                 cq.color,
-                prev + (parseInt(cq.quantity, 10) || 0)
+                prev + (parseInt(cq.quantity, 10) || 0),
               );
             }
           });
@@ -840,7 +875,7 @@ function AddMoreStock() {
         ([color, quantity]) => ({
           color,
           quantity,
-        })
+        }),
       );
 
       // Prepare update data
@@ -877,7 +912,7 @@ function AddMoreStock() {
       window.dispatchEvent(
         new CustomEvent("modelDataUpdated", {
           detail: { modelId: id, reason: "editStockEntry" },
-        })
+        }),
       );
       setEditingEntryIndex(null);
       setEditingEntry(null);
@@ -905,7 +940,7 @@ function AddMoreStock() {
     try {
       const currentStockEntries = model?.stockEntries || [];
       const updatedStockEntries = currentStockEntries.filter(
-        (_, idx) => idx !== index
+        (_, idx) => idx !== index,
       );
 
       // Collect all unique colors from remaining stock entries
@@ -915,10 +950,7 @@ function AddMoreStock() {
           entry.colorQuantities.forEach((cq) => {
             if (cq.color && cq.color.trim() !== "") {
               const prev = allColors.get(cq.color) || 0;
-              allColors.set(
-                cq.color,
-                prev + (parseInt(cq.quantity, 10) || 0)
-              );
+              allColors.set(cq.color, prev + (parseInt(cq.quantity, 10) || 0));
             }
           });
         }
@@ -929,7 +961,7 @@ function AddMoreStock() {
         ([color, quantity]) => ({
           color,
           quantity,
-        })
+        }),
       );
 
       const response = await fetchWithRetry(`/models/${id}`, {
@@ -937,7 +969,7 @@ function AddMoreStock() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           stockEntries: updatedStockEntries,
           colorQuantities: updatedColorQuantities,
         }),
@@ -951,7 +983,7 @@ function AddMoreStock() {
       window.dispatchEvent(
         new CustomEvent("modelDataUpdated", {
           detail: { modelId: id, reason: "deleteStockEntry" },
-        })
+        }),
       );
     } catch (error) {
       console.error("Error deleting stock entry:", error);
@@ -968,7 +1000,11 @@ function AddMoreStock() {
 
     // Prevent deleting if it's the last color
     if (entry.colorQuantities.length <= 1) {
-      if (!window.confirm("This is the last color in this entry. Deleting it will remove the entire entry. Do you want to continue?")) {
+      if (
+        !window.confirm(
+          "This is the last color in this entry. Deleting it will remove the entire entry. Do you want to continue?",
+        )
+      ) {
         return;
       }
       // If confirmed, delete the entire entry
@@ -976,19 +1012,23 @@ function AddMoreStock() {
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to delete ${colorToDelete.color} (${colorToDelete.quantity}) from this entry?`)) {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete ${colorToDelete.color} (${colorToDelete.quantity}) from this entry?`,
+      )
+    ) {
       return;
     }
 
     try {
       const currentStockEntries = model?.stockEntries || [];
       const updatedStockEntries = [...currentStockEntries];
-      
+
       // Remove the color from the entry's colorQuantities
       updatedStockEntries[entryIndex] = {
         ...updatedStockEntries[entryIndex],
         colorQuantities: updatedStockEntries[entryIndex].colorQuantities.filter(
-          (_, idx) => idx !== colorIndex
+          (_, idx) => idx !== colorIndex,
         ),
       };
 
@@ -999,10 +1039,7 @@ function AddMoreStock() {
           entry.colorQuantities.forEach((cq) => {
             if (cq.color && cq.color.trim() !== "") {
               const prev = allColors.get(cq.color) || 0;
-              allColors.set(
-                cq.color,
-                prev + (parseInt(cq.quantity, 10) || 0)
-              );
+              allColors.set(cq.color, prev + (parseInt(cq.quantity, 10) || 0));
             }
           });
         }
@@ -1013,7 +1050,7 @@ function AddMoreStock() {
         ([color, quantity]) => ({
           color,
           quantity,
-        })
+        }),
       );
 
       const response = await fetchWithRetry(`/models/${id}`, {
@@ -1021,7 +1058,7 @@ function AddMoreStock() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           stockEntries: updatedStockEntries,
           colorQuantities: updatedColorQuantities,
         }),
@@ -1035,7 +1072,7 @@ function AddMoreStock() {
       window.dispatchEvent(
         new CustomEvent("modelDataUpdated", {
           detail: { modelId: id, reason: "deleteColorFromEntry" },
-        })
+        }),
       );
     } catch (error) {
       console.error("Error deleting color from entry:", error);
@@ -1056,7 +1093,7 @@ function AddMoreStock() {
     const selectedDate = new Date(
       currentMonth.getFullYear(),
       currentMonth.getMonth(),
-      day
+      day,
     );
     const formattedDate = formatDate(selectedDate);
     setNewStockEntry((prev) => ({ ...prev, purchaseDate: formattedDate }));
@@ -1067,7 +1104,7 @@ function AddMoreStock() {
     const selectedDate = new Date(
       currentMonth.getFullYear(),
       currentMonth.getMonth(),
-      day
+      day,
     );
     const formattedDate = formatDate(selectedDate);
     setEditingEntry((prev) => ({ ...prev, purchaseDate: formattedDate }));
@@ -1124,7 +1161,10 @@ function AddMoreStock() {
           entry.colorQuantities.forEach((cq) => {
             if (cq.color && cq.color.trim() !== "") {
               const currentQuantity = colorMap.get(cq.color) || 0;
-              colorMap.set(cq.color, currentQuantity + (parseInt(cq.quantity) || 0));
+              colorMap.set(
+                cq.color,
+                currentQuantity + (parseInt(cq.quantity) || 0),
+              );
             }
           });
         }
@@ -1150,10 +1190,10 @@ function AddMoreStock() {
         const entryQuantity = entry.colorQuantities
           ? entry.colorQuantities.reduce(
               (sum, cq) => sum + (parseInt(cq.quantity) || 0),
-              0
+              0,
             )
           : 0;
-        
+
         totalQuantity += entryQuantity;
 
         // Calculate value for this entry
@@ -1166,7 +1206,8 @@ function AddMoreStock() {
     return { totalQuantity, totalValue };
   };
 
-  const { totalQuantity: grandTotalQuantity, totalValue: grandTotalValue } = calculateTotals();
+  const { totalQuantity: grandTotalQuantity, totalValue: grandTotalValue } =
+    calculateTotals();
 
   return (
     <div style={style}>
@@ -1450,8 +1491,8 @@ function AddMoreStock() {
                               setCurrentMonth(
                                 new Date(
                                   currentMonth.getFullYear(),
-                                  currentMonth.getMonth() - 1
-                                )
+                                  currentMonth.getMonth() - 1,
+                                ),
                               )
                             }
                             style={{
@@ -1475,8 +1516,8 @@ function AddMoreStock() {
                               setCurrentMonth(
                                 new Date(
                                   currentMonth.getFullYear(),
-                                  currentMonth.getMonth() + 1
-                                )
+                                  currentMonth.getMonth() + 1,
+                                ),
                               )
                             }
                             style={{
@@ -1530,7 +1571,7 @@ function AddMoreStock() {
                             const currentDate = new Date(
                               currentMonth.getFullYear(),
                               currentMonth.getMonth(),
-                              dayNumber
+                              dayNumber,
                             );
                             const currentDateString = formatDate(currentDate);
                             const isSelected =
@@ -1554,17 +1595,17 @@ function AddMoreStock() {
                                   backgroundColor: isSelected
                                     ? "#3b82f6"
                                     : isToday
-                                    ? "#f3f4f6"
-                                    : isFuture
-                                    ? "#f9fafb"
-                                    : "transparent",
+                                      ? "#f3f4f6"
+                                      : isFuture
+                                        ? "#f9fafb"
+                                        : "transparent",
                                   color: isSelected
                                     ? "white"
                                     : isToday
-                                    ? "#1f2937"
-                                    : isFuture
-                                    ? "#d1d5db"
-                                    : "#374151",
+                                      ? "#1f2937"
+                                      : isFuture
+                                        ? "#d1d5db"
+                                        : "#374151",
                                   fontSize: "0.875rem",
                                   fontWeight: isToday ? "600" : "400",
                                   border:
@@ -1704,7 +1745,8 @@ function AddMoreStock() {
                       fontWeight: "500",
                     }}
                   >
-                    Selling Price (per {newStockEntry.batteriesPerSet} batteries) *
+                    Selling Price (per {newStockEntry.batteriesPerSet}{" "}
+                    batteries) *
                   </label>
                   <input
                     type="number"
@@ -1737,7 +1779,8 @@ function AddMoreStock() {
                         fontWeight: "500",
                       }}
                     >
-                      Purchase Price (per {newStockEntry.batteriesPerSet} batteries) *
+                      Purchase Price (per {newStockEntry.batteriesPerSet}{" "}
+                      batteries) *
                     </label>
                     <input
                       type="number"
@@ -1769,7 +1812,8 @@ function AddMoreStock() {
                         fontWeight: "500",
                       }}
                     >
-                      Purchase Price (per {newStockEntry.batteriesPerSet} batteries) *
+                      Purchase Price (per {newStockEntry.batteriesPerSet}{" "}
+                      batteries) *
                     </label>
                     <button
                       type="button"
@@ -1906,7 +1950,7 @@ function AddMoreStock() {
                           handleColorQuantityChange(
                             index,
                             "color",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         disabled={isSubmitting}
@@ -1926,7 +1970,7 @@ function AddMoreStock() {
                             .map((e, i) => (i !== index ? e.color : ""))
                             .filter((c) => c && c !== "");
                           const isDisabled = selectedColors.includes(
-                            color.value
+                            color.value,
                           );
                           return (
                             <option
@@ -2042,7 +2086,7 @@ function AddMoreStock() {
                                   entry.color === "other" || !entry.color
                                     ? "#f5f5f5"
                                     : colorOptions.find(
-                                        (c) => c.value === entry.color
+                                        (c) => c.value === entry.color,
                                       )?.hex || "#f5f5f5",
                               }}
                             />
@@ -2055,21 +2099,45 @@ function AddMoreStock() {
                                   entry.color === "yellow"
                                     ? "#000"
                                     : entry.color && entry.color !== "other"
-                                    ? "#fff"
-                                    : "#666",
+                                      ? "#fff"
+                                      : "#666",
                               }}
                             >
                               {entry.color && entry.color !== "other"
                                 ? colorOptions.find(
-                                    (c) => c.value === entry.color
+                                    (c) => c.value === entry.color,
                                   )?.label
                                 : entry.color === "other"
-                                ? "Custom"
-                                : "No color"}
+                                  ? entry.customColor?.trim() || "Custom"
+                                  : "No color"}
                             </span>
                           </>
                         )}
                       </div>
+                      {entry.color === "other" && (
+                        <input
+                          type="text"
+                          placeholder="Enter custom color name"
+                          value={entry.customColor || ""}
+                          onChange={(e) =>
+                            handleColorQuantityChange(
+                              index,
+                              "customColor",
+                              e.target.value,
+                            )
+                          }
+                          disabled={isSubmitting}
+                          style={{
+                            width: "100%",
+                            padding: "0.5rem",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "0.375rem",
+                            fontSize: "0.875rem",
+                            marginTop: "0.5rem",
+                            backgroundColor: "#ffffff",
+                          }}
+                        />
+                      )}
                     </div>
                     <div style={{ flex: 1 }}>
                       <label
@@ -2088,7 +2156,7 @@ function AddMoreStock() {
                           handleColorQuantityChange(
                             index,
                             "quantity",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="Quantity"
@@ -2302,7 +2370,7 @@ function AddMoreStock() {
 
         {/* Edit Stock Entry Section */}
         {editingEntryIndex !== null && editingEntry && (
-          <div 
+          <div
             id="edit-stock-form-section"
             ref={editFormSectionRef}
             style={{ marginBottom: "2rem" }}
@@ -2405,8 +2473,8 @@ function AddMoreStock() {
                               setCurrentMonth(
                                 new Date(
                                   currentMonth.getFullYear(),
-                                  currentMonth.getMonth() - 1
-                                )
+                                  currentMonth.getMonth() - 1,
+                                ),
                               )
                             }
                             style={{
@@ -2430,8 +2498,8 @@ function AddMoreStock() {
                               setCurrentMonth(
                                 new Date(
                                   currentMonth.getFullYear(),
-                                  currentMonth.getMonth() + 1
-                                )
+                                  currentMonth.getMonth() + 1,
+                                ),
                               )
                             }
                             style={{
@@ -2485,7 +2553,7 @@ function AddMoreStock() {
                             const currentDate = new Date(
                               currentMonth.getFullYear(),
                               currentMonth.getMonth(),
-                              dayNumber
+                              dayNumber,
                             );
                             const currentDateString = formatDate(currentDate);
                             const isSelected =
@@ -2509,17 +2577,17 @@ function AddMoreStock() {
                                   backgroundColor: isSelected
                                     ? "#3b82f6"
                                     : isToday
-                                    ? "#f3f4f6"
-                                    : isFuture
-                                    ? "#f9fafb"
-                                    : "transparent",
+                                      ? "#f3f4f6"
+                                      : isFuture
+                                        ? "#f9fafb"
+                                        : "transparent",
                                   color: isSelected
                                     ? "white"
                                     : isToday
-                                    ? "#1f2937"
-                                    : isFuture
-                                    ? "#d1d5db"
-                                    : "#374151",
+                                      ? "#1f2937"
+                                      : isFuture
+                                        ? "#d1d5db"
+                                        : "#374151",
                                   fontSize: "0.875rem",
                                   fontWeight: isToday ? "600" : "400",
                                   border:
@@ -2657,7 +2725,8 @@ function AddMoreStock() {
                       fontWeight: "500",
                     }}
                   >
-                    Selling Price (per {editingEntry.batteriesPerSet || 5} batteries) *
+                    Selling Price (per {editingEntry.batteriesPerSet || 5}{" "}
+                    batteries) *
                   </label>
                   <input
                     type="number"
@@ -2689,7 +2758,8 @@ function AddMoreStock() {
                         fontWeight: "500",
                       }}
                     >
-                      Purchase Price (per {editingEntry.batteriesPerSet || 5} batteries) *
+                      Purchase Price (per {editingEntry.batteriesPerSet || 5}{" "}
+                      batteries) *
                     </label>
                     <input
                       type="number"
@@ -2720,7 +2790,8 @@ function AddMoreStock() {
                         fontWeight: "500",
                       }}
                     >
-                      Purchase Price (per {editingEntry.batteriesPerSet || 5} batteries) *
+                      Purchase Price (per {editingEntry.batteriesPerSet || 5}{" "}
+                      batteries) *
                     </label>
                     <button
                       type="button"
@@ -2855,7 +2926,7 @@ function AddMoreStock() {
                           handleEditColorQuantityChange(
                             index,
                             "color",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         style={{
@@ -2876,7 +2947,7 @@ function AddMoreStock() {
                             .map((e, i) => (i !== index ? e.color : ""))
                             .filter((c) => c && c !== "");
                           const isDisabled = selectedColors.includes(
-                            color.value
+                            color.value,
                           );
                           return (
                             <option
@@ -2992,7 +3063,7 @@ function AddMoreStock() {
                                   entry.color === "other" || !entry.color
                                     ? "#f5f5f5"
                                     : colorOptions.find(
-                                        (c) => c.value === entry.color
+                                        (c) => c.value === entry.color,
                                       )?.hex || "#f5f5f5",
                               }}
                             />
@@ -3005,21 +3076,44 @@ function AddMoreStock() {
                                   entry.color === "yellow"
                                     ? "#000"
                                     : entry.color && entry.color !== "other"
-                                    ? "#fff"
-                                    : "#666",
+                                      ? "#fff"
+                                      : "#666",
                               }}
                             >
                               {entry.color && entry.color !== "other"
                                 ? colorOptions.find(
-                                    (c) => c.value === entry.color
+                                    (c) => c.value === entry.color,
                                   )?.label
                                 : entry.color === "other"
-                                ? "Custom"
-                                : "No color"}
+                                  ? entry.customColor?.trim() || "Custom"
+                                  : "No color"}
                             </span>
                           </>
                         )}
                       </div>
+                      {entry.color === "other" && (
+                        <input
+                          type="text"
+                          placeholder="Enter custom color name"
+                          value={entry.customColor || ""}
+                          onChange={(e) =>
+                            handleEditColorQuantityChange(
+                              index,
+                              "customColor",
+                              e.target.value,
+                            )
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "0.5rem",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "0.375rem",
+                            fontSize: "0.875rem",
+                            marginTop: "0.5rem",
+                            backgroundColor: "#ffffff",
+                          }}
+                        />
+                      )}
                     </div>
                     <div style={{ flex: 1 }}>
                       <label
@@ -3038,7 +3132,7 @@ function AddMoreStock() {
                           handleEditColorQuantityChange(
                             index,
                             "quantity",
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         placeholder="Quantity"
@@ -3316,550 +3410,582 @@ function AddMoreStock() {
                 // Group entries by purchase date label; show tabs within each date
                 // for different descriptions under the same date.
                 const groups = new Map();
-                sortedIndexedEntries.forEach(({ entry, idx: originalIndex }) => {
-                  const dateLabel = displayDate(entry?.purchaseDate || "") || "Unknown date";
-                  const list = groups.get(dateLabel) || [];
-                  list.push({ entry, originalIndex });
-                  groups.set(dateLabel, list);
-                });
+                sortedIndexedEntries.forEach(
+                  ({ entry, idx: originalIndex }) => {
+                    const dateLabel =
+                      displayDate(entry?.purchaseDate || "") || "Unknown date";
+                    const list = groups.get(dateLabel) || [];
+                    list.push({ entry, originalIndex });
+                    groups.set(dateLabel, list);
+                  },
+                );
 
-                return Array.from(groups.entries()).map(([dateLabel, items]) => {
-                  const activeTab =
-                    selectedEntryTabByDate[dateLabel] !== undefined
-                      ? selectedEntryTabByDate[dateLabel]
-                      : 0;
-                  const safeTab = Math.min(
-                    Math.max(0, activeTab),
-                    Math.max(0, items.length - 1)
-                  );
+                return Array.from(groups.entries()).map(
+                  ([dateLabel, items]) => {
+                    const activeTab =
+                      selectedEntryTabByDate[dateLabel] !== undefined
+                        ? selectedEntryTabByDate[dateLabel]
+                        : 0;
+                    const safeTab = Math.min(
+                      Math.max(0, activeTab),
+                      Math.max(0, items.length - 1),
+                    );
 
-                  const { entry, originalIndex } = items[safeTab] || items[0];
+                    const { entry, originalIndex } = items[safeTab] || items[0];
 
-                  const entryColorQuantities = entry?.colorQuantities || [];
-                  const entryBatteriesPerSet = entry?.batteriesPerSet || 5;
-                  const entryPurchasePrice = parseFloat(entry?.purchasePrice) || 0;
-                  const entrySellingPrice = parseFloat(entry?.sellingPrice) || 0;
-                  const entryDescription = entry?.description || [];
-                  const entryPurchasedInWarranty =
-                    entry?.purchasedInWarranty || false;
-                  const entryTyreSizeLabel = getOptionLabel(
-                    TYRE_SIZE_OPTIONS,
-                    entry?.tyreSize || ""
-                  );
-                  const entryBrakeTypeLabel = getOptionLabel(
-                    BRAKE_TYPE_OPTIONS,
-                    entry?.brakeType || ""
-                  );
+                    const entryColorQuantities = entry?.colorQuantities || [];
+                    const entryBatteriesPerSet = entry?.batteriesPerSet || 5;
+                    const entryPurchasePrice =
+                      parseFloat(entry?.purchasePrice) || 0;
+                    const entrySellingPrice =
+                      parseFloat(entry?.sellingPrice) || 0;
+                    const entryDescription = entry?.description || [];
+                    const entryPurchasedInWarranty =
+                      entry?.purchasedInWarranty || false;
+                    const entryTyreSizeLabel = getOptionLabel(
+                      TYRE_SIZE_OPTIONS,
+                      entry?.tyreSize || "",
+                    );
+                    const entryBrakeTypeLabel = getOptionLabel(
+                      BRAKE_TYPE_OPTIONS,
+                      entry?.brakeType || "",
+                    );
 
-                  const totalQuantity = entryColorQuantities.reduce(
-                    (sum, cq) => sum + (parseInt(cq.quantity) || 0),
-                    0
-                  );
-                  const pricePerPiece = entryPurchasePrice;
-                  const totalValue = totalQuantity * entryPurchasePrice;
+                    const totalQuantity = entryColorQuantities.reduce(
+                      (sum, cq) => sum + (parseInt(cq.quantity) || 0),
+                      0,
+                    );
+                    const pricePerPiece = entryPurchasePrice;
+                    const totalValue = totalQuantity * entryPurchasePrice;
 
-                  return (
-                    <div
-                      key={`${dateLabel}-${items.length}`}
-                      style={{
-                        backgroundColor: "white",
-                        border: "3px solid #e5e7eb",
-                        borderRadius: "0.5rem",
-                        padding: "1.5rem",
-                      }}
-                    >
-                      {/* Date Header */}
+                    return (
                       <div
+                        key={`${dateLabel}-${items.length}`}
                         style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: "1rem",
+                          backgroundColor: "white",
+                          border: "3px solid #e5e7eb",
+                          borderRadius: "0.5rem",
+                          padding: "1.5rem",
                         }}
                       >
-                        <h4
-                          style={{
-                            margin: 0,
-                            fontSize: "1rem",
-                            fontWeight: "600",
-                            color: "#1f2937",
-                          }}
-                        >
-                          {dateLabel}
-                        </h4>
+                        {/* Date Header */}
                         <div
                           style={{
                             display: "flex",
-                            gap: "0.5rem",
+                            justifyContent: "space-between",
                             alignItems: "center",
+                            marginBottom: "1rem",
                           }}
                         >
-                          <button
-                            onClick={() => {
-                              handleEditEntry(originalIndex, entry);
-                            }}
+                          <h4
                             style={{
-                              backgroundColor: "#3b82f6",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "0.375rem",
-                              padding: "0.5rem 1rem",
-                              fontSize: "0.875rem",
-                              fontWeight: "500",
-                              cursor: "pointer",
+                              margin: 0,
+                              fontSize: "1rem",
+                              fontWeight: "600",
+                              color: "#1f2937",
+                            }}
+                          >
+                            {dateLabel}
+                          </h4>
+                          <div
+                            style={{
                               display: "flex",
-                              alignItems: "center",
                               gap: "0.5rem",
-                            }}
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
-                              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                            </svg>
-                            <span>Edit</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleDeleteStockEntry(originalIndex);
-                            }}
-                            style={{
-                              backgroundColor: "#dc2626",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "0.375rem",
-                              padding: "0.5rem 1rem",
-                              fontSize: "0.875rem",
-                              fontWeight: "500",
-                              cursor: "pointer",
-                              display: "flex",
                               alignItems: "center",
-                              gap: "0.5rem",
                             }}
                           >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <polyline points="3 6 5 6 21 6"></polyline>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            </svg>
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Tabs for same-date entries (based on description) */}
-                      {items.length > 1 && (
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: "0.5rem",
-                            flexWrap: "nowrap",
-                            overflowX: "auto",
-                            overflowY: "hidden",
-                            paddingBottom: "0.25rem",
-                            marginBottom: "0.75rem",
-                            WebkitOverflowScrolling: "touch",
-                          }}
-                        >
-                          {items.map((it, idx) => {
-                            const desc = Array.isArray(it.entry?.description)
-                              ? it.entry.description.filter(Boolean)
-                              : [];
-                            const label =
-                              desc.length > 0 ? desc.join(" • ") : `Entry ${idx + 1}`;
-                            const isActive = idx === safeTab;
-                            return (
-                              <button
-                                key={`${dateLabel}-tab-${it.originalIndex}`}
-                                type="button"
-                                onClick={() =>
-                                  setSelectedEntryTabByDate((prev) => ({
-                                    ...prev,
-                                    [dateLabel]: idx,
-                                  }))
-                                }
-                                style={{
-                                  flex: "0 0 auto",
-                                  whiteSpace: "nowrap",
-                                  padding: "0.35rem 0.75rem",
-                                  borderRadius: 999,
-                                  border: isActive
-                                    ? "1px solid #2563eb"
-                                    : "1px solid #e5e7eb",
-                                  backgroundColor: isActive ? "#dbeafe" : "#fff",
-                                  color: isActive ? "#1d4ed8" : "#374151",
-                                  fontSize: "0.8rem",
-                                  fontWeight: 600,
-                                  cursor: "pointer",
-                                }}
-                                title={label}
-                              >
-                                {label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                    {/* Additional Info */}
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: "0.75rem",
-                        marginBottom: "1rem",
-                        padding: "0.75rem",
-                        backgroundColor: "#f9fafb",
-                        borderRadius: "0.375rem",
-                      }}
-                    >
-                      {entryBatteriesPerSet && (
-                        <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-                          <strong>Batteries Per Set:</strong>{" "}
-                          {entryBatteriesPerSet}
-                        </div>
-                      )}
-                      {entryTyreSizeLabel && (
-                        <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-                          <strong>Tyre Size:</strong> {entryTyreSizeLabel}
-                        </div>
-                      )}
-                      {entryBrakeTypeLabel && (
-                        <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-                          <strong>Brake Type:</strong> {entryBrakeTypeLabel}
-                        </div>
-                      )}
-                        <div
-                          style={{
-                            fontSize: "0.875rem",
-                          color: entryPurchasedInWarranty ? "#10b981" : "#dc2626",
-                            fontWeight: "500",
-                          }}
-                        >
-                        {entryPurchasedInWarranty ? "✓ Purchased in Warranty" : "✗ Not Purchased in Warranty"}
-                        </div>
-                    </div>
-
-                    {/* Description Tags */}
-                    {entryDescription && entryDescription.length > 0 && (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "0.5rem",
-                          marginBottom: "1rem",
-                        }}
-                      >
-                        {entryDescription.map((tag, tagIndex) => (
-                          <span
-                            key={tagIndex}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              padding: "0.25rem 0.5rem",
-                              backgroundColor: "#6366f1",
-                              color: "#fff",
-                              borderRadius: "0.25rem",
-                              fontSize: "0.75rem",
-                              fontWeight: "500",
-                            }}
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Color Bars */}
-                    {entryColorQuantities && entryColorQuantities.length > 0 ? (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "0.5rem",
-                          marginBottom: "1rem",
-                        }}
-                      >
-                        {entryColorQuantities.map((cq, cqIndex) => {
-                          const entryKey = `${displayDate(entry?.purchaseDate || "")}-${originalIndex}`;
-                          const isSelected =
-                            selectedColorIndex[entryKey] === cqIndex ||
-                            (selectedColorIndex[entryKey] === undefined &&
-                              cqIndex === 0);
-                          return (
-                            <div
-                              key={cqIndex}
+                            <button
                               onClick={() => {
-                                setSelectedColorIndex((prev) => ({
-                                  ...prev,
-                                  [entryKey]: cqIndex,
-                                }));
+                                handleEditEntry(originalIndex, entry);
                               }}
                               style={{
+                                backgroundColor: "#3b82f6",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "0.375rem",
+                                padding: "0.5rem 1rem",
+                                fontSize: "0.875rem",
+                                fontWeight: "500",
+                                cursor: "pointer",
                                 display: "flex",
                                 alignItems: "center",
                                 gap: "0.5rem",
-                                backgroundColor: isSelected
-                                  ? "#3b82f6"
-                                  : "transparent",
-                                padding: "0.5rem 0.75rem",
-                                borderRadius: "0.375rem",
-                                border: isSelected
-                                  ? "none"
-                                  : "1px solid #e5e7eb",
-                                cursor: "pointer",
-                                transition: "all 0.2s ease",
-                              }}
-                              onMouseEnter={(e) => {
-                                if (!isSelected) {
-                                  e.currentTarget.style.backgroundColor =
-                                    "#f3f4f6";
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                if (!isSelected) {
-                                  e.currentTarget.style.backgroundColor =
-                                    "transparent";
-                                }
                               }}
                             >
-                              <div
-                                style={{
-                                  width: "24px",
-                                  height: "24px",
-                                  borderRadius: "50%",
-                                  backgroundColor: getColourDisplay(cq.color),
-                                  border:
-                                    cq.color?.toLowerCase() === "white"
-                                      ? "1px solid #d1d5db"
-                                      : "none",
-                                }}
-                              />
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                              </svg>
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleDeleteStockEntry(originalIndex);
+                              }}
+                              style={{
+                                backgroundColor: "#dc2626",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "0.375rem",
+                                padding: "0.5rem 1rem",
+                                fontSize: "0.875rem",
+                                fontWeight: "500",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                              }}
+                            >
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                              </svg>
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Tabs for same-date entries (based on description) */}
+                        {items.length > 1 && (
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "0.5rem",
+                              flexWrap: "nowrap",
+                              overflowX: "auto",
+                              overflowY: "hidden",
+                              paddingBottom: "0.25rem",
+                              marginBottom: "0.75rem",
+                              WebkitOverflowScrolling: "touch",
+                            }}
+                          >
+                            {items.map((it, idx) => {
+                              const desc = Array.isArray(it.entry?.description)
+                                ? it.entry.description.filter(Boolean)
+                                : [];
+                              const label =
+                                desc.length > 0
+                                  ? desc.join(" • ")
+                                  : `Entry ${idx + 1}`;
+                              const isActive = idx === safeTab;
+                              return (
+                                <button
+                                  key={`${dateLabel}-tab-${it.originalIndex}`}
+                                  type="button"
+                                  onClick={() =>
+                                    setSelectedEntryTabByDate((prev) => ({
+                                      ...prev,
+                                      [dateLabel]: idx,
+                                    }))
+                                  }
+                                  style={{
+                                    flex: "0 0 auto",
+                                    whiteSpace: "nowrap",
+                                    padding: "0.35rem 0.75rem",
+                                    borderRadius: 999,
+                                    border: isActive
+                                      ? "1px solid #2563eb"
+                                      : "1px solid #e5e7eb",
+                                    backgroundColor: isActive
+                                      ? "#dbeafe"
+                                      : "#fff",
+                                    color: isActive ? "#1d4ed8" : "#374151",
+                                    fontSize: "0.8rem",
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                  }}
+                                  title={label}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Additional Info */}
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "0.75rem",
+                            marginBottom: "1rem",
+                            padding: "0.75rem",
+                            backgroundColor: "#f9fafb",
+                            borderRadius: "0.375rem",
+                          }}
+                        >
+                          {entryBatteriesPerSet && (
+                            <div
+                              style={{ fontSize: "0.875rem", color: "#6b7280" }}
+                            >
+                              <strong>Batteries Per Set:</strong>{" "}
+                              {entryBatteriesPerSet}
+                            </div>
+                          )}
+                          {entryTyreSizeLabel && (
+                            <div
+                              style={{ fontSize: "0.875rem", color: "#6b7280" }}
+                            >
+                              <strong>Tyre Size:</strong> {entryTyreSizeLabel}
+                            </div>
+                          )}
+                          {entryBrakeTypeLabel && (
+                            <div
+                              style={{ fontSize: "0.875rem", color: "#6b7280" }}
+                            >
+                              <strong>Brake Type:</strong> {entryBrakeTypeLabel}
+                            </div>
+                          )}
+                          <div
+                            style={{
+                              fontSize: "0.875rem",
+                              color: entryPurchasedInWarranty
+                                ? "#10b981"
+                                : "#dc2626",
+                              fontWeight: "500",
+                            }}
+                          >
+                            {entryPurchasedInWarranty
+                              ? "✓ Purchased in Warranty"
+                              : "✗ Not Purchased in Warranty"}
+                          </div>
+                        </div>
+
+                        {/* Description Tags */}
+                        {entryDescription && entryDescription.length > 0 && (
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "0.5rem",
+                              marginBottom: "1rem",
+                            }}
+                          >
+                            {entryDescription.map((tag, tagIndex) => (
                               <span
+                                key={tagIndex}
                                 style={{
-                                  color: isSelected ? "white" : "#374151",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  padding: "0.25rem 0.5rem",
+                                  backgroundColor: "#6366f1",
+                                  color: "#fff",
+                                  borderRadius: "0.25rem",
+                                  fontSize: "0.75rem",
                                   fontWeight: "500",
-                                  fontSize: "0.875rem",
                                 }}
                               >
-                                {cq.color} ({cq.quantity || 0})
+                                {tag}
                               </span>
-                              {isSelected && (
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Color Bars */}
+                        {entryColorQuantities &&
+                        entryColorQuantities.length > 0 ? (
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "0.5rem",
+                              marginBottom: "1rem",
+                            }}
+                          >
+                            {entryColorQuantities.map((cq, cqIndex) => {
+                              const entryKey = `${displayDate(entry?.purchaseDate || "")}-${originalIndex}`;
+                              const isSelected =
+                                selectedColorIndex[entryKey] === cqIndex ||
+                                (selectedColorIndex[entryKey] === undefined &&
+                                  cqIndex === 0);
+                              return (
                                 <div
+                                  key={cqIndex}
+                                  onClick={() => {
+                                    setSelectedColorIndex((prev) => ({
+                                      ...prev,
+                                      [entryKey]: cqIndex,
+                                    }));
+                                  }}
                                   style={{
                                     display: "flex",
+                                    alignItems: "center",
                                     gap: "0.5rem",
+                                    backgroundColor: isSelected
+                                      ? "#3b82f6"
+                                      : "transparent",
+                                    padding: "0.5rem 0.75rem",
+                                    borderRadius: "0.375rem",
+                                    border: isSelected
+                                      ? "none"
+                                      : "1px solid #e5e7eb",
+                                    cursor: "pointer",
+                                    transition: "all 0.2s ease",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (!isSelected) {
+                                      e.currentTarget.style.backgroundColor =
+                                        "#f3f4f6";
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    if (!isSelected) {
+                                      e.currentTarget.style.backgroundColor =
+                                        "transparent";
+                                    }
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      width: "24px",
+                                      height: "24px",
+                                      borderRadius: "50%",
+                                      backgroundColor: getColourDisplay(
+                                        cq.color,
+                                      ),
+                                      border:
+                                        cq.color?.toLowerCase() === "white"
+                                          ? "1px solid #d1d5db"
+                                          : "none",
+                                    }}
+                                  />
+                                  <span
+                                    style={{
+                                      color: isSelected ? "white" : "#374151",
+                                      fontWeight: "500",
+                                      fontSize: "0.875rem",
+                                    }}
+                                  >
+                                    {cq.color} ({cq.quantity || 0})
+                                  </span>
+                                  {isSelected && (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        gap: "0.5rem",
+                                        marginLeft: "0.5rem",
+                                      }}
+                                    >
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (originalIndex !== -1) {
+                                            handleDeleteColorFromEntry(
+                                              originalIndex,
+                                              cqIndex,
+                                            );
+                                          }
+                                        }}
+                                        style={{
+                                          background:
+                                            "rgba(255, 255, 255, 0.2)",
+                                          border: "none",
+                                          borderRadius: "0.25rem",
+                                          padding: "0.25rem",
+                                          cursor: "pointer",
+                                          display: "flex",
+                                          alignItems: "center",
+                                        }}
+                                        title="Delete Color"
+                                      >
+                                        <svg
+                                          width="14"
+                                          height="14"
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="white"
+                                          strokeWidth="2"
+                                        >
+                                          <polyline points="3 6 5 6 21 6"></polyline>
+                                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+
+                        {/* Details Card */}
+                        <div
+                          style={{
+                            backgroundColor: "#f9fafb",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: "0.5rem",
+                            padding: "1rem",
+                            display: "grid",
+                            gridTemplateColumns: "repeat(3, 1fr)",
+                            gap: "1rem",
+                          }}
+                        >
+                          <div>
+                            <div
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "#6b7280",
+                                marginBottom: "0.25rem",
+                              }}
+                            >
+                              Quantity
+                            </div>
+                            <div
+                              style={{
+                                fontWeight: "700",
+                                color: "#1f2937",
+                                fontSize: "1rem",
+                              }}
+                            >
+                              {totalQuantity}
+                            </div>
+                          </div>
+                          <div>
+                            <div
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "#6b7280",
+                                marginBottom: "0.25rem",
+                              }}
+                            >
+                              Selling Price
+                            </div>
+                            {entrySellingPrice > 0 ? (
+                              <div
+                                style={{
+                                  fontWeight: "700",
+                                  color: "#3b82f6",
+                                  fontSize: "1rem",
+                                }}
+                              >
+                                ₹
+                                {entrySellingPrice.toLocaleString("en-IN", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                                <span
+                                  style={{
+                                    fontSize: "0.875rem",
+                                    fontWeight: "400",
+                                    color: "#6b7280",
                                     marginLeft: "0.5rem",
                                   }}
                                 >
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (originalIndex !== -1) {
-                                        handleDeleteColorFromEntry(originalIndex, cqIndex);
-                                      }
-                                    }}
-                                    style={{
-                                      background: "rgba(255, 255, 255, 0.2)",
-                                      border: "none",
-                                      borderRadius: "0.25rem",
-                                      padding: "0.25rem",
-                                      cursor: "pointer",
-                                      display: "flex",
-                                      alignItems: "center",
-                                    }}
-                                    title="Delete Color"
-                                  >
-                                    <svg
-                                      width="14"
-                                      height="14"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="white"
-                                      strokeWidth="2"
-                                    >
-                                      <polyline points="3 6 5 6 21 6"></polyline>
-                                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                    </svg>
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-
-                    {/* Details Card */}
-                    <div
-                      style={{
-                        backgroundColor: "#f9fafb",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "0.5rem",
-                        padding: "1rem",
-                        display: "grid",
-                        gridTemplateColumns: "repeat(3, 1fr)",
-                        gap: "1rem",
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "#6b7280",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          Quantity
-                        </div>
-                        <div
-                          style={{
-                            fontWeight: "700",
-                            color: "#1f2937",
-                            fontSize: "1rem",
-                          }}
-                        >
-                          {totalQuantity}
-                        </div>
-                      </div>
-                      <div>
-                        <div
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "#6b7280",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          Selling Price
-                        </div>
-                        {entrySellingPrice > 0 ? (
-                          <div
-                            style={{
-                              fontWeight: "700",
-                              color: "#3b82f6",
-                              fontSize: "1rem",
-                            }}
-                          >
-                            ₹{entrySellingPrice.toLocaleString("en-IN", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                            <span
-                              style={{
-                                fontSize: "0.875rem",
-                                fontWeight: "400",
-                                color: "#6b7280",
-                                marginLeft: "0.5rem",
-                              }}
-                            >
-                              (per pc)
-                            </span>
-                          </div>
-                        ) : (
-                          <div
-                            style={{
-                              fontSize: "0.875rem",
-                              color: "#9ca3af",
-                              fontStyle: "italic",
-                            }}
-                          >
-                            Not set
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <div
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "#6b7280",
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          Value
-                        </div>
-                        {entryPurchasePrice === 0 ? (
-                          <div
-                            style={{
-                              fontSize: "0.875rem",
-                              color: "#f59e0b",
-                              fontStyle: "italic",
-                              padding: "0.5rem",
-                              backgroundColor: "#fef3c7",
-                              borderRadius: "0.375rem",
-                              border: "1px solid #fcd34d",
-                            }}
-                          >
-                            Purchase price not set. Please edit entry to add purchase price.
-                          </div>
-                        ) : isPriceVerified ? (
-                          <div
-                            style={{
-                              fontWeight: "700",
-                              color: "#10b981",
-                              fontSize: "1rem",
-                            }}
-                          >
-                            ₹
-                            {totalValue.toLocaleString("en-IN", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                            {pricePerPiece > 0 && (
-                              <span
+                                  (per pc)
+                                </span>
+                              </div>
+                            ) : (
+                              <div
                                 style={{
                                   fontSize: "0.875rem",
-                                  fontWeight: "400",
-                                  color: "#6b7280",
-                                  marginLeft: "0.5rem",
+                                  color: "#9ca3af",
+                                  fontStyle: "italic",
                                 }}
                               >
-                                (₹{pricePerPiece.toLocaleString("en-IN", {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })} per pc)
-                              </span>
+                                Not set
+                              </div>
                             )}
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={handleRequestPriceAccess}
-                            style={{
-                              padding: "0.5rem",
-                              border: "1px solid #d1d5db",
-                              borderRadius: "0.375rem",
-                              fontSize: "0.875rem",
-                              width: "100%",
-                              backgroundColor: "#f3f4f6",
-                              cursor: "pointer",
-                              color: "#6b7280",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: "0.25rem",
-                            }}
-                          >
-                            <span>🔒</span>
-                            <span>Click to view total value</span>
-                          </button>
-                        )}
+                          <div>
+                            <div
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "#6b7280",
+                                marginBottom: "0.25rem",
+                              }}
+                            >
+                              Value
+                            </div>
+                            {entryPurchasePrice === 0 ? (
+                              <div
+                                style={{
+                                  fontSize: "0.875rem",
+                                  color: "#f59e0b",
+                                  fontStyle: "italic",
+                                  padding: "0.5rem",
+                                  backgroundColor: "#fef3c7",
+                                  borderRadius: "0.375rem",
+                                  border: "1px solid #fcd34d",
+                                }}
+                              >
+                                Purchase price not set. Please edit entry to add
+                                purchase price.
+                              </div>
+                            ) : isPriceVerified ? (
+                              <div
+                                style={{
+                                  fontWeight: "700",
+                                  color: "#10b981",
+                                  fontSize: "1rem",
+                                }}
+                              >
+                                ₹
+                                {totalValue.toLocaleString("en-IN", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                                {pricePerPiece > 0 && (
+                                  <span
+                                    style={{
+                                      fontSize: "0.875rem",
+                                      fontWeight: "400",
+                                      color: "#6b7280",
+                                      marginLeft: "0.5rem",
+                                    }}
+                                  >
+                                    (₹
+                                    {pricePerPiece.toLocaleString("en-IN", {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}{" "}
+                                    per pc)
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={handleRequestPriceAccess}
+                                style={{
+                                  padding: "0.5rem",
+                                  border: "1px solid #d1d5db",
+                                  borderRadius: "0.375rem",
+                                  fontSize: "0.875rem",
+                                  width: "100%",
+                                  backgroundColor: "#f3f4f6",
+                                  cursor: "pointer",
+                                  color: "#6b7280",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: "0.25rem",
+                                }}
+                              >
+                                <span>🔒</span>
+                                <span>Click to view total value</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  );
-                });
+                    );
+                  },
+                );
               })()}
             </div>
           ) : (
@@ -4108,12 +4234,30 @@ function AddMoreStock() {
                   }}
                 >
                   {showPassword ? (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
                       <line x1="1" y1="1" x2="23" y2="23" />
                     </svg>
                   ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                       <circle cx="12" cy="12" r="3" />
                     </svg>

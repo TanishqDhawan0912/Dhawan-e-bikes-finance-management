@@ -13,6 +13,14 @@ function normalizeMobile(input) {
   return digits;
 }
 
+// Lowercased/whitespace-collapsed name paired with mobile to uniquely identify a customer.
+function normalizeName(input) {
+  return String(input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 function escapeRegex(input) {
   return String(input).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -51,7 +59,7 @@ async function getCustomerJobcards(customer) {
   if (missingCustomerIds.length > 0) {
     await Jobcard.updateMany(
       { _id: { $in: missingCustomerIds } },
-      { $set: { customer: customer._id } }
+      { $set: { customer: customer._id } },
     );
   }
 
@@ -67,6 +75,7 @@ const upsertCustomer = async (req, res) => {
     const place = cleanText(req.body?.place);
     const mobile = cleanText(req.body?.mobile);
     const mobileNormalized = normalizeMobile(mobile);
+    const nameNormalized = normalizeName(name);
 
     if (!name || !place || !mobileNormalized) {
       return res.status(400).json({
@@ -74,14 +83,17 @@ const upsertCustomer = async (req, res) => {
       });
     }
 
+    // Match on both name and mobile so different people sharing a mobile
+    // number (e.g. a family) are kept as distinct customer records.
     const customer = await Customer.findOneAndUpdate(
-      { mobileNormalized },
+      { mobileNormalized, nameNormalized },
       {
         $set: {
           name,
           place,
           mobile,
           mobileNormalized,
+          nameNormalized,
         },
       },
       {
@@ -89,7 +101,7 @@ const upsertCustomer = async (req, res) => {
         upsert: true,
         setDefaultsOnInsert: true,
         runValidators: true,
-      }
+      },
     );
 
     const jobcards = await getCustomerJobcards(customer);
