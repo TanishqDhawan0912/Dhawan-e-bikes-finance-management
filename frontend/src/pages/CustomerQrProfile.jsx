@@ -35,6 +35,35 @@ export default function CustomerQrProfile() {
     );
   }, [jobcards]);
 
+  const warrantyJobcard = useMemo(
+    () =>
+      jobcards.find(
+        (row) => row.warrantyType && row.warrantyType !== "none",
+      ),
+    [jobcards],
+  );
+
+  const warrantyStatus = customer?.warrantyStatus ||
+    (warrantyJobcard ? "warranty" : "none");
+  const warrantyDate = customer?.warrantyDate || warrantyJobcard?.date || "";
+
+  const customerType = customer?.customerType || "green";
+
+  const updateCustomerType = async (type) => {
+    if (type === customerType) return;
+    try {
+      const response = await fetchWithRetry(`/customers/${id}/type`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerType: type }),
+      });
+      const data = await response.json();
+      setCustomer(data?.customer || { ...customer, customerType: type });
+    } catch (e) {
+      setError(e?.message || "Failed to update customer type");
+    }
+  };
+
   const qrImageUrl = useMemo(() => {
     if (!qrToken) return "";
     return `https://api.qrserver.com/v1/create-qr-code/?size=420x420&ecc=H&qzone=2&data=${encodeURIComponent(qrToken)}`;
@@ -90,6 +119,13 @@ export default function CustomerQrProfile() {
             <p>Customer details and complete jobcard history.</p>
           </div>
           <div className="header-right customer-qr-header-actions">
+            <button
+              className="btn btn-secondary"
+              onClick={() => navigate(-1)}
+              title="Go back"
+            >
+              Back
+            </button>
             <button className="btn btn-secondary" onClick={() => navigate("/")}>
               Home
             </button>
@@ -132,7 +168,33 @@ export default function CustomerQrProfile() {
               </div>
               <div>
                 <label>Total Pending</label>
-                <p>{formatMoney(totalPending)}</p>
+                <p className={totalPending > 0 ? "customer-pending" : ""}>
+                  {formatMoney(totalPending)}
+                </p>
+              </div>
+              <div>
+                <label>Warranty</label>
+                <p>
+                  {warrantyStatus === "warranty" ? "Warranty" : "No Warranty"}
+                </p>
+                {warrantyDate ? (
+                  <span className="customer-detail-note">
+                    Warranty Date: {formatDate(warrantyDate)}
+                  </span>
+                ) : null}
+              </div>
+              <div>
+                <label>Customer Type</label>
+                <select
+                  className="customer-type-select"
+                  value={customerType}
+                  onChange={(event) => updateCustomerType(event.target.value)}
+                  aria-label="Customer Type"
+                >
+                  <option value="green">Green</option>
+                  <option value="red">Red</option>
+                  <option value="black">Black</option>
+                </select>
               </div>
             </div>
           </section>
@@ -166,6 +228,11 @@ export default function CustomerQrProfile() {
           <section className="customer-history-panel">
             <div className="customer-history-header">
               <h3>Past Jobcards</h3>
+              {totalPending > 0 ? (
+                <strong className="customer-history-pending">
+                  Pending from customer: {formatMoney(totalPending)}
+                </strong>
+              ) : null}
             </div>
             <div className="table-wrapper">
               <table className="simple-table">

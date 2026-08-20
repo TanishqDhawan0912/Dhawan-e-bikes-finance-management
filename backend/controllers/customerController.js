@@ -30,6 +30,20 @@ function buildMobileRegex(mobileNormalized) {
   return new RegExp(mobileNormalized.split("").join("\\D*"));
 }
 
+function readWarrantyFields(payload) {
+  const warrantyStatus = String(payload?.warrantyStatus || "none")
+    .trim()
+    .toLowerCase();
+  const warrantyDate = cleanText(payload?.warrantyDate);
+  if (!["none", "warranty"].includes(warrantyStatus)) {
+    return { error: "Invalid warranty status" };
+  }
+  return {
+    warrantyStatus,
+    warrantyDate,
+  };
+}
+
 async function getCustomerJobcards(customer) {
   const or = [{ customer: customer._id }];
 
@@ -74,6 +88,10 @@ const upsertCustomer = async (req, res) => {
     const name = cleanText(req.body?.name);
     const place = cleanText(req.body?.place);
     const mobile = cleanText(req.body?.mobile);
+    const warranty = readWarrantyFields(req.body);
+    if (warranty.error) {
+      return res.status(400).json({ message: warranty.error });
+    }
     const mobileNormalized = normalizeMobile(mobile);
     const nameNormalized = normalizeName(name);
 
@@ -94,6 +112,8 @@ const upsertCustomer = async (req, res) => {
           mobile,
           mobileNormalized,
           nameNormalized,
+          warrantyStatus: warranty.warrantyStatus,
+          warrantyDate: warranty.warrantyDate,
         },
       },
       {
@@ -146,6 +166,53 @@ const getCustomers = async (req, res) => {
   }
 };
 
+const updateCustomer = async (req, res) => {
+  try {
+    const name = cleanText(req.body?.name);
+    const place = cleanText(req.body?.place);
+    const mobile = cleanText(req.body?.mobile);
+    const warranty = readWarrantyFields(req.body);
+    if (warranty.error) {
+      return res.status(400).json({ message: warranty.error });
+    }
+    const mobileNormalized = normalizeMobile(mobile);
+    const nameNormalized = normalizeName(name);
+
+    if (!name || !place || !mobileNormalized) {
+      return res.status(400).json({
+        message: "name, place and mobile are required",
+      });
+    }
+
+    const customer = await Customer.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: {
+          name,
+          place,
+          mobile,
+          mobileNormalized,
+          nameNormalized,
+          warrantyStatus: warranty.warrantyStatus,
+          warrantyDate: warranty.warrantyDate,
+        },
+      },
+      { new: true, runValidators: true },
+    );
+    if (!customer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    res.json({ customer });
+  } catch (error) {
+    console.error("Error updating customer:", error);
+    if (error?.code === 11000) {
+      return res.status(409).json({ message: "A customer with this name and mobile already exists" });
+    }
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 // @desc    Get customer by id with full jobcard history
 // @route   GET /api/customers/:id/history
 // @access  Public
@@ -169,8 +236,32 @@ const getCustomerHistoryById = async (req, res) => {
   }
 };
 
+const updateCustomerType = async (req, res) => {
+  try {
+    const customerType = String(req.body?.customerType || "").trim().toLowerCase();
+    if (!["green", "red", "black"].includes(customerType)) {
+      return res.status(400).json({ message: "Invalid customer type" });
+    }
+
+    const customer = await Customer.findByIdAndUpdate(
+      req.params.id,
+      { $set: { customerType } },
+      { new: true, runValidators: true },
+    );
+    if (!customer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+    res.json({ customer });
+  } catch (error) {
+    console.error("Error updating customer type:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 module.exports = {
   upsertCustomer,
+  updateCustomer,
   getCustomers,
   getCustomerHistoryById,
+  updateCustomerType,
 };

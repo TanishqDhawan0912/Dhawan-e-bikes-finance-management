@@ -3725,12 +3725,29 @@ textarea {
 }
 
 .customer-form-grid input,
+.customer-form-grid select,
 .customer-search-row input {
   width: 100%;
   border: 1px solid #d1d5db;
   border-radius: 0.5rem;
   padding: 0.65rem 0.75rem;
   font-size: 0.9rem;
+}
+
+.customer-form-grid select {
+  background: #ffffff;
+}
+
+.customer-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.customer-form-field label {
+  color: #374151;
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .customer-search-row {
@@ -3880,6 +3897,29 @@ textarea {
   font-size: 0.96rem;
   font-weight: 600;
   color: #111827;
+}
+
+.customer-detail-note {
+  display: block;
+  margin-top: 0.2rem;
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+.customer-pending,
+.customer-history-pending {
+  color: #b91c1c !important;
+}
+
+.customer-type-select {
+  min-width: 7.5rem;
+  min-height: 1.8rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.4rem;
+  background: #ffffff;
+  color: #111827;
+  font-size: 0.85rem;
 }
 
 @media (max-width: 960px) {

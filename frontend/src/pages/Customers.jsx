@@ -31,7 +31,14 @@ export default function Customers() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState("");
 
-  const [form, setForm] = useState({ name: "", place: "", mobile: "" });
+  const [form, setForm] = useState({
+    name: "",
+    place: "",
+    mobile: "",
+    warrantyStatus: "none",
+    warrantyDate: "",
+  });
+  const [editingCustomerId, setEditingCustomerId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
 
@@ -98,6 +105,8 @@ export default function Customers() {
       name: String(form.name || "").trim(),
       place: String(form.place || "").trim(),
       mobile: String(form.mobile || "").trim(),
+      warrantyStatus: form.warrantyStatus || "none",
+      warrantyDate: form.warrantyDate || "",
     };
 
     if (!payload.name || !payload.place || !payload.mobile) {
@@ -107,14 +116,25 @@ export default function Customers() {
 
     try {
       setIsSaving(true);
-      const res = await fetchWithRetry("/customers", {
-        method: "POST",
+      const isEditing = Boolean(editingCustomerId);
+      const res = await fetchWithRetry(
+        isEditing ? `/customers/${editingCustomerId}` : "/customers",
+        {
+        method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      });
+        },
+      );
       const data = await res.json();
-      setSaveMessage("Customer saved successfully.");
-      setForm({ name: "", place: "", mobile: "" });
+      setSaveMessage(isEditing ? "Customer updated successfully." : "Customer saved successfully.");
+      setForm({
+        name: "",
+        place: "",
+        mobile: "",
+        warrantyStatus: "none",
+        warrantyDate: "",
+      });
+      setEditingCustomerId(null);
       await fetchCustomers(search);
       if (data?.customer?._id) {
         await fetchHistory(data.customer._id);
@@ -124,6 +144,31 @@ export default function Customers() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const startEditingCustomer = (customer) => {
+    setEditingCustomerId(customer._id);
+    setForm({
+      name: customer.name || "",
+      place: customer.place || "",
+      mobile: customer.mobile || "",
+      warrantyStatus: customer.warrantyStatus || "none",
+      warrantyDate: customer.warrantyDate || "",
+    });
+    setSaveMessage("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const cancelEditingCustomer = () => {
+    setEditingCustomerId(null);
+    setForm({
+      name: "",
+      place: "",
+      mobile: "",
+      warrantyStatus: "none",
+      warrantyDate: "",
+    });
+    setSaveMessage("");
   };
 
   return (
@@ -151,7 +196,7 @@ export default function Customers() {
 
       <section className="customer-actions-panel">
         <form className="customer-form" onSubmit={onCreateOrUpdateCustomer}>
-          <h3>Add / Update Customer</h3>
+            <h3>{editingCustomerId ? "Edit Customer" : "Add Customer"}</h3>
           <div className="customer-form-grid">
             <input
               type="text"
@@ -175,10 +220,47 @@ export default function Customers() {
                 setForm((p) => ({ ...p, mobile: e.target.value }))
               }
             />
+            <div className="customer-form-field">
+              <label htmlFor="customer-warranty-status">Warranty Status</label>
+              <select
+                id="customer-warranty-status"
+                value={form.warrantyStatus}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    warrantyStatus: e.target.value,
+                  }))
+                }
+              >
+                <option value="none">No Warranty</option>
+                <option value="warranty">Warranty</option>
+              </select>
+            </div>
+            <div className="customer-form-field">
+              <label htmlFor="customer-warranty-date">Warranty Date</label>
+              <input
+                id="customer-warranty-date"
+                type="date"
+                value={form.warrantyDate}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, warrantyDate: e.target.value }))
+                }
+              />
+            </div>
           </div>
           <button className="btn btn-primary" type="submit" disabled={isSaving}>
-            {isSaving ? "Saving..." : "Save Customer"}
+            {isSaving ? "Saving..." : editingCustomerId ? "Update Customer" : "Save Customer"}
           </button>
+          {editingCustomerId ? (
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={cancelEditingCustomer}
+              disabled={isSaving}
+            >
+              Cancel Edit
+            </button>
+          ) : null}
           {saveMessage ? (
             <div className="customer-message">{saveMessage}</div>
           ) : null}
@@ -229,18 +311,18 @@ export default function Customers() {
                 <td>
                   <div className="customer-action-buttons">
                     <button
-                      className="btn btn-primary btn-small"
-                      onClick={() => fetchHistory(c._id)}
+                      className="btn btn-secondary btn-small"
+                      onClick={() => startEditingCustomer(c)}
                       type="button"
                     >
-                      View History
+                      Edit
                     </button>
                     <button
-                      className="btn btn-secondary btn-small"
+                      className="btn btn-primary btn-small"
                       onClick={() => navigate(`/customer-card/${c._id}`)}
                       type="button"
                     >
-                      Generate / Print QR
+                      View Details / Print QR
                     </button>
                   </div>
                 </td>

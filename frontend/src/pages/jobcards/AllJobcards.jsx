@@ -44,7 +44,10 @@ export default function AllJobcards() {
   const fetchFinalizedJobcards = async () => {
     try {
       setLoading(true);
-      const filter = filterType === "all" ? "status=finalized" : `status=finalized&jobcardType=${filterType}`;
+      const filter =
+        filterType === "all"
+          ? "status=finalized"
+          : `status=finalized&jobcardType=${filterType}`;
       const response = await fetchWithRetry(`/jobcards?${filter}`);
       if (!response.ok) {
         throw new Error("Failed to fetch finalized jobcards");
@@ -65,7 +68,7 @@ export default function AllJobcards() {
     if (searchName.trim()) {
       const q = searchName.toLowerCase().trim();
       filtered = filtered.filter((jc) =>
-        jc.customerName?.toLowerCase().includes(q)
+        jc.customerName?.toLowerCase().includes(q),
       );
     }
 
@@ -84,7 +87,9 @@ export default function AllJobcards() {
     if (searchPlace.trim()) {
       const q = searchPlace.toLowerCase().trim();
       filtered = filtered.filter((jc) =>
-        String(jc.place ?? "").toLowerCase().includes(q)
+        String(jc.place ?? "")
+          .toLowerCase()
+          .includes(q),
       );
     }
 
@@ -121,7 +126,11 @@ export default function AllJobcards() {
       // Check if it's already in dd/mm/yyyy format
       if (typeof dateString === "string" && dateString.includes("/")) {
         const parts = dateString.split("/");
-        if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2) {
+        if (
+          parts.length === 3 &&
+          parts[0].length === 2 &&
+          parts[1].length === 2
+        ) {
           return dateString;
         }
       }
@@ -259,22 +268,24 @@ export default function AllJobcards() {
 
   const getAllPayments = (jobcard) => {
     let payments = [];
-    
+
     if (jobcard.paymentHistory && jobcard.paymentHistory.length > 0) {
       payments = [...jobcard.paymentHistory];
     } else if (jobcard.paidAmount && jobcard.paidAmount > 0) {
-      payments = [{
-        amount: jobcard.paidAmount,
-        date: jobcard.date || getTodayForInput(),
-        paymentMode: jobcard.paymentMode || "cash",
-      }];
+      payments = [
+        {
+          amount: jobcard.paidAmount,
+          date: jobcard.date || getTodayForInput(),
+          paymentMode: jobcard.paymentMode || "cash",
+        },
+      ];
     }
-    
+
     // Sort payments by date in ascending order
     return payments.sort((a, b) => {
       const dateAStr = a.date || "";
       const dateBStr = b.date || "";
-      
+
       if (dateAStr.includes("/") && dateBStr.includes("/")) {
         const [dayA, monthA, yearA] = dateAStr.split("/").map(Number);
         const [dayB, monthB, yearB] = dateBStr.split("/").map(Number);
@@ -282,7 +293,7 @@ export default function AllJobcards() {
         const dateB = new Date(yearB, monthB - 1, dayB);
         return dateA - dateB;
       }
-      
+
       const dateA = new Date(dateAStr);
       const dateB = new Date(dateBStr);
       return dateA - dateB;
@@ -293,20 +304,23 @@ export default function AllJobcards() {
   const getTotalPaidByCustomer = (jobcard) =>
     getAllPayments(jobcard).reduce(
       (sum, p) => sum + (Number(p.amount) || 0),
-      0
+      0,
     );
 
   /** Parts + labour before discount (stored totalAmount is net after discount). */
   const getJobcardGrossBillAmount = (jobcard) =>
-    calculatePartsTotal(jobcard?.parts || []) +
-    (Number(jobcard?.labour) || 0);
+    calculatePartsTotal(jobcard?.parts || []) + (Number(jobcard?.labour) || 0);
 
   const formatPaymentDate = (dateString) => {
     if (!dateString) return "N/A";
     // If already in dd/mm/yyyy format, return as is
     if (typeof dateString === "string" && dateString.includes("/")) {
       const parts = dateString.split("/");
-      if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2) {
+      if (
+        parts.length === 3 &&
+        parts[0].length === 2 &&
+        parts[1].length === 2
+      ) {
         return dateString;
       }
     }
@@ -396,7 +410,7 @@ export default function AllJobcards() {
 
       if (!response.ok) {
         throw new Error(
-          await getFetchErrorMessage(response, "Failed to delete jobcard")
+          await getFetchErrorMessage(response, "Failed to delete jobcard"),
         );
       }
 
@@ -436,7 +450,14 @@ export default function AllJobcards() {
 
   return (
     <div className="page-content">
-      <div style={{ marginBottom: "1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div
+        style={{
+          marginBottom: "1.5rem",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
         <h2>All Jobcards (Finalized)</h2>
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <button
@@ -477,7 +498,8 @@ export default function AllJobcards() {
               fontWeight: 500,
               borderRadius: "0.375rem",
               border: "1px solid #d1d5db",
-              backgroundColor: filterType === "replacement" ? "#3b82f6" : "#ffffff",
+              backgroundColor:
+                filterType === "replacement" ? "#3b82f6" : "#ffffff",
               color: filterType === "replacement" ? "white" : "#374151",
               cursor: "pointer",
             }}
@@ -616,7 +638,9 @@ export default function AllJobcards() {
               >
                 Filter by Date
               </label>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <div
+                style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
+              >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <DatePicker
                     value={filterDate}
@@ -649,7 +673,13 @@ export default function AllJobcards() {
             </div>
           </div>
           {hasActiveSearchFilters && (
-            <div style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end" }}>
+            <div
+              style={{
+                marginTop: "1rem",
+                display: "flex",
+                justifyContent: "flex-end",
+              }}
+            >
               <button
                 type="button"
                 onClick={() => {
@@ -687,7 +717,8 @@ export default function AllJobcards() {
           }}
         >
           <p style={{ color: "#6b7280", fontSize: "1rem" }}>
-            No finalized jobcards found{filterType !== "all" ? ` for ${filterType}` : ""}.
+            No finalized jobcards found
+            {filterType !== "all" ? ` for ${filterType}` : ""}.
           </p>
         </div>
       ) : filteredJobcards.length === 0 ? (
@@ -717,15 +748,45 @@ export default function AllJobcards() {
                 boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.1)",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  marginBottom: "1rem",
+                }}
+              >
                 <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.125rem", fontWeight: 600 }}>
+                  <h3
+                    style={{
+                      margin: "0 0 0.5rem 0",
+                      fontSize: "1.125rem",
+                      fontWeight: 600,
+                    }}
+                  >
                     {jobcard.jobcardNumber || "N/A"}
                   </h3>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.875rem", color: "#6b7280" }}>
-                    Type: <span style={{ textTransform: "capitalize" }}>{jobcard.jobcardType}</span> | Date: {formatDate(jobcard.updatedAt)} | Time: {formatTime(jobcard.updatedAt)}
+                  <p
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.875rem",
+                      color: "#6b7280",
+                    }}
+                  >
+                    Type:{" "}
+                    <span style={{ textTransform: "capitalize" }}>
+                      {jobcard.jobcardType}
+                    </span>{" "}
+                    | Date: {formatDate(jobcard.updatedAt)} | Time:{" "}
+                    {formatTime(jobcard.updatedAt)}
                   </p>
-                  <p style={{ margin: "0", fontSize: "0.75rem", color: "#9ca3af" }}>
+                  <p
+                    style={{
+                      margin: "0",
+                      fontSize: "0.75rem",
+                      color: "#9ca3af",
+                    }}
+                  >
                     Created: {formatDateTime(jobcard.createdAt)}
                   </p>
                 </div>
@@ -743,63 +804,169 @@ export default function AllJobcards() {
                 </span>
               </div>
 
-              <div style={{ marginBottom: "1rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+              <div
+                style={{
+                  marginBottom: "1rem",
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                }}
+              >
                 <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Customer</p>
-                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}>{capitalizeText(jobcard.customerName)}</p>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Mobile</p>
-                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}>{jobcard.mobile}</p>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Place</p>
-                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}>{capitalizeText(jobcard.place)}</p>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Total bill amount</p>
                   <p
-                    style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#059669" }}
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Customer
+                  </p>
+                  <p
+                    style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}
+                  >
+                    {capitalizeText(jobcard.customerName)}
+                  </p>
+                </div>
+                <div>
+                  <p
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Mobile
+                  </p>
+                  <p
+                    style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}
+                  >
+                    {jobcard.mobile}
+                  </p>
+                </div>
+                <div>
+                  <p
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Place
+                  </p>
+                  <p
+                    style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}
+                  >
+                    {capitalizeText(jobcard.place)}
+                  </p>
+                </div>
+                <div>
+                  <p
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Total bill amount
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.875rem",
+                      fontWeight: 600,
+                      color: "#059669",
+                    }}
                     title="Parts + labour before discount"
                   >
                     ₹{getJobcardGrossBillAmount(jobcard).toFixed(2)}
                   </p>
                 </div>
                 <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Amount paid by customer</p>
-                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#2563eb" }}>
+                  <p
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Amount paid by customer
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.875rem",
+                      fontWeight: 600,
+                      color: "#2563eb",
+                    }}
+                  >
                     ₹{getTotalPaidByCustomer(jobcard).toFixed(2)}
                   </p>
                 </div>
                 <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Warranty Status</p>
-                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}>{formatWarrantyType(jobcard.warrantyType)}</p>
+                  <p
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Warranty Status
+                  </p>
+                  <p
+                    style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}
+                  >
+                    {formatWarrantyType(jobcard.warrantyType)}
+                  </p>
                 </div>
                 <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Warranty Date/Code</p>
-                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}>
+                  <p
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Warranty Date/Code
+                  </p>
+                  <p
+                    style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}
+                  >
                     {formatDateDDMMYYYY(jobcard.warrantyDate)}
                   </p>
                 </div>
               </div>
 
               {jobcard.parts && jobcard.parts.length > 0 && (
-                <div style={{ 
-                  marginBottom: "1rem", 
-                  padding: "1rem",
-                  backgroundColor: "#eff6ff",
-                  borderRadius: "0.5rem",
-                  border: "2px solid #3b82f6",
-                }}>
-                  <p style={{ 
-                    margin: "0 0 0.75rem 0", 
-                    fontSize: "0.875rem", 
-                    color: "#1e40af", 
-                    fontWeight: 600 
-                  }}>
+                <div
+                  style={{
+                    marginBottom: "1rem",
+                    padding: "1rem",
+                    backgroundColor: "#eff6ff",
+                    borderRadius: "0.5rem",
+                    border: "2px solid #3b82f6",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: "0 0 0.75rem 0",
+                      fontSize: "0.875rem",
+                      color: "#1e40af",
+                      fontWeight: 600,
+                    }}
+                  >
                     Parts ({jobcard.parts.length})
                   </p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <div
+                    style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}
+                  >
                     {jobcard.parts.slice(0, 5).map((part, index) => {
                       const tags = [];
                       if (
@@ -852,12 +1019,12 @@ export default function AllJobcards() {
                               color: "#166534",
                             }
                           : warrantyTag === "NW"
-                          ? {
-                              backgroundColor: "#fee2e2",
-                              borderColor: "#fecaca",
-                              color: "#991b1b",
-                            }
-                          : null;
+                            ? {
+                                backgroundColor: "#fee2e2",
+                                borderColor: "#fecaca",
+                                color: "#991b1b",
+                              }
+                            : null;
                       const scrapQty =
                         part.partType === "sales" &&
                         part.salesType === "battery" &&
@@ -867,109 +1034,114 @@ export default function AllJobcards() {
                           : 0;
                       const showOldChargerTrade =
                         partShowsCustomerOldChargerTradeIn(part);
-                      const partChipStacked = scrapQty > 0 || showOldChargerTrade;
+                      const partChipStacked =
+                        scrapQty > 0 || showOldChargerTrade;
                       return (
-                      <span
-                        key={index}
-                        style={{
-                          padding: "0.5rem 0.75rem",
-                          fontSize: "0.875rem",
-                          backgroundColor: "#3b82f6",
-                          borderRadius: "0.375rem",
-                          color: "#ffffff",
-                          fontWeight: 500,
-                          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
-                          display: "inline-flex",
-                          flexDirection: partChipStacked ? "column" : "row",
-                          alignItems: partChipStacked ? "stretch" : "center",
-                          gap: partChipStacked ? "0.35rem" : "0.5rem",
-                        }}
-                      >
                         <span
+                          key={index}
                           style={{
+                            padding: "0.5rem 0.75rem",
+                            fontSize: "0.875rem",
+                            backgroundColor: "#3b82f6",
+                            borderRadius: "0.375rem",
+                            color: "#ffffff",
+                            fontWeight: 500,
+                            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
                             display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            flexWrap: "wrap",
+                            flexDirection: partChipStacked ? "column" : "row",
+                            alignItems: partChipStacked ? "stretch" : "center",
+                            gap: partChipStacked ? "0.35rem" : "0.5rem",
                           }}
                         >
-                          <span>{nameWithTypes}</span>
-                          {warrantyTag && (
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <span>{nameWithTypes}</span>
+                            {warrantyTag && (
+                              <span
+                                style={{
+                                  padding: "0.125rem 0.375rem",
+                                  backgroundColor:
+                                    warrantyStyles?.backgroundColor,
+                                  borderRadius: "0.25rem",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 800,
+                                  border: `1px solid ${warrantyStyles?.borderColor}`,
+                                  color: warrantyStyles?.color,
+                                }}
+                                title={
+                                  warrantyTag === "W"
+                                    ? "Warranty"
+                                    : "No Warranty"
+                                }
+                              >
+                                {warrantyTag}
+                              </span>
+                            )}
                             <span
                               style={{
+                                marginLeft: partChipStacked ? 0 : "auto",
                                 padding: "0.125rem 0.375rem",
-                                backgroundColor: warrantyStyles?.backgroundColor,
+                                backgroundColor: "rgba(255, 255, 255, 0.2)",
                                 borderRadius: "0.25rem",
                                 fontSize: "0.75rem",
-                                fontWeight: 800,
-                                border: `1px solid ${warrantyStyles?.borderColor}`,
-                                color: warrantyStyles?.color,
+                                fontWeight: 600,
+                              }}
+                            >
+                              Qty: {part.quantity}
+                            </span>
+                          </span>
+                          {scrapQty > 0 && (
+                            <span
+                              style={{
+                                fontSize: "0.72rem",
+                                fontWeight: 600,
+                                padding: "0.2rem 0.45rem",
+                                backgroundColor: "rgba(254, 243, 199, 0.95)",
+                                color: "#92400e",
+                                borderRadius: "0.25rem",
+                                border: "1px solid rgba(251, 191, 36, 0.6)",
+                                alignSelf: "flex-start",
                               }}
                               title={
-                                warrantyTag === "W" ? "Warranty" : "No Warranty"
+                                String(
+                                  part.batteryOldNew || "",
+                                ).toLowerCase() === "new"
+                                  ? "Old batteries received with this new battery sale"
+                                  : "Scrap received with this old battery sale"
                               }
                             >
-                              {warrantyTag}
+                              Customer scrap available: ×{scrapQty}
                             </span>
                           )}
-                          <span
-                            style={{
-                              marginLeft: partChipStacked ? 0 : "auto",
-                              padding: "0.125rem 0.375rem",
-                              backgroundColor: "rgba(255, 255, 255, 0.2)",
-                              borderRadius: "0.25rem",
-                              fontSize: "0.75rem",
-                              fontWeight: 600,
-                            }}
-                          >
-                            Qty: {part.quantity}
-                          </span>
+                          {showOldChargerTrade && (
+                            <span
+                              style={{
+                                fontSize: "0.72rem",
+                                fontWeight: 600,
+                                padding: "0.2rem 0.45rem",
+                                backgroundColor: "rgba(254, 243, 199, 0.95)",
+                                color: "#92400e",
+                                borderRadius: "0.25rem",
+                                border: "1px solid rgba(251, 191, 36, 0.6)",
+                                alignSelf: "flex-start",
+                              }}
+                              title={
+                                part.oldChargerName
+                                  ? `Customer old charger: ${part.oldChargerName}`
+                                  : "Old charger received from customer with this charger sale"
+                              }
+                            >
+                              Customer old charger:{" "}
+                              {customerOldChargerTradeInSummary(part)}
+                            </span>
+                          )}
                         </span>
-                        {scrapQty > 0 && (
-                          <span
-                            style={{
-                              fontSize: "0.72rem",
-                              fontWeight: 600,
-                              padding: "0.2rem 0.45rem",
-                              backgroundColor: "rgba(254, 243, 199, 0.95)",
-                              color: "#92400e",
-                              borderRadius: "0.25rem",
-                              border: "1px solid rgba(251, 191, 36, 0.6)",
-                              alignSelf: "flex-start",
-                            }}
-                            title={
-                              String(part.batteryOldNew || "").toLowerCase() ===
-                              "new"
-                                ? "Old batteries received with this new battery sale"
-                                : "Scrap received with this old battery sale"
-                            }
-                          >
-                            Customer scrap available: ×{scrapQty}
-                          </span>
-                        )}
-                        {showOldChargerTrade && (
-                          <span
-                            style={{
-                              fontSize: "0.72rem",
-                              fontWeight: 600,
-                              padding: "0.2rem 0.45rem",
-                              backgroundColor: "rgba(254, 243, 199, 0.95)",
-                              color: "#92400e",
-                              borderRadius: "0.25rem",
-                              border: "1px solid rgba(251, 191, 36, 0.6)",
-                              alignSelf: "flex-start",
-                            }}
-                            title={
-                              part.oldChargerName
-                                ? `Customer old charger: ${part.oldChargerName}`
-                                : "Old charger received from customer with this charger sale"
-                            }
-                          >
-                            Customer old charger:{" "}
-                            {customerOldChargerTradeInSummary(part)}
-                          </span>
-                        )}
-                      </span>
                       );
                     })}
                     {jobcard.parts.length > 5 && (
@@ -993,8 +1165,19 @@ export default function AllJobcards() {
 
               {jobcard.details && jobcard.details.length > 0 && (
                 <div style={{ marginBottom: "1rem" }}>
-                  <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Details</p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <p
+                    style={{
+                      margin: "0 0 0.5rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Details
+                  </p>
+                  <div
+                    style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}
+                  >
                     {jobcard.details.map((detail, index) => (
                       <span
                         key={index}
@@ -1113,14 +1296,33 @@ export default function AllJobcards() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.25rem", fontWeight: 600 }}>
+            <h3
+              style={{
+                margin: "0 0 1rem 0",
+                fontSize: "1.25rem",
+                fontWeight: 600,
+              }}
+            >
               Confirm Deletion
             </h3>
-            <p style={{ margin: "0 0 1.5rem 0", fontSize: "0.875rem", color: "#6b7280" }}>
+            <p
+              style={{
+                margin: "0 0 1.5rem 0",
+                fontSize: "0.875rem",
+                color: "#6b7280",
+              }}
+            >
               Please enter the admin password to delete this jobcard.
             </p>
             {jobcardToDelete && (
-              <p style={{ margin: "0 0 1rem 0", fontSize: "0.875rem", color: "#374151", fontWeight: 500 }}>
+              <p
+                style={{
+                  margin: "0 0 1rem 0",
+                  fontSize: "0.875rem",
+                  color: "#374151",
+                  fontWeight: 500,
+                }}
+              >
                 Jobcard: {jobcardToDelete.jobcardNumber}
               </p>
             )}
@@ -1151,7 +1353,9 @@ export default function AllJobcards() {
                       padding: "0.5rem 2.5rem 0.5rem 0.5rem",
                       fontSize: "0.875rem",
                       borderRadius: "0.375rem",
-                      border: passwordError ? "1px solid #ef4444" : "1px solid #d1d5db",
+                      border: passwordError
+                        ? "1px solid #ef4444"
+                        : "1px solid #d1d5db",
                       outline: "none",
                     }}
                     autoFocus
@@ -1207,12 +1411,24 @@ export default function AllJobcards() {
                   </button>
                 </div>
                 {passwordError && (
-                  <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.75rem", color: "#ef4444" }}>
+                  <p
+                    style={{
+                      margin: "0.5rem 0 0 0",
+                      fontSize: "0.75rem",
+                      color: "#ef4444",
+                    }}
+                  >
                     {passwordError}
                   </p>
                 )}
               </div>
-              <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  justifyContent: "flex-end",
+                }}
+              >
                 <button
                   type="button"
                   onClick={handleCancelDelete}
@@ -1287,7 +1503,15 @@ export default function AllJobcards() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="jobcards-details-modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+            <div
+              className="jobcards-details-modal-header"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1.5rem",
+              }}
+            >
               <h2 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 600 }}>
                 Jobcard Details: {selectedJobcard.jobcardNumber}
               </h2>
@@ -1319,21 +1543,80 @@ export default function AllJobcards() {
             {/* Spare Parts Section */}
             {selectedJobcard.parts && selectedJobcard.parts.length > 0 && (
               <div style={{ marginBottom: "1.5rem" }}>
-                <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.125rem", fontWeight: 600 }}>Spare Parts</h3>
-                <div className="jobcards-details-table-wrap" style={{ border: "1px solid #e5e7eb", borderRadius: "0.5rem", overflow: "hidden" }}>
-                  <table className="jobcards-details-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                <h3
+                  style={{
+                    margin: "0 0 1rem 0",
+                    fontSize: "1.125rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  Spare Parts
+                </h3>
+                <div
+                  className="jobcards-details-table-wrap"
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "0.5rem",
+                    overflow: "hidden",
+                  }}
+                >
+                  <table
+                    className="jobcards-details-table"
+                    style={{ width: "100%", borderCollapse: "collapse" }}
+                  >
                     <thead>
                       <tr style={{ backgroundColor: "#f9fafb" }}>
-                        <th style={{ padding: "0.75rem", textAlign: "left", fontSize: "0.875rem", fontWeight: 600, borderBottom: "1px solid #e5e7eb" }}>Part Name</th>
-                        <th style={{ padding: "0.75rem", textAlign: "center", fontSize: "0.875rem", fontWeight: 600, borderBottom: "1px solid #e5e7eb" }}>Quantity</th>
-                        <th style={{ padding: "0.75rem", textAlign: "right", fontSize: "0.875rem", fontWeight: 600, borderBottom: "1px solid #e5e7eb" }}>Price (₹)</th>
-                        <th style={{ padding: "0.75rem", textAlign: "right", fontSize: "0.875rem", fontWeight: 600, borderBottom: "1px solid #e5e7eb" }}>Total (₹)</th>
+                        <th
+                          style={{
+                            padding: "0.75rem",
+                            textAlign: "left",
+                            fontSize: "0.875rem",
+                            fontWeight: 600,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Part Name
+                        </th>
+                        <th
+                          style={{
+                            padding: "0.75rem",
+                            textAlign: "center",
+                            fontSize: "0.875rem",
+                            fontWeight: 600,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Quantity
+                        </th>
+                        <th
+                          style={{
+                            padding: "0.75rem",
+                            textAlign: "right",
+                            fontSize: "0.875rem",
+                            fontWeight: 600,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Price (₹)
+                        </th>
+                        <th
+                          style={{
+                            padding: "0.75rem",
+                            textAlign: "right",
+                            fontSize: "0.875rem",
+                            fontWeight: 600,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Total (₹)
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedJobcard.parts.map((part, index) => {
                         const isReplacement =
-                          part.partType === "replacement" || part.replacementType;
+                          part.partType === "replacement" ||
+                          part.replacementType;
                         const qty = part.quantity || 1;
                         const price = part.price || 0;
                         const lineAmount = isReplacement ? 0 : price * qty;
@@ -1385,12 +1668,12 @@ export default function AllJobcards() {
                                 color: "#166534",
                               }
                             : warrantyTag === "NW"
-                            ? {
-                                backgroundColor: "#fee2e2",
-                                borderColor: "#fecaca",
-                                color: "#991b1b",
-                              }
-                            : null;
+                              ? {
+                                  backgroundColor: "#fee2e2",
+                                  borderColor: "#fecaca",
+                                  color: "#991b1b",
+                                }
+                              : null;
                         const modalScrapQty =
                           part.partType === "sales" &&
                           part.salesType === "battery" &&
@@ -1425,7 +1708,14 @@ export default function AllJobcards() {
                                   alignItems: "flex-start",
                                 }}
                               >
-                                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                    flexWrap: "wrap",
+                                  }}
+                                >
                                   <span>{nameWithTypes}</span>
                                   {warrantyTag && (
                                     <span
@@ -1518,10 +1808,30 @@ export default function AllJobcards() {
                           </tr>
                         );
                       })}
-                      <tr style={{ backgroundColor: "#f9fafb", fontWeight: 600 }}>
-                        <td colSpan="3" style={{ padding: "0.75rem", textAlign: "right", fontSize: "0.875rem" }}>Parts Total:</td>
-                        <td style={{ padding: "0.75rem", textAlign: "right", fontSize: "0.875rem" }}>
-                          ₹{calculatePartsTotal(selectedJobcard.parts).toFixed(2)}
+                      <tr
+                        style={{ backgroundColor: "#f9fafb", fontWeight: 600 }}
+                      >
+                        <td
+                          colSpan="3"
+                          style={{
+                            padding: "0.75rem",
+                            textAlign: "right",
+                            fontSize: "0.875rem",
+                          }}
+                        >
+                          Parts Total:
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.75rem",
+                            textAlign: "right",
+                            fontSize: "0.875rem",
+                          }}
+                        >
+                          ₹
+                          {calculatePartsTotal(selectedJobcard.parts).toFixed(
+                            2,
+                          )}
                         </td>
                       </tr>
                     </tbody>
@@ -1532,33 +1842,122 @@ export default function AllJobcards() {
 
             {/* Bill Summary Section */}
             <div style={{ marginBottom: "1.5rem" }}>
-              <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.125rem", fontWeight: 600 }}>Bill Summary</h3>
-              <div style={{ backgroundColor: "#f9fafb", padding: "1rem", borderRadius: "0.5rem", border: "1px solid #e5e7eb" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+              <h3
+                style={{
+                  margin: "0 0 1rem 0",
+                  fontSize: "1.125rem",
+                  fontWeight: 600,
+                }}
+              >
+                Bill Summary
+              </h3>
+              <div
+                style={{
+                  backgroundColor: "#f9fafb",
+                  padding: "1rem",
+                  borderRadius: "0.5rem",
+                  border: "1px solid #e5e7eb",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: "0.5rem",
+                  }}
+                >
                   <span style={{ fontSize: "0.875rem" }}>Parts Total:</span>
-                  <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>₹{calculatePartsTotal(selectedJobcard.parts || []).toFixed(2)}</span>
+                  <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>
+                    ₹
+                    {calculatePartsTotal(selectedJobcard.parts || []).toFixed(
+                      2,
+                    )}
+                  </span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: "0.5rem",
+                  }}
+                >
                   <span style={{ fontSize: "0.875rem" }}>Labour:</span>
-                  <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>₹{(selectedJobcard.labour || 0).toFixed(2)}</span>
+                  <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>
+                    ₹{(selectedJobcard.labour || 0).toFixed(2)}
+                  </span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem", borderTop: "1px solid #e5e7eb", paddingTop: "0.5rem" }}>
-                  <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>Total Bill Amount:</span>
-                  <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#059669" }}>
-                    ₹{((calculatePartsTotal(selectedJobcard.parts || []) + (selectedJobcard.labour || 0)).toFixed(2))}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: "0.5rem",
+                    borderTop: "1px solid #e5e7eb",
+                    paddingTop: "0.5rem",
+                  }}
+                >
+                  <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                    Total Bill Amount:
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "0.875rem",
+                      fontWeight: 600,
+                      color: "#059669",
+                    }}
+                  >
+                    ₹
+                    {(
+                      calculatePartsTotal(selectedJobcard.parts || []) +
+                      (selectedJobcard.labour || 0)
+                    ).toFixed(2)}
                   </span>
                 </div>
                 {selectedJobcard.discount > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "0.5rem" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginTop: "0.5rem",
+                    }}
+                  >
                     <span style={{ fontSize: "0.875rem" }}>Discount:</span>
-                    <span style={{ fontSize: "0.875rem", fontWeight: 500, color: "#ef4444" }}>-₹{(selectedJobcard.discount || 0).toFixed(2)}</span>
+                    <span
+                      style={{
+                        fontSize: "0.875rem",
+                        fontWeight: 500,
+                        color: "#ef4444",
+                      }}
+                    >
+                      -₹{(selectedJobcard.discount || 0).toFixed(2)}
+                    </span>
                   </div>
                 )}
                 {selectedJobcard.discount > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "0.5rem", borderTop: "1px solid #e5e7eb", paddingTop: "0.5rem" }}>
-                    <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>Price After Discount:</span>
-                    <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#059669" }}>
-                      ₹{((calculatePartsTotal(selectedJobcard.parts || []) + (selectedJobcard.labour || 0) - (selectedJobcard.discount || 0)).toFixed(2))}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginTop: "0.5rem",
+                      borderTop: "1px solid #e5e7eb",
+                      paddingTop: "0.5rem",
+                    }}
+                  >
+                    <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                      Price After Discount:
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.875rem",
+                        fontWeight: 600,
+                        color: "#059669",
+                      }}
+                    >
+                      ₹
+                      {(
+                        calculatePartsTotal(selectedJobcard.parts || []) +
+                        (selectedJobcard.labour || 0) -
+                        (selectedJobcard.discount || 0)
+                      ).toFixed(2)}
                     </span>
                   </div>
                 )}
@@ -1567,46 +1966,162 @@ export default function AllJobcards() {
 
             {/* Payment History Section */}
             <div style={{ marginBottom: "1.5rem" }}>
-              <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.125rem", fontWeight: 600 }}>Payment History</h3>
+              <h3
+                style={{
+                  margin: "0 0 1rem 0",
+                  fontSize: "1.125rem",
+                  fontWeight: 600,
+                }}
+              >
+                Payment History
+              </h3>
               {getAllPayments(selectedJobcard).length > 0 ? (
-                <div className="jobcards-details-table-wrap" style={{ border: "1px solid #e5e7eb", borderRadius: "0.5rem", overflow: "hidden" }}>
-                  <table className="jobcards-details-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                <div
+                  className="jobcards-details-table-wrap"
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "0.5rem",
+                    overflow: "hidden",
+                  }}
+                >
+                  <table
+                    className="jobcards-details-table"
+                    style={{ width: "100%", borderCollapse: "collapse" }}
+                  >
                     <thead>
                       <tr style={{ backgroundColor: "#f9fafb" }}>
-                        <th style={{ padding: "0.75rem", textAlign: "left", fontSize: "0.875rem", fontWeight: 600, borderBottom: "1px solid #e5e7eb" }}>Date</th>
-                        <th style={{ padding: "0.75rem", textAlign: "left", fontSize: "0.875rem", fontWeight: 600, borderBottom: "1px solid #e5e7eb" }}>Time</th>
-                        <th style={{ padding: "0.75rem", textAlign: "right", fontSize: "0.875rem", fontWeight: 600, borderBottom: "1px solid #e5e7eb" }}>Amount (₹)</th>
-                        <th style={{ padding: "0.75rem", textAlign: "center", fontSize: "0.875rem", fontWeight: 600, borderBottom: "1px solid #e5e7eb" }}>Mode</th>
+                        <th
+                          style={{
+                            padding: "0.75rem",
+                            textAlign: "left",
+                            fontSize: "0.875rem",
+                            fontWeight: 600,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Date
+                        </th>
+                        <th
+                          style={{
+                            padding: "0.75rem",
+                            textAlign: "left",
+                            fontSize: "0.875rem",
+                            fontWeight: 600,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Time
+                        </th>
+                        <th
+                          style={{
+                            padding: "0.75rem",
+                            textAlign: "right",
+                            fontSize: "0.875rem",
+                            fontWeight: 600,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Amount (₹)
+                        </th>
+                        <th
+                          style={{
+                            padding: "0.75rem",
+                            textAlign: "center",
+                            fontSize: "0.875rem",
+                            fontWeight: 600,
+                            borderBottom: "1px solid #e5e7eb",
+                          }}
+                        >
+                          Mode
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {getAllPayments(selectedJobcard).map((payment, index) => (
-                        <tr key={index} style={{ borderBottom: index < getAllPayments(selectedJobcard).length - 1 ? "1px solid #e5e7eb" : "none" }}>
-                          <td style={{ padding: "0.75rem", fontSize: "0.875rem" }}>{formatPaymentDate(payment.date)}</td>
-                          <td style={{ padding: "0.75rem", fontSize: "0.875rem" }}>{formatPaymentTime(payment)}</td>
-                          <td style={{ padding: "0.75rem", textAlign: "right", fontSize: "0.875rem", fontWeight: 500 }}>
+                        <tr
+                          key={index}
+                          style={{
+                            borderBottom:
+                              index < getAllPayments(selectedJobcard).length - 1
+                                ? "1px solid #e5e7eb"
+                                : "none",
+                          }}
+                        >
+                          <td
+                            style={{ padding: "0.75rem", fontSize: "0.875rem" }}
+                          >
+                            {formatPaymentDate(payment.date)}
+                          </td>
+                          <td
+                            style={{ padding: "0.75rem", fontSize: "0.875rem" }}
+                          >
+                            {formatPaymentTime(payment)}
+                          </td>
+                          <td
+                            style={{
+                              padding: "0.75rem",
+                              textAlign: "right",
+                              fontSize: "0.875rem",
+                              fontWeight: 500,
+                            }}
+                          >
                             ₹{(payment.amount || 0).toFixed(2)}
                           </td>
-                          <td style={{ padding: "0.75rem", textAlign: "center", fontSize: "0.875rem", textTransform: "uppercase" }}>
+                          <td
+                            style={{
+                              padding: "0.75rem",
+                              textAlign: "center",
+                              fontSize: "0.875rem",
+                              textTransform: "uppercase",
+                            }}
+                          >
                             {payment.paymentMode || "Cash"}
                           </td>
                         </tr>
                       ))}
-                      <tr style={{ backgroundColor: "#f9fafb", fontWeight: 600 }}>
-                        <td colSpan="3" style={{ padding: "0.75rem", textAlign: "right", fontSize: "0.875rem" }}>Total Paid:</td>
-                        <td style={{ padding: "0.75rem", textAlign: "right", fontSize: "0.875rem" }}>
-                          ₹{getAllPayments(selectedJobcard).reduce((sum, p) => sum + (p.amount || 0), 0).toFixed(2)}
+                      <tr
+                        style={{ backgroundColor: "#f9fafb", fontWeight: 600 }}
+                      >
+                        <td
+                          colSpan="3"
+                          style={{
+                            padding: "0.75rem",
+                            textAlign: "right",
+                            fontSize: "0.875rem",
+                          }}
+                        >
+                          Total Paid:
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.75rem",
+                            textAlign: "right",
+                            fontSize: "0.875rem",
+                          }}
+                        >
+                          ₹
+                          {getAllPayments(selectedJobcard)
+                            .reduce((sum, p) => sum + (p.amount || 0), 0)
+                            .toFixed(2)}
                         </td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
               ) : (
-                <p style={{ color: "#6b7280", fontSize: "0.875rem" }}>No payment history available.</p>
+                <p style={{ color: "#6b7280", fontSize: "0.875rem" }}>
+                  No payment history available.
+                </p>
               )}
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1.5rem" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginTop: "1.5rem",
+              }}
+            >
               <button
                 onClick={() => {
                   setShowDetailsModal(false);
@@ -1645,7 +2160,9 @@ export default function AllJobcards() {
             overflow: "auto",
             boxSizing: "border-box",
           }}
-          onClick={(e) => e.target === e.currentTarget && setPrintingJobcard(null)}
+          onClick={(e) =>
+            e.target === e.currentTarget && setPrintingJobcard(null)
+          }
         >
           <div
             className="jobcard-print-modal-inner"

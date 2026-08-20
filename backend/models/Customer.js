@@ -33,6 +33,20 @@ const customerSchema = new mongoose.Schema(
       lowercase: true,
       index: true,
     },
+    customerType: {
+      type: String,
+      enum: ["green", "red", "black"],
+      default: "green",
+    },
+    warrantyStatus: {
+      type: String,
+      enum: ["none", "warranty"],
+      default: "none",
+    },
+    warrantyDate: {
+      type: String,
+      default: "",
+    },
   },
   {
     timestamps: true,
