@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import JobcardPrintView from "../../components/JobcardPrintView";
 import DatePicker from "../../components/DatePicker";
 import { getTodayForInput } from "../../utils/dateUtils";
@@ -8,6 +8,7 @@ import { getFetchErrorMessage } from "../../utils/apiError";
 import { fetchWithRetry } from "../../config/api";
 export default function AllJobcards() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [jobcards, setJobcards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState("all"); // all, service, replacement, sales
@@ -24,6 +25,17 @@ export default function AllJobcards() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedJobcard, setSelectedJobcard] = useState(null);
   const [printingJobcard, setPrintingJobcard] = useState(null);
+  const [returnPath, setReturnPath] = useState("");
+
+  useEffect(() => {
+    const selectedFromNavigation = location.state?.selectedJobcard;
+    if (!selectedFromNavigation) return;
+
+    setSelectedJobcard(selectedFromNavigation);
+    setShowDetailsModal(true);
+    setReturnPath(location.state.returnPath || "");
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   useEffect(() => {
     fetchFinalizedJobcards();
@@ -222,6 +234,16 @@ export default function AllJobcards() {
   const handleViewDetails = (jobcard) => {
     setSelectedJobcard(jobcard);
     setShowDetailsModal(true);
+  };
+
+  const closeDetails = () => {
+    setShowDetailsModal(false);
+    setSelectedJobcard(null);
+    if (returnPath) {
+      const path = returnPath;
+      setReturnPath("");
+      navigate(path);
+    }
   };
 
   const calculatePartsTotal = (parts) => {
@@ -1248,8 +1270,7 @@ export default function AllJobcards() {
             padding: "2rem",
           }}
           onClick={() => {
-            setShowDetailsModal(false);
-            setSelectedJobcard(null);
+            closeDetails();
           }}
         >
           <div
@@ -1271,10 +1292,7 @@ export default function AllJobcards() {
                 Jobcard Details: {selectedJobcard.jobcardNumber}
               </h2>
               <button
-                onClick={() => {
-                  setShowDetailsModal(false);
-                  setSelectedJobcard(null);
-                }}
+                onClick={closeDetails}
                 style={{
                   background: "none",
                   border: "none",
@@ -1287,6 +1305,16 @@ export default function AllJobcards() {
                 ×
               </button>
             </div>
+            {returnPath ? (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={closeDetails}
+                style={{ marginBottom: "1.25rem" }}
+              >
+                ← Back to Owner Card
+              </button>
+            ) : null}
 
             {/* Spare Parts Section */}
             {selectedJobcard.parts && selectedJobcard.parts.length > 0 && (

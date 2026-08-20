@@ -35,12 +35,6 @@ export default function CustomerQrProfile() {
     );
   }, [jobcards]);
 
-  const profileUrl = useMemo(() => {
-    if (!id) return "";
-    const base = window.location.origin.replace(/\/$/, "");
-    return `${base}/customer-card/${id}`;
-  }, [id]);
-
   const qrImageUrl = useMemo(() => {
     if (!qrToken) return "";
     return `https://api.qrserver.com/v1/create-qr-code/?size=420x420&ecc=H&qzone=2&data=${encodeURIComponent(qrToken)}`;
@@ -85,16 +79,6 @@ export default function CustomerQrProfile() {
         },
       },
     });
-  };
-
-  const copyProfileUrl = async () => {
-    if (!profileUrl) return;
-    try {
-      await navigator.clipboard.writeText(profileUrl);
-      alert("QR profile link copied.");
-    } catch (e) {
-      alert("Could not copy link. Please copy from browser address bar.");
-    }
   };
 
   return (
@@ -154,6 +138,7 @@ export default function CustomerQrProfile() {
           </section>
 
           <section className="customer-qr-print-card">
+            <h2 className="customer-qr-print-heading">Dhawan E-Bikes</h2>
             <h3>Scooty QR Sticker</h3>
             <p>
               Print and paste this QR on the scooty. Scanning it opens this
@@ -168,9 +153,6 @@ export default function CustomerQrProfile() {
                 />
               ) : null}
               <div className="customer-qr-print-actions">
-                <button className="btn btn-secondary" onClick={copyProfileUrl}>
-                  Copy Link
-                </button>
                 <button
                   className="btn btn-primary"
                   onClick={() => window.print()}
@@ -199,7 +181,19 @@ export default function CustomerQrProfile() {
                 </thead>
                 <tbody>
                   {jobcards.map((j) => (
-                    <tr key={j._id}>
+                    <tr
+                      key={j._id}
+                      className="customer-history-row"
+                      onClick={() =>
+                        navigate("/jobcards/all", {
+                          state: {
+                            selectedJobcard: j,
+                            returnPath: `/customer-card/${id}`,
+                          },
+                        })
+                      }
+                      title={`Open ${j.jobcardNumber || "jobcard"}`}
+                    >
                       <td>{j.jobcardNumber || "-"}</td>
                       <td>{formatDate(j.date)}</td>
                       <td>{j.jobcardType || "-"}</td>

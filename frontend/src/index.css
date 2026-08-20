@@ -3675,6 +3675,15 @@ textarea {
   background: #f8fafc;
 }
 
+.customer-history-row {
+  cursor: pointer;
+}
+
+.customer-history-row:focus-within,
+.customer-history-row:hover {
+  background: #eff6ff;
+}
+
 .simple-table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -3819,6 +3828,10 @@ textarea {
 
 .customer-qr-print-card h3 {
   margin: 0;
+}
+
+.customer-qr-print-heading {
+  display: none;
 }
 
 .customer-qr-print-card p {
@@ -4714,6 +4727,68 @@ body {
     height: 100% !important;
     box-shadow: none !important;
     padding: 0 !important;
+  }
+
+  .customer-qr-page,
+  .customer-qr-page * {
+    visibility: visible !important;
+  }
+
+  .customer-qr-page {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .customer-qr-page > *:not(.customer-qr-print-card),
+  .customer-qr-print-actions {
+    display: none !important;
+  }
+
+  .customer-qr-print-card {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    box-sizing: border-box !important;
+    height: 100vh !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 1rem 0 !important;
+  }
+
+  .customer-qr-print-heading {
+    display: block !important;
+    margin: 0 0 0.75rem !important;
+    font-size: 1.5rem !important;
+    line-height: 1.2 !important;
+    text-align: center !important;
+    color: #111827 !important;
+  }
+
+  .customer-qr-print-card > h3,
+  .customer-qr-print-card > p {
+    display: none !important;
+  }
+
+  .customer-qr-print-body {
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+  }
+
+  .customer-qr-image {
+    display: block !important;
+    width: min(calc(100vw - 2rem), calc(100vh - 3.5rem)) !important;
+    height: min(calc(100vw - 2rem), calc(100vh - 3.5rem)) !important;
+    max-width: none !important;
+    max-height: none !important;
   }
 }
 

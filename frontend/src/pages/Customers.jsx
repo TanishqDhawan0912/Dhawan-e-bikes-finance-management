@@ -37,11 +37,6 @@ export default function Customers() {
 
   const selectedCustomerId = selectedCustomer?._id || null;
 
-  const getCustomerCardUrl = (customerId) => {
-    const base = window.location.origin.replace(/\/$/, "");
-    return `${base}/customer-card/${customerId}`;
-  };
-
   const totalPending = useMemo(() => {
     return history.reduce(
       (sum, row) => sum + (Number(row.pendingAmount) || 0),
@@ -128,20 +123,6 @@ export default function Customers() {
       setSaveMessage(error?.message || "Failed to save customer.");
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const copyCustomerCardUrl = async (customerId) => {
-    try {
-      const url = getCustomerCardUrl(customerId);
-      await navigator.clipboard.writeText(url);
-      setSaveMessage(
-        "Customer QR link copied. Use this link to generate/print QR sticker.",
-      );
-    } catch (error) {
-      setSaveMessage(
-        "Could not copy link. Open QR Page and copy URL manually.",
-      );
     }
   };
 
@@ -260,13 +241,6 @@ export default function Customers() {
                       type="button"
                     >
                       Generate / Print QR
-                    </button>
-                    <button
-                      className="btn btn-secondary btn-small"
-                      onClick={() => copyCustomerCardUrl(c._id)}
-                      type="button"
-                    >
-                      Copy QR Link
                     </button>
                   </div>
                 </td>
