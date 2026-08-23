@@ -214,11 +214,9 @@ const updateCustomer = async (req, res) => {
   } catch (error) {
     console.error("Error updating customer:", error);
     if (error?.code === 11000) {
-      return res
-        .status(409)
-        .json({
-          message: "A customer with this name and mobile already exists",
-        });
+      return res.status(409).json({
+        message: "A customer with this name and mobile already exists",
+      });
     }
     res.status(500).json({ message: "Server error", error: error.message });
   }

@@ -353,19 +353,25 @@ export default function Customers() {
                 type="text"
                 placeholder="Customer name"
                 value={form.name}
-                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, name: e.target.value }))
+                }
               />
               <input
                 type="text"
                 placeholder="Place"
                 value={form.place}
-                onChange={(e) => setForm((p) => ({ ...p, place: e.target.value }))}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, place: e.target.value }))
+                }
               />
               <input
                 type="text"
                 placeholder="Mobile number"
                 value={form.mobile}
-                onChange={(e) => setForm((p) => ({ ...p, mobile: e.target.value }))}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, mobile: e.target.value }))
+                }
               />
               <div className="customer-form-field">
                 <label htmlFor="edit-customer-category">Category</label>
@@ -382,7 +388,9 @@ export default function Customers() {
                 </select>
               </div>
               <div className="customer-form-field">
-                <label htmlFor="edit-customer-warranty-status">Warranty Status</label>
+                <label htmlFor="edit-customer-warranty-status">
+                  Warranty Status
+                </label>
                 <select
                   id="edit-customer-warranty-status"
                   value={form.warrantyStatus}
@@ -395,7 +403,9 @@ export default function Customers() {
                 </select>
               </div>
               <div className="customer-form-field">
-                <label htmlFor="edit-customer-warranty-date">Warranty Date</label>
+                <label htmlFor="edit-customer-warranty-date">
+                  Warranty Date
+                </label>
                 <input
                   id="edit-customer-warranty-date"
                   type="date"
@@ -406,7 +416,11 @@ export default function Customers() {
                 />
               </div>
             </div>
-            <button className="btn btn-primary" type="submit" disabled={isSaving}>
+            <button
+              className="btn btn-primary"
+              type="submit"
+              disabled={isSaving}
+            >
               {isSaving ? "Saving..." : "Update Customer"}
             </button>
             <button
@@ -427,7 +441,9 @@ export default function Customers() {
                 Back to Customer
               </button>
             ) : null}
-            {saveMessage ? <div className="customer-message">{saveMessage}</div> : null}
+            {saveMessage ? (
+              <div className="customer-message">{saveMessage}</div>
+            ) : null}
           </form>
         </div>
       ) : null}

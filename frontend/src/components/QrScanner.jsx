@@ -388,6 +388,17 @@ export default function QrScanner({ onClose, initialResult = null }) {
                 {(customer.customerType || "green").toUpperCase()}
               </span>
             </div>
+            <div>
+              <strong>Warranty</strong>
+              <span>
+                {customer.warrantyStatus === "warranty" ? "Warranty" : "No Warranty"}
+                {customer.warrantyDate &&
+                customer.warrantyDate !== "NA" &&
+                customer.warrantyDate !== "N/A"
+                  ? ` (${formatJobcardDate(customer.warrantyDate)})`
+                  : ""}
+              </span>
+            </div>
             <div className="qr-scanner-actions">
               <button
                 type="button"

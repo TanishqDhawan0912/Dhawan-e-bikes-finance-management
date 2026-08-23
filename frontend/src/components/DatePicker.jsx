@@ -263,6 +263,7 @@ export default function DatePicker({
             width: "100%",
             minWidth: 0,
             padding: isModern ? "0.55rem 0.7rem" : "0.5rem",
+            paddingRight: displayValue ? "4.5rem" : undefined,
             borderRadius: isModern ? "0.5rem" : "0.375rem",
             border: "1px solid #e5e7eb",
             fontSize: isModern ? "0.9rem" : "1rem",
@@ -271,16 +272,32 @@ export default function DatePicker({
             ...style,
           }}
         />
-        {isModern && displayValue ? (
+        {displayValue ? (
           <button
             type="button"
-            className="date-picker-clear-modern"
+            className={isModern ? "date-picker-clear-modern" : ""}
             aria-label="Clear date"
-            title="Clear date"
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleClearClick}
+            style={
+              isModern
+                ? undefined
+                : {
+                    position: "absolute",
+                    top: "50%",
+                    right: "0.35rem",
+                    transform: "translateY(-50%)",
+                    border: 0,
+                    background: "transparent",
+                    color: "#475569",
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    padding: "0.25rem",
+                  }
+            }
           >
-            ×
+            {isModern ? "×" : "Clear"}
           </button>
         ) : null}
         {isModern && showCalendarIcon ? (

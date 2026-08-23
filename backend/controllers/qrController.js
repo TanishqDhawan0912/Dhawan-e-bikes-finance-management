@@ -12,6 +12,8 @@ function serializeCustomer(customer) {
     place: customer.place,
     phoneNumber: customer.mobile,
     customerType: customer.customerType || "green",
+    warrantyStatus: customer.warrantyStatus || "none",
+    warrantyDate: customer.warrantyDate || "",
   };
 }
 
