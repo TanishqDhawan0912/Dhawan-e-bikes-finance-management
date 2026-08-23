@@ -85,7 +85,14 @@ export default function Jobcards() {
               {location.state?.returnToQr ? (
                 <button
                   className="btn btn-secondary"
-                  onClick={() => navigate("/", { state: { returnToQr: location.state.returnToQr } })}
+                  onClick={() => {
+                    const returnToQr = location.state.returnToQr;
+                    sessionStorage.setItem(
+                      "qr-return-result",
+                      JSON.stringify(returnToQr),
+                    );
+                    navigate("/", { state: { returnToQr } });
+                  }}
                 >
                   Back to Customer
                 </button>

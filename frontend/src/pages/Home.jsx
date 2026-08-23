@@ -20,8 +20,15 @@ export default function Home() {
   const [scannerResult, setScannerResult] = useState(null);
 
   useEffect(() => {
-    const result = location.state?.returnToQr;
+    let savedResult = null;
+    try {
+      savedResult = JSON.parse(sessionStorage.getItem("qr-return-result"));
+    } catch {
+      sessionStorage.removeItem("qr-return-result");
+    }
+    const result = location.state?.returnToQr || savedResult;
     if (!result?.customer) return;
+    sessionStorage.removeItem("qr-return-result");
     setScannerResult(result);
     setShowScanner(true);
     navigate(location.pathname, { replace: true, state: null });

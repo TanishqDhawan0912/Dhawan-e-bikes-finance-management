@@ -26,13 +26,21 @@ export default function PendingJobcard() {
   // Same wording as jobcard creation form (Warranty Type dropdown)
   const getWarrantyTypeLabel = (value) => {
     if (!value) return "";
-    const labels = { none: "No Warranty", full: "Full Warranty", battery: "Battery Only", charger: "Charger Only" };
+    const labels = {
+      none: "No Warranty",
+      full: "Full Warranty",
+      battery: "Battery Only",
+      charger: "Charger Only",
+    };
     return labels[value] ?? value;
   };
   const getWarrantyDisplay = (jc) => {
     const label = getWarrantyTypeLabel(jc?.warrantyType);
     if (!label) return "";
-    const date = jc?.warrantyDate && jc.warrantyDate !== "N/A" && jc.warrantyDate !== "NA" ? jc.warrantyDate : null;
+    const date =
+      jc?.warrantyDate && jc.warrantyDate !== "N/A" && jc.warrantyDate !== "NA"
+        ? jc.warrantyDate
+        : null;
     return date ? `${label} (${date})` : label;
   };
 
@@ -41,7 +49,7 @@ export default function PendingJobcard() {
     if (jc.paymentHistory && jc.paymentHistory.length > 0) {
       return jc.paymentHistory.reduce(
         (sum, p) => sum + (Number(p.amount) || 0),
-        0
+        0,
       );
     }
     return Number(jc.paidAmount) || 0;
@@ -107,7 +115,8 @@ export default function PendingJobcard() {
 
   // Scroll edited jobcard into view after list loads
   useEffect(() => {
-    if (loading || !editedJobcardIdRef.current || filteredJobcards.length === 0) return;
+    if (loading || !editedJobcardIdRef.current || filteredJobcards.length === 0)
+      return;
     const id = editedJobcardIdRef.current;
     editedJobcardIdRef.current = null; // Only scroll once
     const el = document.querySelector(`[data-jobcard-id="${id}"]`);
@@ -130,27 +139,27 @@ export default function PendingJobcard() {
         // First, compare by the date field (date entered in form)
         const dateA = a.date || "";
         const dateB = b.date || "";
-        
+
         if (dateA !== dateB) {
           // Compare dates (YYYY-MM-DD format can be compared as strings)
           // Descending order: newer date first
           return dateB.localeCompare(dateA);
         }
-        
+
         // If dates are the same, sort by creation time (createdAt)
         const getTimestamp = (jobcard) => {
           if (!jobcard.createdAt) return 0;
           const date = new Date(jobcard.createdAt);
           return isNaN(date.getTime()) ? 0 : date.getTime();
         };
-        
+
         const timeA = getTimestamp(a);
         const timeB = getTimestamp(b);
-        
+
         // Descending order: newest time first
         return timeB - timeA;
       });
-      
+
       setJobcards(sortedData);
     } catch (error) {
       console.error("Error fetching pending jobcards:", error);
@@ -183,24 +192,27 @@ export default function PendingJobcard() {
   const handleFinalizeWithPending = async (jobcard) => {
     const pendingAmount = jobcard.pendingAmount || 0;
     const confirmMessage = `Pending amount of ₹${pendingAmount.toFixed(2)} is still left. Do you want to finalize? Sure?`;
-    
+
     if (!window.confirm(confirmMessage)) {
       return;
     }
 
     try {
-      const response = await fetchWithRetry(`/jobcards/${jobcard._id}/finalize`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetchWithRetry(
+        `/jobcards/${jobcard._id}/finalize`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            labour: jobcard.labour || 0,
+            discount: jobcard.discount || 0,
+            paymentMode: jobcard.paymentMode || "cash",
+            forceFinalize: true,
+          }),
         },
-        body: JSON.stringify({
-          labour: jobcard.labour || 0,
-          discount: jobcard.discount || 0,
-          paymentMode: jobcard.paymentMode || "cash",
-          forceFinalize: true,
-        }),
-      });
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -228,7 +240,11 @@ export default function PendingJobcard() {
   };
 
   const handleDelete = async (jobcardId) => {
-    if (!window.confirm("Are you sure you want to delete this jobcard? This action cannot be undone.")) {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this jobcard? This action cannot be undone.",
+      )
+    ) {
       return;
     }
 
@@ -239,7 +255,7 @@ export default function PendingJobcard() {
 
       if (!response.ok) {
         throw new Error(
-          await getFetchErrorMessage(response, "Failed to delete jobcard")
+          await getFetchErrorMessage(response, "Failed to delete jobcard"),
         );
       }
 
@@ -286,7 +302,7 @@ export default function PendingJobcard() {
     if (searchName.trim()) {
       const searchLower = searchName.toLowerCase().trim();
       filtered = filtered.filter((jobcard) =>
-        jobcard.customerName?.toLowerCase().includes(searchLower)
+        jobcard.customerName?.toLowerCase().includes(searchLower),
       );
     }
 
@@ -304,11 +320,11 @@ export default function PendingJobcard() {
     if (filterStatus !== "all") {
       if (filterStatus === "pending_payment") {
         filtered = filtered.filter(
-          (jobcard) => jobcard.pendingAmount && jobcard.pendingAmount > 0
+          (jobcard) => jobcard.pendingAmount && jobcard.pendingAmount > 0,
         );
       } else if (filterStatus === "not_finalized") {
         filtered = filtered.filter(
-          (jobcard) => !jobcard.pendingAmount || jobcard.pendingAmount === 0
+          (jobcard) => !jobcard.pendingAmount || jobcard.pendingAmount === 0,
         );
       }
     }
@@ -319,23 +335,23 @@ export default function PendingJobcard() {
       // First, compare by the date field (date entered in form)
       const dateA = a.date || "";
       const dateB = b.date || "";
-      
+
       if (dateA !== dateB) {
         // Compare dates (YYYY-MM-DD format can be compared as strings)
         // Descending order: newer date first
         return dateB.localeCompare(dateA);
       }
-      
+
       // If dates are the same, sort by creation time (createdAt)
       const getTimestamp = (jobcard) => {
         if (!jobcard.createdAt) return 0;
         const date = new Date(jobcard.createdAt);
         return isNaN(date.getTime()) ? 0 : date.getTime();
       };
-      
+
       const timeA = getTimestamp(a);
       const timeB = getTimestamp(b);
-      
+
       // Descending order: newest time first
       return timeB - timeA;
     });
@@ -355,7 +371,14 @@ export default function PendingJobcard() {
 
   return (
     <div className="page-content">
-      <div style={{ marginBottom: "1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div
+        style={{
+          marginBottom: "1.5rem",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
         <h2>Pending Jobcards</h2>
         <button
           onClick={() => navigate("/jobcards/new")}
@@ -434,7 +457,9 @@ export default function PendingJobcard() {
             >
               Filter by Date
             </label>
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <div
+              style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
+            >
               <div style={{ flex: 1 }}>
                 <DatePicker
                   value={filterDate}
@@ -501,7 +526,13 @@ export default function PendingJobcard() {
 
         {/* Clear Filters Button */}
         {(searchName || filterDate || filterStatus !== "all") && (
-          <div style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end" }}>
+          <div
+            style={{
+              marginTop: "1rem",
+              display: "flex",
+              justifyContent: "flex-end",
+            }}
+          >
             <button
               onClick={() => {
                 setSearchName("");
@@ -576,13 +607,37 @@ export default function PendingJobcard() {
                 boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.1)",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  marginBottom: "1rem",
+                }}
+              >
                 <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.125rem", fontWeight: 600 }}>
+                  <h3
+                    style={{
+                      margin: "0 0 0.5rem 0",
+                      fontSize: "1.125rem",
+                      fontWeight: 600,
+                    }}
+                  >
                     {jobcard.jobcardNumber || "N/A"}
                   </h3>
-                  <p style={{ margin: "0", fontSize: "0.875rem", color: "#6b7280" }}>
-                    Type: <span style={{ textTransform: "capitalize" }}>{jobcard.jobcardType}</span> | Date: {formatDate(jobcard.date)} | Created: {formatTime(jobcard.createdAt)}
+                  <p
+                    style={{
+                      margin: "0",
+                      fontSize: "0.875rem",
+                      color: "#6b7280",
+                    }}
+                  >
+                    Type:{" "}
+                    <span style={{ textTransform: "capitalize" }}>
+                      {jobcard.jobcardType}
+                    </span>{" "}
+                    | Date: {formatDate(jobcard.date)} | Created:{" "}
+                    {formatTime(jobcard.createdAt)}
                   </p>
                 </div>
                 <span
@@ -591,320 +646,481 @@ export default function PendingJobcard() {
                     fontSize: "0.75rem",
                     fontWeight: 600,
                     borderRadius: "9999px",
-                    backgroundColor: jobcard.pendingAmount && jobcard.pendingAmount > 0 ? "#fee2e2" : "#fef3c7",
-                    color: jobcard.pendingAmount && jobcard.pendingAmount > 0 ? "#991b1b" : "#92400e",
-                    border: jobcard.pendingAmount && jobcard.pendingAmount > 0 ? "1px solid #fecaca" : "none",
+                    backgroundColor:
+                      jobcard.pendingAmount && jobcard.pendingAmount > 0
+                        ? "#fee2e2"
+                        : "#fef3c7",
+                    color:
+                      jobcard.pendingAmount && jobcard.pendingAmount > 0
+                        ? "#991b1b"
+                        : "#92400e",
+                    border:
+                      jobcard.pendingAmount && jobcard.pendingAmount > 0
+                        ? "1px solid #fecaca"
+                        : "none",
                   }}
                 >
-                  {jobcard.pendingAmount && jobcard.pendingAmount > 0 
-                    ? `₹${jobcard.pendingAmount.toFixed(2)} Pending` 
+                  {jobcard.pendingAmount && jobcard.pendingAmount > 0
+                    ? `₹${jobcard.pendingAmount.toFixed(2)} Pending`
                     : "Pending"}
                 </span>
               </div>
 
-              <div style={{ marginBottom: "1rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+              <div
+                style={{
+                  marginBottom: "1rem",
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                }}
+              >
                 <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Customer</p>
-                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}>{jobcard.customerName}</p>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Mobile</p>
-                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}>{jobcard.mobile}</p>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Place</p>
-                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}>{jobcard.place}</p>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Total bill amount</p>
                   <p
-                    style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#059669" }}
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Customer
+                  </p>
+                  <p
+                    style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}
+                  >
+                    {jobcard.customerName}
+                  </p>
+                </div>
+                <div>
+                  <p
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Mobile
+                  </p>
+                  <p
+                    style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}
+                  >
+                    {jobcard.mobile}
+                  </p>
+                </div>
+                <div>
+                  <p
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Place
+                  </p>
+                  <p
+                    style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}
+                  >
+                    {jobcard.place}
+                  </p>
+                </div>
+                <div>
+                  <p
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Total bill amount
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.875rem",
+                      fontWeight: 600,
+                      color: "#059669",
+                    }}
                     title="Parts + labour before discount"
                   >
                     ₹{getJobcardGrossBillAmount(jobcard).toFixed(2)}
                   </p>
                 </div>
                 <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Amount paid by customer</p>
-                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "#2563eb" }}>
+                  <p
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Amount paid by customer
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.875rem",
+                      fontWeight: 600,
+                      color: "#2563eb",
+                    }}
+                  >
                     ₹{getTotalPaidByCustomer(jobcard).toFixed(2)}
                   </p>
                 </div>
                 <div>
-                  <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.75rem", color: "#6b7280", fontWeight: 500 }}>Warranty</p>
-                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}>{getWarrantyDisplay(jobcard) || "—"}</p>
+                  <p
+                    style={{
+                      margin: "0 0 0.25rem 0",
+                      fontSize: "0.75rem",
+                      color: "#6b7280",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Warranty
+                  </p>
+                  <p
+                    style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500 }}
+                  >
+                    {getWarrantyDisplay(jobcard) || "—"}
+                  </p>
                 </div>
               </div>
 
-              {jobcard.parts && jobcard.parts.length > 0 && (() => {
-                const getWarrantyTagForPart = (part) => {
-                  const isBattery =
-                    part?.salesType === "battery" ||
-                    part?.replacementType === "battery";
-                  const isCharger =
-                    part?.salesType === "charger" ||
-                    part?.replacementType === "charger";
-                  if (!isBattery && !isCharger) return null;
+              {jobcard.parts &&
+                jobcard.parts.length > 0 &&
+                (() => {
+                  const getWarrantyTagForPart = (part) => {
+                    const isBattery =
+                      part?.salesType === "battery" ||
+                      part?.replacementType === "battery";
+                    const isCharger =
+                      part?.salesType === "charger" ||
+                      part?.replacementType === "charger";
+                    if (!isBattery && !isCharger) return null;
 
-                  const ws = String(part?.warrantyStatus ?? "").toLowerCase();
-                  const isWarranty =
-                    ws &&
-                    ws !== "nowarranty" &&
-                    ws !== "no warranty" &&
-                    ws !== "withoutwarranty" &&
-                    ws !== "without warranty" &&
-                    ws !== "none";
-                  return isWarranty ? "W" : "NW";
-                };
+                    const ws = String(part?.warrantyStatus ?? "").toLowerCase();
+                    const isWarranty =
+                      ws &&
+                      ws !== "nowarranty" &&
+                      ws !== "no warranty" &&
+                      ws !== "withoutwarranty" &&
+                      ws !== "without warranty" &&
+                      ws !== "none";
+                    return isWarranty ? "W" : "NW";
+                  };
 
-                const grouped = { service: [], replacement: [], sales: [] };
-                jobcard.parts.forEach((part) => {
-                  const type = ["service", "replacement", "sales"].includes(part.partType)
-                    ? part.partType
-                    : (jobcard.jobcardType || "service");
-                  grouped[type].push(part);
-                });
+                  const grouped = { service: [], replacement: [], sales: [] };
+                  jobcard.parts.forEach((part) => {
+                    const type = ["service", "replacement", "sales"].includes(
+                      part.partType,
+                    )
+                      ? part.partType
+                      : jobcard.jobcardType || "service";
+                    grouped[type].push(part);
+                  });
 
-                const categories = [
-                  { key: "service", label: "🔧 Service", border: "#3b82f6", bg: "#eff6ff", chip: "#3b82f6" },
-                  { key: "replacement", label: "🔄 Replacement", border: "#10b981", bg: "#ecfdf5", chip: "#10b981" },
-                  { key: "sales", label: "💰 Sales", border: "#8b5cf6", bg: "#f5f3ff", chip: "#8b5cf6" },
-                ];
+                  const categories = [
+                    {
+                      key: "service",
+                      label: "🔧 Service",
+                      border: "#3b82f6",
+                      bg: "#eff6ff",
+                      chip: "#3b82f6",
+                    },
+                    {
+                      key: "replacement",
+                      label: "🔄 Replacement",
+                      border: "#10b981",
+                      bg: "#ecfdf5",
+                      chip: "#10b981",
+                    },
+                    {
+                      key: "sales",
+                      label: "💰 Sales",
+                      border: "#8b5cf6",
+                      bg: "#f5f3ff",
+                      chip: "#8b5cf6",
+                    },
+                  ];
 
-                return (
-                  <div
-                    style={{
-                      marginBottom: "1rem",
-                      padding: "1rem",
-                      backgroundColor: "#f8fafc",
-                      borderRadius: "0.5rem",
-                      border: "1px solid #cbd5e1",
-                    }}
-                  >
-                    <p
+                  return (
+                    <div
                       style={{
-                        margin: "0 0 0.75rem 0",
-                        fontSize: "0.875rem",
-                        color: "#334155",
-                        fontWeight: 700,
+                        marginBottom: "1rem",
+                        padding: "1rem",
+                        backgroundColor: "#f8fafc",
+                        borderRadius: "0.5rem",
+                        border: "1px solid #cbd5e1",
                       }}
                     >
-                      Parts Overview ({jobcard.parts.length})
-                    </p>
+                      <p
+                        style={{
+                          margin: "0 0 0.75rem 0",
+                          fontSize: "0.875rem",
+                          color: "#334155",
+                          fontWeight: 700,
+                        }}
+                      >
+                        Parts Overview ({jobcard.parts.length})
+                      </p>
 
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                      {categories.map((category) =>
-                        grouped[category.key].length > 0 ? (
-                          <div
-                            key={category.key}
-                            style={{
-                              padding: "0.75rem",
-                              borderRadius: "0.5rem",
-                              border: `1px solid ${category.border}`,
-                              backgroundColor: category.bg,
-                            }}
-                          >
-                            <p
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.75rem",
+                        }}
+                      >
+                        {categories.map((category) =>
+                          grouped[category.key].length > 0 ? (
+                            <div
+                              key={category.key}
                               style={{
-                                margin: "0 0 0.5rem 0",
-                                fontSize: "0.8125rem",
-                                fontWeight: 700,
-                                color: "#0f172a",
+                                padding: "0.75rem",
+                                borderRadius: "0.5rem",
+                                border: `1px solid ${category.border}`,
+                                backgroundColor: category.bg,
                               }}
                             >
-                              {category.label} ({grouped[category.key].length})
-                            </p>
+                              <p
+                                style={{
+                                  margin: "0 0 0.5rem 0",
+                                  fontSize: "0.8125rem",
+                                  fontWeight: 700,
+                                  color: "#0f172a",
+                                }}
+                              >
+                                {category.label} ({grouped[category.key].length}
+                                )
+                              </p>
 
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                              {grouped[category.key].map((part, index) => {
-                                const scrapQty =
-                                  part.partType === "sales" &&
-                                  part.salesType === "battery" &&
-                                  part.scrapAvailable &&
-                                  (Number(part.scrapQuantity) || 0) > 0
-                                    ? Math.max(0, Number(part.scrapQuantity) || 0)
-                                    : 0;
-                                const showOldChargerTrade =
-                                  partShowsCustomerOldChargerTradeIn(part);
-                                const partChipStacked =
-                                  scrapQty > 0 || showOldChargerTrade;
-                                return (
-                                <span
-                                  key={`${category.key}-${index}`}
-                                  style={{
-                                    padding: "0.45rem 0.65rem",
-                                    fontSize: "0.8125rem",
-                                    backgroundColor: category.chip,
-                                    borderRadius: "0.375rem",
-                                    color: "#ffffff",
-                                    fontWeight: 500,
-                                    display: "inline-flex",
-                                    flexDirection: partChipStacked
-                                      ? "column"
-                                      : "row",
-                                    alignItems: partChipStacked
-                                      ? "stretch"
-                                      : "center",
-                                    gap: partChipStacked ? "0.35rem" : "0.45rem",
-                                  }}
-                                >
-                                  <span
-                                    style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "0.45rem",
-                                      flexWrap: "wrap",
-                                    }}
-                                  >
-                                  <span>
-                                    {(() => {
-                                      const tags = [];
-                                      if (
-                                        part.salesType === "battery" ||
-                                        part.replacementType === "battery"
-                                      ) {
-                                        tags.push("battery");
-                                      }
-                                      if (
-                                        part.salesType === "charger" ||
-                                        part.replacementType === "charger"
-                                      ) {
-                                        tags.push("charger");
-                                      }
-                                      if (
-                                        part.partType === "replacement" ||
-                                        part.replacementType
-                                      ) {
-                                        tags.push("replacement");
-                                      }
-                                      // Append model names when present and no battery/charger/replacement tag
-                                      const modelNames = Array.isArray(
-                                        part.models
-                                      )
-                                        ? part.models.filter(Boolean)
-                                        : [];
-                                      if (!tags.length && modelNames.length) {
-                                        tags.push(...modelNames);
-                                      }
-                                      const typeSuffix = tags.length
-                                        ? ` <${tags.join(", ")}>`
-                                        : "";
-                                      let label = part.spareName;
-                                      if (part.salesType === "oldScooty") {
-                                        const rawPmc = String(part.pmcNo || "").trim();
-                                        const pmcDisplay = rawPmc
-                                          ? `PMC-${rawPmc.replace(/^PMC-?/i, "")}`
-                                          : "";
-                                        label = pmcDisplay
-                                          ? `Old Scooty - ${label} (${pmcDisplay})`
-                                          : `Old Scooty - ${label}`;
-                                      }
-                                      if (part.selectedColor) {
-                                        label += ` (${part.selectedColor})`;
-                                      }
-                                      return `${label}${typeSuffix}`;
-                                    })()}
-                                  </span>
-                                  {(() => {
-                                    const tag = getWarrantyTagForPart(part);
-                                    if (!tag) return null;
-                                    const styles =
-                                      tag === "W"
-                                        ? {
-                                            backgroundColor: "#dcfce7",
-                                            borderColor: "#86efac",
-                                            color: "#166534",
-                                          }
-                                        : {
-                                            backgroundColor: "#fee2e2",
-                                            borderColor: "#fecaca",
-                                            color: "#991b1b",
-                                          };
-                                    return (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: "0.5rem",
+                                }}
+                              >
+                                {grouped[category.key].map((part, index) => {
+                                  const scrapQty =
+                                    part.partType === "sales" &&
+                                    part.salesType === "battery" &&
+                                    part.scrapAvailable &&
+                                    (Number(part.scrapQuantity) || 0) > 0
+                                      ? Math.max(
+                                          0,
+                                          Number(part.scrapQuantity) || 0,
+                                        )
+                                      : 0;
+                                  const showOldChargerTrade =
+                                    partShowsCustomerOldChargerTradeIn(part);
+                                  const partChipStacked =
+                                    scrapQty > 0 || showOldChargerTrade;
+                                  return (
+                                    <span
+                                      key={`${category.key}-${index}`}
+                                      style={{
+                                        padding: "0.45rem 0.65rem",
+                                        fontSize: "0.8125rem",
+                                        backgroundColor: category.chip,
+                                        borderRadius: "0.375rem",
+                                        color: "#ffffff",
+                                        fontWeight: 500,
+                                        display: "inline-flex",
+                                        flexDirection: partChipStacked
+                                          ? "column"
+                                          : "row",
+                                        alignItems: partChipStacked
+                                          ? "stretch"
+                                          : "center",
+                                        gap: partChipStacked
+                                          ? "0.35rem"
+                                          : "0.45rem",
+                                      }}
+                                    >
                                       <span
                                         style={{
-                                          padding: "0.1rem 0.35rem",
-                                          borderRadius: "0.25rem",
-                                          backgroundColor: styles.backgroundColor,
-                                          border: `1px solid ${styles.borderColor}`,
-                                          color: styles.color,
-                                          fontSize: "0.72rem",
-                                          fontWeight: 800,
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "0.45rem",
+                                          flexWrap: "wrap",
                                         }}
-                                        title={tag === "W" ? "Warranty" : "No Warranty"}
                                       >
-                                        {tag}
+                                        <span>
+                                          {(() => {
+                                            const tags = [];
+                                            if (
+                                              part.salesType === "battery" ||
+                                              part.replacementType === "battery"
+                                            ) {
+                                              tags.push("battery");
+                                            }
+                                            if (
+                                              part.salesType === "charger" ||
+                                              part.replacementType === "charger"
+                                            ) {
+                                              tags.push("charger");
+                                            }
+                                            if (
+                                              part.partType === "replacement" ||
+                                              part.replacementType
+                                            ) {
+                                              tags.push("replacement");
+                                            }
+                                            // Append model names when present and no battery/charger/replacement tag
+                                            const modelNames = Array.isArray(
+                                              part.models,
+                                            )
+                                              ? part.models.filter(Boolean)
+                                              : [];
+                                            if (
+                                              !tags.length &&
+                                              modelNames.length
+                                            ) {
+                                              tags.push(...modelNames);
+                                            }
+                                            const typeSuffix = tags.length
+                                              ? ` <${tags.join(", ")}>`
+                                              : "";
+                                            let label = part.spareName;
+                                            if (
+                                              part.salesType === "oldScooty"
+                                            ) {
+                                              const rawPmc = String(
+                                                part.pmcNo || "",
+                                              ).trim();
+                                              const pmcDisplay = rawPmc
+                                                ? `PMC-${rawPmc.replace(/^PMC-?/i, "")}`
+                                                : "";
+                                              label = pmcDisplay
+                                                ? `Old Scooty - ${label} (${pmcDisplay})`
+                                                : `Old Scooty - ${label}`;
+                                            }
+                                            if (part.selectedColor) {
+                                              label += ` (${part.selectedColor})`;
+                                            }
+                                            return `${label}${typeSuffix}`;
+                                          })()}
+                                        </span>
+                                        {(() => {
+                                          const tag =
+                                            getWarrantyTagForPart(part);
+                                          if (!tag) return null;
+                                          const styles =
+                                            tag === "W"
+                                              ? {
+                                                  backgroundColor: "#dcfce7",
+                                                  borderColor: "#86efac",
+                                                  color: "#166534",
+                                                }
+                                              : {
+                                                  backgroundColor: "#fee2e2",
+                                                  borderColor: "#fecaca",
+                                                  color: "#991b1b",
+                                                };
+                                          return (
+                                            <span
+                                              style={{
+                                                padding: "0.1rem 0.35rem",
+                                                borderRadius: "0.25rem",
+                                                backgroundColor:
+                                                  styles.backgroundColor,
+                                                border: `1px solid ${styles.borderColor}`,
+                                                color: styles.color,
+                                                fontSize: "0.72rem",
+                                                fontWeight: 800,
+                                              }}
+                                              title={
+                                                tag === "W"
+                                                  ? "Warranty"
+                                                  : "No Warranty"
+                                              }
+                                            >
+                                              {tag}
+                                            </span>
+                                          );
+                                        })()}
+                                        <span
+                                          style={{
+                                            marginLeft: partChipStacked
+                                              ? 0
+                                              : "auto",
+                                            padding: "0.1rem 0.35rem",
+                                            backgroundColor:
+                                              "rgba(255, 255, 255, 0.2)",
+                                            borderRadius: "0.25rem",
+                                            fontSize: "0.72rem",
+                                            fontWeight: 700,
+                                          }}
+                                        >
+                                          Qty: {part.quantity}
+                                        </span>
                                       </span>
-                                    );
-                                  })()}
-                                  <span
-                                    style={{
-                                      marginLeft: partChipStacked ? 0 : "auto",
-                                      padding: "0.1rem 0.35rem",
-                                      backgroundColor: "rgba(255, 255, 255, 0.2)",
-                                      borderRadius: "0.25rem",
-                                      fontSize: "0.72rem",
-                                      fontWeight: 700,
-                                    }}
-                                  >
-                                    Qty: {part.quantity}
-                                  </span>
-                                  </span>
-                                  {scrapQty > 0 && (
-                                    <span
-                                      style={{
-                                        fontSize: "0.7rem",
-                                        fontWeight: 600,
-                                        padding: "0.2rem 0.45rem",
-                                        backgroundColor: "rgba(254, 243, 199, 0.95)",
-                                        color: "#92400e",
-                                        borderRadius: "0.25rem",
-                                        border: "1px solid rgba(251, 191, 36, 0.6)",
-                                        alignSelf: "flex-start",
-                                      }}
-                                      title={
-                                        String(part.batteryOldNew || "").toLowerCase() ===
-                                        "new"
-                                          ? "Old batteries received with this new battery sale"
-                                          : "Scrap received with this old battery sale"
-                                      }
-                                    >
-                                      Customer scrap available: ×{scrapQty}
+                                      {scrapQty > 0 && (
+                                        <span
+                                          style={{
+                                            fontSize: "0.7rem",
+                                            fontWeight: 600,
+                                            padding: "0.2rem 0.45rem",
+                                            backgroundColor:
+                                              "rgba(254, 243, 199, 0.95)",
+                                            color: "#92400e",
+                                            borderRadius: "0.25rem",
+                                            border:
+                                              "1px solid rgba(251, 191, 36, 0.6)",
+                                            alignSelf: "flex-start",
+                                          }}
+                                          title={
+                                            String(
+                                              part.batteryOldNew || "",
+                                            ).toLowerCase() === "new"
+                                              ? "Old batteries received with this new battery sale"
+                                              : "Scrap received with this old battery sale"
+                                          }
+                                        >
+                                          Customer scrap available: ×{scrapQty}
+                                        </span>
+                                      )}
+                                      {showOldChargerTrade && (
+                                        <span
+                                          style={{
+                                            fontSize: "0.7rem",
+                                            fontWeight: 600,
+                                            padding: "0.2rem 0.45rem",
+                                            backgroundColor:
+                                              "rgba(254, 243, 199, 0.95)",
+                                            color: "#92400e",
+                                            borderRadius: "0.25rem",
+                                            border:
+                                              "1px solid rgba(251, 191, 36, 0.6)",
+                                            alignSelf: "flex-start",
+                                          }}
+                                          title={
+                                            part.oldChargerName
+                                              ? `Customer old charger: ${part.oldChargerName}`
+                                              : "Old charger received from customer with this charger sale"
+                                          }
+                                        >
+                                          Customer old charger:{" "}
+                                          {customerOldChargerTradeInSummary(
+                                            part,
+                                          )}
+                                        </span>
+                                      )}
                                     </span>
-                                  )}
-                                  {showOldChargerTrade && (
-                                    <span
-                                      style={{
-                                        fontSize: "0.7rem",
-                                        fontWeight: 600,
-                                        padding: "0.2rem 0.45rem",
-                                        backgroundColor: "rgba(254, 243, 199, 0.95)",
-                                        color: "#92400e",
-                                        borderRadius: "0.25rem",
-                                        border: "1px solid rgba(251, 191, 36, 0.6)",
-                                        alignSelf: "flex-start",
-                                      }}
-                                      title={
-                                        part.oldChargerName
-                                          ? `Customer old charger: ${part.oldChargerName}`
-                                          : "Old charger received from customer with this charger sale"
-                                      }
-                                    >
-                                      Customer old charger:{" "}
-                                      {customerOldChargerTradeInSummary(part)}
-                                    </span>
-                                  )}
-                                </span>
-                                );
-                              })}
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        ) : null
-                      )}
+                          ) : null,
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })()}
+                  );
+                })()}
 
               <div
                 style={{
@@ -916,7 +1132,9 @@ export default function PendingJobcard() {
                   flexWrap: "wrap",
                 }}
               >
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <div
+                  style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
+                >
                   <button
                     onClick={() => setPrintingJobcard(jobcard)}
                     style={{
@@ -964,7 +1182,9 @@ export default function PendingJobcard() {
                   </button>
                 </div>
 
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <div
+                  style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
+                >
                   {/* For pending-payment jobcards, show Settle just left of Finalize */}
                   {jobcard.pendingAmount && jobcard.pendingAmount > 0 ? (
                     <button
@@ -1051,7 +1271,9 @@ export default function PendingJobcard() {
             overflow: "auto",
             boxSizing: "border-box",
           }}
-          onClick={(e) => e.target === e.currentTarget && setPrintingJobcard(null)}
+          onClick={(e) =>
+            e.target === e.currentTarget && setPrintingJobcard(null)
+          }
         >
           <div
             className="jobcard-print-modal-inner"

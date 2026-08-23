@@ -260,6 +260,13 @@ export default function AllJobcards() {
     }
   };
 
+  const returnToCustomer = () => {
+    const returnToQr = location.state?.returnToQr;
+    if (!returnToQr) return;
+    sessionStorage.setItem("qr-return-result", JSON.stringify(returnToQr));
+    navigate("/", { state: { returnToQr } });
+  };
+
   const calculatePartsTotal = (parts) => {
     if (!parts || parts.length === 0) return 0;
     // Only count non-replacement parts in totals
@@ -1520,19 +1527,31 @@ export default function AllJobcards() {
               <h2 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 600 }}>
                 Jobcard Details: {selectedJobcard.jobcardNumber}
               </h2>
-              <button
-                onClick={closeDetails}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "1.5rem",
-                  cursor: "pointer",
-                  color: "#6b7280",
-                  padding: "0.25rem",
-                }}
-              >
-                ×
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                {location.state?.returnToQr ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={returnToCustomer}
+                  >
+                    Back to Customer
+                  </button>
+                ) : null}
+                <button
+                  onClick={closeDetails}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: "1.5rem",
+                    cursor: "pointer",
+                    color: "#6b7280",
+                    padding: "0.25rem",
+                  }}
+                  aria-label="Close jobcard details"
+                >
+                  ×
+                </button>
+              </div>
             </div>
             {returnPath ? (
               <button
