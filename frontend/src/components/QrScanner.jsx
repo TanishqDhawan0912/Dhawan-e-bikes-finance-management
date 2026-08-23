@@ -190,6 +190,31 @@ export default function QrScanner({ onClose }) {
             }
           }
         }
+
+        // Laptops and some phones expose no rear-facing camera. Use the first
+        // available device after the rear-camera attempts have been exhausted.
+        if (!started && !cancelled) {
+          try {
+            const cameras = await Html5Qrcode.getCameras();
+            if (cameras.length > 0) {
+              await scanner.start(
+                cameras[0].id,
+                { ...baseConfig, fps: 15, qrbox: makeQrbox(0.78) },
+                onScanSuccess,
+                onScanFailure,
+              );
+              started = true;
+            }
+          } catch (startError) {
+            lastError = startError;
+            if (import.meta.env.DEV) {
+              console.warn("[QR] available-camera fallback failed", {
+                name: startError?.name,
+                message: startError?.message,
+              });
+            }
+          }
+        }
         if (!started) throw lastError || new Error("Unable to start camera");
 
         if (cancelled) return;
@@ -208,7 +233,9 @@ export default function QrScanner({ onClose }) {
         }
         if (!cancelled) {
           const name = cameraError?.name || "";
-          if (name === "NotAllowedError" || name === "SecurityError") {
+          if (!window.isSecureContext) {
+            setError("Camera access requires HTTPS. Open this app using its HTTPS address.");
+          } else if (name === "NotAllowedError" || name === "SecurityError") {
             setError(
               "Camera permission was denied. Allow camera access in your browser settings and try again.",
             );
