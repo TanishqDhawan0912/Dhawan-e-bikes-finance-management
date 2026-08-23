@@ -11,6 +11,7 @@ export default function PendingJobcard() {
   const navigate = useNavigate();
   const location = useLocation();
   const editedJobcardIdRef = useRef(null);
+  const [qrOpenedJobcardId, setQrOpenedJobcardId] = useState("");
   const [jobcards, setJobcards] = useState([]);
   const [filteredJobcards, setFilteredJobcards] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -95,6 +96,9 @@ export default function PendingJobcard() {
     const editedId = location.state?.editedJobcardId;
     if (editedId) {
       editedJobcardIdRef.current = editedId;
+      if (location.state?.returnToQr) {
+        setQrOpenedJobcardId(editedId);
+      }
       // Clear state so refresh doesn't re-scroll
       navigate(location.pathname, {
         replace: true,
@@ -176,6 +180,13 @@ export default function PendingJobcard() {
         scrollToAddParts: true,
       },
     });
+  };
+
+  const returnToCustomer = () => {
+    const returnToQr = location.state?.returnToQr;
+    if (!returnToQr) return;
+    sessionStorage.setItem("qr-return-result", JSON.stringify(returnToQr));
+    navigate("/", { state: { returnToQr } });
   };
 
   const handleFinalize = (jobcard) => {
@@ -1185,6 +1196,25 @@ export default function PendingJobcard() {
                 <div
                   style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
                 >
+                  {qrOpenedJobcardId === String(jobcard._id) &&
+                  location.state?.returnToQr ? (
+                    <button
+                      type="button"
+                      onClick={returnToCustomer}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        fontSize: "0.875rem",
+                        fontWeight: 500,
+                        borderRadius: "0.375rem",
+                        border: "1px solid #94a3b8",
+                        backgroundColor: "#f8fafc",
+                        color: "#334155",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Back to Customer
+                    </button>
+                  ) : null}
                   {/* For pending-payment jobcards, show Settle just left of Finalize */}
                   {jobcard.pendingAmount && jobcard.pendingAmount > 0 ? (
                     <button
