@@ -109,14 +109,67 @@ export default function CustomerQrProfile() {
   };
 
   const printQrSticker = () => {
-    const img = document.querySelector(".customer-qr-image");
-    if (img && !img.complete) {
-      // Wait until the QR image finishes loading so it appears on the printout
-      img.addEventListener("load", () => window.print(), { once: true });
-      img.addEventListener("error", () => window.print(), { once: true });
+    if (!qrImageUrl) return;
+
+    // Open a dedicated print window with only the QR sticker. This avoids
+    // the main app's fixed-height/overflow-hidden shell clipping the page
+    // to a blank sheet when printing the SPA route directly.
+    const printWindow = window.open("", "_blank", "width=480,height=640");
+    if (!printWindow) {
+      // Popup blocked: fall back to printing the current page
+      window.print();
       return;
     }
-    window.print();
+
+    const customerName = customer?.name || "";
+
+    printWindow.document.write(`<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Scooty QR Sticker</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; background: #fff; }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        font-family: system-ui, -apple-system, sans-serif;
+        color: #111827;
+      }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      p { font-size: 12px; color: #4b5563; margin: 0 0 12px; }
+      img { width: 320px; height: 320px; display: block; }
+      @page { margin: 0; }
+      @media print {
+        body { min-height: auto; padding: 8mm; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Dhawan E-Bikes</h1>
+    <p>${customerName ? `Owner: ${customerName}` : "Scooty QR Sticker"}</p>
+    <img id="qrImg" src="${qrImageUrl}" alt="QR code" />
+    <script>
+      var img = document.getElementById('qrImg');
+      function doPrint() {
+        window.focus();
+        window.print();
+        window.onafterprint = function () { window.close(); };
+      }
+      if (img.complete) {
+        doPrint();
+      } else {
+        img.onload = doPrint;
+        img.onerror = doPrint;
+      }
+    <\/script>
+  </body>
+</html>`);
+    printWindow.document.close();
   };
 
   return (
@@ -224,10 +277,7 @@ export default function CustomerQrProfile() {
                 />
               ) : null}
               <div className="customer-qr-print-actions">
-                <button
-                  className="btn btn-primary"
-                  onClick={printQrSticker}
-                >
+                <button className="btn btn-primary" onClick={printQrSticker}>
                   Print QR
                 </button>
               </div>
