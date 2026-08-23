@@ -2501,7 +2501,9 @@ button {
   width: 0.95rem;
   height: 0.95rem;
   border-radius: 50%;
-  box-shadow: 0 0 0 2px #ffffff, 0 1px 4px rgba(15, 23, 42, 0.35);
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 1px 4px rgba(15, 23, 42, 0.35);
 }
 
 .qr-type-dot.qr-type-green {

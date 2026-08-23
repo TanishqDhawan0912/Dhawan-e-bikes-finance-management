@@ -39,10 +39,105 @@ export default function QrScanner({ onClose }) {
     };
 
     const start = async () => {
+      const scanner = new Html5Qrcode("home-qr-reader");
+      scannerRef.current = scanner;
+
+      const config = {
+        fps: 30,
+        qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const size = Math.floor(
+            Math.min(viewfinderWidth, viewfinderHeight) * 0.85,
+          );
+          return { width: size, height: size };
+        },
+        aspectRatio: 4 / 3,
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        useBarCodeDetectorIfSupported: true,
+        disableFlip: false,
+        rememberLastUsedCamera: true,
+      };
+
+      const onScanSuccess = async (decodedText) => {
+        if (processingRef.current || !decodedText) return;
+        processingRef.current = true;
+        setFlash(true);
+        setError("");
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(60);
+        }
+        setStatus("Verifying QR code...");
+        try {
+          const qrToken = decodedText.trim();
+          if (import.meta.env.DEV) {
+            console.info("[QR] decoded value", {
+              qrDecoded: Boolean(qrToken),
+              valueLength: qrToken.length,
+              looksLikeUrl: /^https?:\/\//i.test(qrToken),
+              jwtExists: Boolean(localStorage.getItem("token")?.trim()),
+            });
+          }
+          const token = localStorage.getItem("token")?.trim();
+          if (!token || token === "undefined" || token === "null") {
+            if (import.meta.env.DEV) {
+              console.warn("[QR] request skipped: JWT missing");
+            }
+            setError(
+              "No saved login session on this device. Log in once using Admin.",
+            );
+            setStatus("Login required");
+            processingRef.current = false;
+            return;
+          }
+
+          const response = await fetchWithRetry("/qr/scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ qrToken }),
+          });
+          const data = await response.json();
+          if (!response.ok || !data?.success || !data?.customer) {
+            throw new Error("Customer QR code not found");
+          }
+          await stop();
+          setCustomer(data.customer);
+          setJobcards(Array.isArray(data.jobcards) ? data.jobcards : []);
+          setTotalPendingAmount(Number(data.totalPendingAmount) || 0);
+          setStatus("Customer found");
+        } catch (scanError) {
+          if (import.meta.env.DEV) {
+            console.warn("[QR] scan request failed", {
+              status: scanError?.status || "no-response",
+              responseError: scanError?.responseBody || scanError?.message,
+            });
+          }
+          if (scanError?.status === 401) {
+            setError("Your login session has expired. Please log in again.");
+          } else if (scanError?.status === 403) {
+            setError("You are not authorized to view this customer.");
+          } else if (scanError?.status === 404) {
+            setError("QR customer not found.");
+          } else if (scanError?.status) {
+            setError("Unable to scan this QR code.");
+          } else {
+            setError("Unable to connect to the server.");
+          }
+          setFlash(false);
+          setStatus("Unable to complete QR lookup");
+          processingRef.current = false;
+          if (errorTimeoutRef.current) {
+            clearTimeout(errorTimeoutRef.current);
+          }
+          // Auto-clear the message so scanning feels continuous.
+          errorTimeoutRef.current = setTimeout(() => setError(""), 2500);
+        }
+      };
+
+      const onScanFailure = () => {};
+
       try {
-        const scanner = new Html5Qrcode("home-qr-reader");
-        scannerRef.current = scanner;
-        await scanner.start(
+        // Ideal: HD stream with continuous autofocus. Safari on iOS rejects
+        // the focusMode constraint, so fall back to simpler constraints.
+        const cameraCandidates = [
           {
             facingMode: "environment",
             width: { ideal: 1280 },
@@ -51,97 +146,31 @@ export default function QrScanner({ onClose }) {
             advanced: [{ focusMode: "continuous" }],
           },
           {
-            fps: 30,
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const size = Math.floor(
-                Math.min(viewfinderWidth, viewfinderHeight) * 0.85,
-              );
-              return { width: size, height: size };
-            },
-            aspectRatio: 4 / 3,
-            formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-            useBarCodeDetectorIfSupported: true,
-            disableFlip: false,
-            rememberLastUsedCamera: true,
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
           },
-          async (decodedText) => {
-            if (processingRef.current || !decodedText) return;
-            processingRef.current = true;
-            setFlash(true);
-            setError("");
-            if (typeof navigator !== "undefined" && navigator.vibrate) {
-              navigator.vibrate(60);
-            }
-            setStatus("Verifying QR code...");
-            try {
-              const qrToken = decodedText.trim();
-              if (import.meta.env.DEV) {
-                console.info("[QR] decoded value", {
-                  qrDecoded: Boolean(qrToken),
-                  valueLength: qrToken.length,
-                  looksLikeUrl: /^https?:\/\//i.test(qrToken),
-                  jwtExists: Boolean(localStorage.getItem("token")?.trim()),
-                });
-              }
-              const token = localStorage.getItem("token")?.trim();
-              if (!token || token === "undefined" || token === "null") {
-                if (import.meta.env.DEV) {
-                  console.warn("[QR] request skipped: JWT missing");
-                }
-                setError(
-                  "No saved login session on this device. Log in once using Admin.",
-                );
-                setStatus("Login required");
-                processingRef.current = false;
-                return;
-              }
+          { facingMode: "environment" },
+        ];
 
-              const response = await fetchWithRetry("/qr/scan", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ qrToken }),
-              });
-              const data = await response.json();
-              if (!response.ok || !data?.success || !data?.customer) {
-                throw new Error("Customer QR code not found");
-              }
-              await stop();
-              setCustomer(data.customer);
-              setJobcards(Array.isArray(data.jobcards) ? data.jobcards : []);
-              setTotalPendingAmount(Number(data.totalPendingAmount) || 0);
-              setStatus("Customer found");
-            } catch (scanError) {
-              if (import.meta.env.DEV) {
-                console.warn("[QR] scan request failed", {
-                  status: scanError?.status || "no-response",
-                  responseError: scanError?.responseBody || scanError?.message,
-                });
-              }
-              if (scanError?.status === 401) {
-                setError(
-                  "Your login session has expired. Please log in again.",
-                );
-              } else if (scanError?.status === 403) {
-                setError("You are not authorized to view this customer.");
-              } else if (scanError?.status === 404) {
-                setError("QR customer not found.");
-              } else if (scanError?.status) {
-                setError("Unable to scan this QR code.");
-              } else {
-                setError("Unable to connect to the server.");
-              }
-              setFlash(false);
-              setStatus("Unable to complete QR lookup");
-              processingRef.current = false;
-              if (errorTimeoutRef.current) {
-                clearTimeout(errorTimeoutRef.current);
-              }
-              // Auto-clear the message so scanning feels continuous.
-              errorTimeoutRef.current = setTimeout(() => setError(""), 2500);
-            }
-          },
-          () => {},
-        );
+        let started = false;
+        let lastError = null;
+        for (const cameraConfig of cameraCandidates) {
+          if (started || cancelled) break;
+          try {
+            await scanner.start(
+              cameraConfig,
+              config,
+              onScanSuccess,
+              onScanFailure,
+            );
+            started = true;
+          } catch (startError) {
+            lastError = startError;
+          }
+        }
+        if (!started) throw lastError || new Error("Unable to start camera");
+
         if (cancelled) return;
         setStatus("Scan QR code");
         try {
@@ -152,9 +181,23 @@ export default function QrScanner({ onClose }) {
         } catch {
           // Torch capability detection is not supported on this browser.
         }
-      } catch {
+      } catch (cameraError) {
+        if (import.meta.env.DEV) {
+          console.warn("[QR] camera start failed", cameraError);
+        }
         if (!cancelled) {
-          setError("Camera permission was denied or no camera is available.");
+          const name = cameraError?.name || "";
+          if (name === "NotAllowedError" || name === "SecurityError") {
+            setError(
+              "Camera permission was denied. Allow camera access in your browser settings and try again.",
+            );
+          } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+            setError("No camera is available on this device.");
+          } else {
+            setError(
+              `Camera could not be started${cameraError?.message ? `: ${cameraError.message}` : "."}`,
+            );
+          }
           setStatus("Camera unavailable");
         }
       }
