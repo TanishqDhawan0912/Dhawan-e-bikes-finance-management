@@ -4743,6 +4743,27 @@ body {
   body * {
     visibility: hidden;
   }
+
+  /* Un-clip the app shell for printing. The app scrolls inside .app-main
+     while body/#root/.app-root are fixed-height with overflow hidden, so
+     Chrome clips printed output to the on-screen scroll viewport and the
+     QR page prints as a blank sheet. Reset to normal flow for print. */
+  html,
+  body,
+  #root,
+  .app-root,
+  .app-main {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .app-root,
+  .app-main {
+    display: block !important;
+  }
+
   .jobcard-print-modal-overlay,
   .jobcard-print-modal-overlay * {
     visibility: visible;

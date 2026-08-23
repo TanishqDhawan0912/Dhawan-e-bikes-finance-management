@@ -120,13 +120,17 @@ export default function Customers() {
       const res = await fetchWithRetry(
         isEditing ? `/customers/${editingCustomerId}` : "/customers",
         {
-        method: isEditing ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+          method: isEditing ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
         },
       );
       const data = await res.json();
-      setSaveMessage(isEditing ? "Customer updated successfully." : "Customer saved successfully.");
+      setSaveMessage(
+        isEditing
+          ? "Customer updated successfully."
+          : "Customer saved successfully.",
+      );
       setForm({
         name: "",
         place: "",
@@ -196,7 +200,7 @@ export default function Customers() {
 
       <section className="customer-actions-panel">
         <form className="customer-form" onSubmit={onCreateOrUpdateCustomer}>
-            <h3>{editingCustomerId ? "Edit Customer" : "Add Customer"}</h3>
+          <h3>{editingCustomerId ? "Edit Customer" : "Add Customer"}</h3>
           <div className="customer-form-grid">
             <input
               type="text"
@@ -249,7 +253,11 @@ export default function Customers() {
             </div>
           </div>
           <button className="btn btn-primary" type="submit" disabled={isSaving}>
-            {isSaving ? "Saving..." : editingCustomerId ? "Update Customer" : "Save Customer"}
+            {isSaving
+              ? "Saving..."
+              : editingCustomerId
+                ? "Update Customer"
+                : "Save Customer"}
           </button>
           {editingCustomerId ? (
             <button

@@ -37,14 +37,12 @@ export default function CustomerQrProfile() {
 
   const warrantyJobcard = useMemo(
     () =>
-      jobcards.find(
-        (row) => row.warrantyType && row.warrantyType !== "none",
-      ),
+      jobcards.find((row) => row.warrantyType && row.warrantyType !== "none"),
     [jobcards],
   );
 
-  const warrantyStatus = customer?.warrantyStatus ||
-    (warrantyJobcard ? "warranty" : "none");
+  const warrantyStatus =
+    customer?.warrantyStatus || (warrantyJobcard ? "warranty" : "none");
   const warrantyDate = customer?.warrantyDate || warrantyJobcard?.date || "";
 
   const customerType = customer?.customerType || "green";
@@ -108,6 +106,17 @@ export default function CustomerQrProfile() {
         },
       },
     });
+  };
+
+  const printQrSticker = () => {
+    const img = document.querySelector(".customer-qr-image");
+    if (img && !img.complete) {
+      // Wait until the QR image finishes loading so it appears on the printout
+      img.addEventListener("load", () => window.print(), { once: true });
+      img.addEventListener("error", () => window.print(), { once: true });
+      return;
+    }
+    window.print();
   };
 
   return (
@@ -217,7 +226,7 @@ export default function CustomerQrProfile() {
               <div className="customer-qr-print-actions">
                 <button
                   className="btn btn-primary"
-                  onClick={() => window.print()}
+                  onClick={printQrSticker}
                 >
                   Print QR
                 </button>

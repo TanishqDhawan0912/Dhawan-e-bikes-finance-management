@@ -207,7 +207,11 @@ const updateCustomer = async (req, res) => {
   } catch (error) {
     console.error("Error updating customer:", error);
     if (error?.code === 11000) {
-      return res.status(409).json({ message: "A customer with this name and mobile already exists" });
+      return res
+        .status(409)
+        .json({
+          message: "A customer with this name and mobile already exists",
+        });
     }
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -238,7 +242,9 @@ const getCustomerHistoryById = async (req, res) => {
 
 const updateCustomerType = async (req, res) => {
   try {
-    const customerType = String(req.body?.customerType || "").trim().toLowerCase();
+    const customerType = String(req.body?.customerType || "")
+      .trim()
+      .toLowerCase();
     if (!["green", "red", "black"].includes(customerType)) {
       return res.status(400).json({ message: "Invalid customer type" });
     }
