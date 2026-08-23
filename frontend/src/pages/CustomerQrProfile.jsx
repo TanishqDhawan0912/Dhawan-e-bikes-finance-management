@@ -27,6 +27,7 @@ export default function CustomerQrProfile() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [qrToken, setQrToken] = useState("");
+  const [qrImageData, setQrImageData] = useState("");
 
   const totalPending = useMemo(() => {
     return jobcards.reduce(
@@ -63,9 +64,12 @@ export default function CustomerQrProfile() {
   };
 
   const qrImageUrl = useMemo(() => {
+    // Prefer locally generated data URL (reliable for print); fall back to
+    // the external API only for on-screen display when no data URL exists yet.
+    if (qrImageData) return qrImageData;
     if (!qrToken) return "";
     return `https://api.qrserver.com/v1/create-qr-code/?size=420x420&ecc=H&qzone=2&data=${encodeURIComponent(qrToken)}`;
-  }, [qrToken]);
+  }, [qrToken, qrImageData]);
 
   useEffect(() => {
     const load = async () => {
@@ -79,9 +83,10 @@ export default function CustomerQrProfile() {
         const data = await res.json();
         setCustomer(data?.customer || null);
         setJobcards(Array.isArray(data?.jobcards) ? data.jobcards : []);
-        const tokenResponse = await fetchWithRetry(`/qr/customers/${id}/token`);
-        const tokenData = await tokenResponse.json();
-        setQrToken(tokenData?.qrToken || "");
+        const imageResponse = await fetchWithRetry(`/qr/customers/${id}/image`);
+        const imageData = await imageResponse.json();
+        setQrToken(imageData?.qrToken || "");
+        setQrImageData(imageData?.qrImage || "");
       } catch (e) {
         setError(e?.message || "Failed to load customer details");
         setCustomer(null);
@@ -109,7 +114,10 @@ export default function CustomerQrProfile() {
   };
 
   const printQrSticker = () => {
-    if (!qrImageUrl) return;
+    // Use the locally generated data URL so printing does not depend on a
+    // cross-origin image, which Chrome can fail to rasterize (blank page).
+    const imgSrc = qrImageData || qrImageUrl;
+    if (!imgSrc) return;
 
     // Open a dedicated print window with only the QR sticker. This avoids
     // the main app's fixed-height/overflow-hidden shell clipping the page
@@ -152,7 +160,7 @@ export default function CustomerQrProfile() {
   <body>
     <h1>Dhawan E-Bikes</h1>
     <p>${customerName ? `Owner: ${customerName}` : "Scooty QR Sticker"}</p>
-    <img id="qrImg" src="${qrImageUrl}" alt="QR code" />
+    <img id="qrImg" src="${imgSrc}" alt="QR code" />
     <script>
       var img = document.getElementById('qrImg');
       function doPrint() {
