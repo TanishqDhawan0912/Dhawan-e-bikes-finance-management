@@ -1527,31 +1527,20 @@ export default function AllJobcards() {
               <h2 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 600 }}>
                 Jobcard Details: {selectedJobcard.jobcardNumber}
               </h2>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                {location.state?.returnToQr ? (
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={returnToCustomer}
-                  >
-                    Back to Customer
-                  </button>
-                ) : null}
-                <button
-                  onClick={closeDetails}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    fontSize: "1.5rem",
-                    cursor: "pointer",
-                    color: "#6b7280",
-                    padding: "0.25rem",
-                  }}
-                  aria-label="Close jobcard details"
-                >
-                  ×
-                </button>
-              </div>
+              <button
+                onClick={closeDetails}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                  color: "#6b7280",
+                  padding: "0.25rem",
+                }}
+                aria-label="Close jobcard details"
+              >
+                ×
+              </button>
             </div>
             {returnPath ? (
               <button
@@ -2143,9 +2132,28 @@ export default function AllJobcards() {
               style={{
                 display: "flex",
                 justifyContent: "flex-end",
+                gap: "0.75rem",
                 marginTop: "1.5rem",
               }}
             >
+              {location.state?.returnToQr ? (
+                <button
+                  type="button"
+                  onClick={returnToCustomer}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    fontSize: "0.875rem",
+                    fontWeight: 500,
+                    borderRadius: "0.375rem",
+                    border: "1px solid #94a3b8",
+                    backgroundColor: "#f8fafc",
+                    color: "#334155",
+                    cursor: "pointer",
+                  }}
+                >
+                  Back to Customer
+                </button>
+              ) : null}
               <button
                 onClick={() => {
                   setShowDetailsModal(false);
