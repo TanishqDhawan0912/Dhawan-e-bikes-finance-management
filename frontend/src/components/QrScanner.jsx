@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { useNavigate } from "react-router-dom";
+import { FiZap, FiZapOff } from "react-icons/fi";
 import { fetchWithRetry } from "../config/api";
 
 export default function QrScanner({ onClose }) {
   const navigate = useNavigate();
   const scannerRef = useRef(null);
   const processingRef = useRef(false);
+  const errorTimeoutRef = useRef(null);
   const [status, setStatus] = useState("Opening camera...");
   const [error, setError] = useState("");
   const [customer, setCustomer] = useState(null);
   const [jobcards, setJobcards] = useState([]);
   const [showJobcards, setShowJobcards] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,12 +41,18 @@ export default function QrScanner({ onClose }) {
         const scanner = new Html5Qrcode("home-qr-reader");
         scannerRef.current = scanner;
         await scanner.start(
-          { facingMode: "environment" },
           {
-            fps: 15,
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 },
+            advanced: [{ focusMode: "continuous" }],
+          },
+          {
+            fps: 30,
             qrbox: (viewfinderWidth, viewfinderHeight) => {
               const size = Math.floor(
-                Math.min(viewfinderWidth, viewfinderHeight) * 0.78,
+                Math.min(viewfinderWidth, viewfinderHeight) * 0.85,
               );
               return { width: size, height: size };
             },
@@ -49,10 +60,16 @@ export default function QrScanner({ onClose }) {
             formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
             useBarCodeDetectorIfSupported: true,
             disableFlip: false,
+            rememberLastUsedCamera: true,
           },
           async (decodedText) => {
             if (processingRef.current || !decodedText) return;
             processingRef.current = true;
+            setFlash(true);
+            setError("");
+            if (typeof navigator !== "undefined" && navigator.vibrate) {
+              navigator.vibrate(60);
+            }
             setStatus("Verifying QR code...");
             try {
               const qrToken = decodedText.trim();
@@ -110,13 +127,28 @@ export default function QrScanner({ onClose }) {
               } else {
                 setError("Unable to connect to the server.");
               }
+              setFlash(false);
               setStatus("Unable to complete QR lookup");
               processingRef.current = false;
+              if (errorTimeoutRef.current) {
+                clearTimeout(errorTimeoutRef.current);
+              }
+              // Auto-clear the message so scanning feels continuous.
+              errorTimeoutRef.current = setTimeout(() => setError(""), 2500);
             }
           },
           () => {},
         );
-        if (!cancelled) setStatus("Scan QR code");
+        if (cancelled) return;
+        setStatus("Scan QR code");
+        try {
+          const capabilities = scanner.getRunningTrackCapabilities?.();
+          if (capabilities && "torch" in capabilities) {
+            setTorchSupported(true);
+          }
+        } catch {
+          // Torch capability detection is not supported on this browser.
+        }
       } catch {
         if (!cancelled) {
           setError("Camera permission was denied or no camera is available.");
@@ -129,9 +161,24 @@ export default function QrScanner({ onClose }) {
     return () => {
       cancelled = true;
       processingRef.current = true;
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+      }
       stop();
     };
   }, []);
+
+  const toggleTorch = async () => {
+    const scanner = scannerRef.current;
+    if (!scanner) return;
+    const next = !torchOn;
+    try {
+      await scanner.applyVideoConstraints({ advanced: [{ torch: next }] });
+      setTorchOn(next);
+    } catch {
+      // This device or browser does not support torch control.
+    }
+  };
 
   return (
     <div
@@ -154,7 +201,31 @@ export default function QrScanner({ onClose }) {
         </div>
 
         {!customer ? (
-          <div id="home-qr-reader" className="qr-scanner-reader" />
+          <div className="qr-scanner-viewfinder">
+            <div id="home-qr-reader" className="qr-scanner-reader" />
+            <div className="qr-scanner-overlay" aria-hidden="true">
+              <div className={`qr-scanner-frame${flash ? " qr-flash" : ""}`}>
+                <span className="qr-corner qr-corner-tl" />
+                <span className="qr-corner qr-corner-tr" />
+                <span className="qr-corner qr-corner-bl" />
+                <span className="qr-corner qr-corner-br" />
+                <span className="qr-scan-line" />
+              </div>
+            </div>
+            {torchSupported ? (
+              <button
+                type="button"
+                className={`qr-torch-btn${torchOn ? " qr-torch-on" : ""}`}
+                onClick={toggleTorch}
+                aria-label={
+                  torchOn ? "Turn flashlight off" : "Turn flashlight on"
+                }
+                aria-pressed={torchOn}
+              >
+                {torchOn ? <FiZap /> : <FiZapOff />}
+              </button>
+            ) : null}
+          </div>
         ) : null}
         <p className="qr-scanner-status">{status}</p>
         {error ? <p className="qr-scanner-error">{error}</p> : null}
