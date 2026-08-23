@@ -88,9 +88,15 @@ const upsertCustomer = async (req, res) => {
     const name = cleanText(req.body?.name);
     const place = cleanText(req.body?.place);
     const mobile = cleanText(req.body?.mobile);
+    const customerType = String(req.body?.customerType || "green")
+      .trim()
+      .toLowerCase();
     const warranty = readWarrantyFields(req.body);
     if (warranty.error) {
       return res.status(400).json({ message: warranty.error });
+    }
+    if (!["green", "red", "black"].includes(customerType)) {
+      return res.status(400).json({ message: "Invalid customer type" });
     }
     const mobileNormalized = normalizeMobile(mobile);
     const nameNormalized = normalizeName(name);
@@ -112,6 +118,7 @@ const upsertCustomer = async (req, res) => {
           mobile,
           mobileNormalized,
           nameNormalized,
+          customerType,
           warrantyStatus: warranty.warrantyStatus,
           warrantyDate: warranty.warrantyDate,
         },

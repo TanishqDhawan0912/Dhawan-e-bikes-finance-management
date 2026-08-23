@@ -392,6 +392,19 @@ export default function QrScanner({ onClose, initialResult = null }) {
               <button
                 type="button"
                 className="btn btn-secondary"
+                onClick={() => {
+                  const returnToQr = { customer, jobcards, totalPendingAmount };
+                  onClose();
+                  navigate("/customers", {
+                    state: { editCustomer: customer, returnToQr },
+                  });
+                }}
+              >
+                Edit Customer
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
                 onClick={() => setShowJobcards((visible) => !visible)}
               >
                 View Job Cards

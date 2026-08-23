@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { fetchWithRetry } from "../config/api";
 
 function formatMoney(value) {
@@ -19,6 +19,7 @@ function formatDate(dateString) {
 }
 
 export default function Customers() {
+  const location = useLocation();
   const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
@@ -35,6 +36,7 @@ export default function Customers() {
     name: "",
     place: "",
     mobile: "",
+    customerType: "green",
     warrantyStatus: "none",
     warrantyDate: "",
   });
@@ -93,6 +95,37 @@ export default function Customers() {
     fetchCustomers();
   }, []);
 
+  useEffect(() => {
+    const customerFromQr = location.state?.editCustomer;
+    if (!customerFromQr?.id) return;
+
+    const loadCustomerForEditing = async () => {
+      try {
+        const response = await fetchWithRetry(
+          `/customers/${customerFromQr.id}/history`,
+          { method: "GET" },
+        );
+        const data = await response.json();
+        const customer = data?.customer;
+        if (!customer?._id) return;
+        setEditingCustomerId(customer._id);
+        setForm({
+          name: customer.name || "",
+          place: customer.place || "",
+          mobile: customer.mobile || "",
+          customerType: customer.customerType || "green",
+          warrantyStatus: customer.warrantyStatus || "none",
+          warrantyDate: customer.warrantyDate || "",
+        });
+        setSaveMessage("");
+      } catch (error) {
+        setCustomerError(error?.message || "Failed to load customer details.");
+      }
+    };
+
+    loadCustomerForEditing();
+  }, [location.state?.editCustomer]);
+
   const onSearchSubmit = (e) => {
     e.preventDefault();
     fetchCustomers(search);
@@ -105,6 +138,7 @@ export default function Customers() {
       name: String(form.name || "").trim(),
       place: String(form.place || "").trim(),
       mobile: String(form.mobile || "").trim(),
+      customerType: form.customerType || "green",
       warrantyStatus: form.warrantyStatus || "none",
       warrantyDate: form.warrantyDate || "",
     };
@@ -135,6 +169,7 @@ export default function Customers() {
         name: "",
         place: "",
         mobile: "",
+        customerType: "green",
         warrantyStatus: "none",
         warrantyDate: "",
       });
@@ -156,11 +191,11 @@ export default function Customers() {
       name: customer.name || "",
       place: customer.place || "",
       mobile: customer.mobile || "",
+      customerType: customer.customerType || "green",
       warrantyStatus: customer.warrantyStatus || "none",
       warrantyDate: customer.warrantyDate || "",
     });
     setSaveMessage("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const cancelEditingCustomer = () => {
@@ -169,10 +204,18 @@ export default function Customers() {
       name: "",
       place: "",
       mobile: "",
+      customerType: "green",
       warrantyStatus: "none",
       warrantyDate: "",
     });
     setSaveMessage("");
+  };
+
+  const returnToCustomerFound = () => {
+    const returnToQr = location.state?.returnToQr;
+    if (!returnToQr) return;
+    sessionStorage.setItem("qr-return-result", JSON.stringify(returnToQr));
+    navigate("/", { state: { returnToQr } });
   };
 
   return (
@@ -200,7 +243,7 @@ export default function Customers() {
 
       <section className="customer-actions-panel">
         <form className="customer-form" onSubmit={onCreateOrUpdateCustomer}>
-          <h3>{editingCustomerId ? "Edit Customer" : "Add Customer"}</h3>
+          <h3>Add Customer</h3>
           <div className="customer-form-grid">
             <input
               type="text"
@@ -253,22 +296,8 @@ export default function Customers() {
             </div>
           </div>
           <button className="btn btn-primary" type="submit" disabled={isSaving}>
-            {isSaving
-              ? "Saving..."
-              : editingCustomerId
-                ? "Update Customer"
-                : "Save Customer"}
+            {isSaving ? "Saving..." : "Save Customer"}
           </button>
-          {editingCustomerId ? (
-            <button
-              className="btn btn-secondary"
-              type="button"
-              onClick={cancelEditingCustomer}
-              disabled={isSaving}
-            >
-              Cancel Edit
-            </button>
-          ) : null}
           {saveMessage ? (
             <div className="customer-message">{saveMessage}</div>
           ) : null}
@@ -296,6 +325,112 @@ export default function Customers() {
           ) : null}
         </form>
       </section>
+
+      {editingCustomerId ? (
+        <div
+          role="presentation"
+          onClick={cancelEditingCustomer}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1200,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+            backgroundColor: "rgba(15, 23, 42, 0.55)",
+          }}
+        >
+          <form
+            className="customer-form"
+            onSubmit={onCreateOrUpdateCustomer}
+            onClick={(event) => event.stopPropagation()}
+            style={{ width: "min(100%, 32rem)", margin: 0 }}
+          >
+            <h3>Edit Customer</h3>
+            <div className="customer-form-grid">
+              <input
+                type="text"
+                placeholder="Customer name"
+                value={form.name}
+                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+              />
+              <input
+                type="text"
+                placeholder="Place"
+                value={form.place}
+                onChange={(e) => setForm((p) => ({ ...p, place: e.target.value }))}
+              />
+              <input
+                type="text"
+                placeholder="Mobile number"
+                value={form.mobile}
+                onChange={(e) => setForm((p) => ({ ...p, mobile: e.target.value }))}
+              />
+              <div className="customer-form-field">
+                <label htmlFor="edit-customer-category">Category</label>
+                <select
+                  id="edit-customer-category"
+                  value={form.customerType}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, customerType: e.target.value }))
+                  }
+                >
+                  <option value="green">Green</option>
+                  <option value="red">Red</option>
+                  <option value="black">Black</option>
+                </select>
+              </div>
+              <div className="customer-form-field">
+                <label htmlFor="edit-customer-warranty-status">Warranty Status</label>
+                <select
+                  id="edit-customer-warranty-status"
+                  value={form.warrantyStatus}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, warrantyStatus: e.target.value }))
+                  }
+                >
+                  <option value="none">No Warranty</option>
+                  <option value="warranty">Warranty</option>
+                </select>
+              </div>
+              <div className="customer-form-field">
+                <label htmlFor="edit-customer-warranty-date">Warranty Date</label>
+                <input
+                  id="edit-customer-warranty-date"
+                  type="date"
+                  value={form.warrantyDate}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, warrantyDate: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <button className="btn btn-primary" type="submit" disabled={isSaving}>
+              {isSaving ? "Saving..." : "Update Customer"}
+            </button>
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={cancelEditingCustomer}
+              disabled={isSaving}
+            >
+              Cancel
+            </button>
+            {location.state?.returnToQr ? (
+              <button
+                className="btn btn-secondary"
+                type="button"
+                onClick={returnToCustomerFound}
+                disabled={isSaving}
+              >
+                Back to Customer
+              </button>
+            ) : null}
+            {saveMessage ? <div className="customer-message">{saveMessage}</div> : null}
+          </form>
+        </div>
+      ) : null}
 
       <div className="table-wrapper">
         <table className="simple-table">
