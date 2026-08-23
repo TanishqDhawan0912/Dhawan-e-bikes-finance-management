@@ -2459,7 +2459,7 @@ button {
   gap: 0.75rem;
 }
 
-.qr-scanner-result > div:not(.qr-scanner-actions) {
+.qr-scanner-result > div:not(.qr-scanner-actions):not(.qr-scanner-jobcards) {
   display: flex;
   justify-content: space-between;
   gap: 1rem;

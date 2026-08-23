@@ -148,8 +148,9 @@ export default function QrScanner({ onClose }) {
 
         const cameras = await Html5Qrcode.getCameras();
         const camera =
-          cameras.find((device) => /back|rear|environment/i.test(device.label)) ||
-          cameras[0];
+          cameras.find((device) =>
+            /back|rear|environment/i.test(device.label),
+          ) || cameras[0];
         if (!camera) {
           throw new Error("No camera is available on this device.");
         }
