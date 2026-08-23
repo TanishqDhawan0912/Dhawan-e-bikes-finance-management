@@ -42,19 +42,18 @@ export default function QrScanner({ onClose }) {
       const scanner = new Html5Qrcode("home-qr-reader");
       scannerRef.current = scanner;
 
-      const config = {
-        fps: 30,
-        qrbox: (viewfinderWidth, viewfinderHeight) => {
-          const size = Math.floor(
-            Math.min(viewfinderWidth, viewfinderHeight) * 0.85,
-          );
-          return { width: size, height: size };
-        },
+      const makeQrbox = (ratio) => (viewfinderWidth, viewfinderHeight) => {
+        const size = Math.floor(
+          Math.min(viewfinderWidth, viewfinderHeight) * ratio,
+        );
+        return { width: size, height: size };
+      };
+
+      const baseConfig = {
         aspectRatio: 4 / 3,
         formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
         useBarCodeDetectorIfSupported: true,
         disableFlip: false,
-        rememberLastUsedCamera: true,
       };
 
       const onScanSuccess = async (decodedText) => {
@@ -135,38 +134,60 @@ export default function QrScanner({ onClose }) {
       const onScanFailure = () => {};
 
       try {
-        // Ideal: HD stream with continuous autofocus. Safari on iOS rejects
-        // the focusMode constraint, so fall back to simpler constraints.
-        const cameraCandidates = [
+        // Ideal: HD stream with continuous autofocus. iOS Safari rejects
+        // focusMode and may reject other constraints/config options, so try
+        // progressively simpler camera+config pairs until one is accepted.
+        const startAttempts = [
           {
-            facingMode: "environment",
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            frameRate: { ideal: 30 },
-            advanced: [{ focusMode: "continuous" }],
+            camera: {
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 30 },
+              advanced: [{ focusMode: "continuous" }],
+            },
+            config: {
+              ...baseConfig,
+              fps: 30,
+              qrbox: makeQrbox(0.85),
+              rememberLastUsedCamera: true,
+            },
           },
           {
-            facingMode: "environment",
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            camera: {
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            config: { ...baseConfig, fps: 30, qrbox: makeQrbox(0.85) },
           },
-          { facingMode: "environment" },
+          // Last resort: the exact combination known to work on this device.
+          {
+            camera: { facingMode: "environment" },
+            config: { ...baseConfig, fps: 15, qrbox: makeQrbox(0.78) },
+          },
         ];
 
         let started = false;
         let lastError = null;
-        for (const cameraConfig of cameraCandidates) {
+        for (const attempt of startAttempts) {
           if (started || cancelled) break;
           try {
             await scanner.start(
-              cameraConfig,
-              config,
+              attempt.camera,
+              attempt.config,
               onScanSuccess,
               onScanFailure,
             );
             started = true;
           } catch (startError) {
             lastError = startError;
+            if (import.meta.env.DEV) {
+              console.warn("[QR] start attempt failed", {
+                name: startError?.name,
+                message: startError?.message,
+              });
+            }
           }
         }
         if (!started) throw lastError || new Error("Unable to start camera");
@@ -191,8 +212,15 @@ export default function QrScanner({ onClose }) {
             setError(
               "Camera permission was denied. Allow camera access in your browser settings and try again.",
             );
-          } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+          } else if (
+            name === "NotFoundError" ||
+            name === "OverconstrainedError"
+          ) {
             setError("No camera is available on this device.");
+          } else if (name === "NotReadableError") {
+            setError(
+              "Camera is in use by another app. Close it and try again.",
+            );
           } else {
             setError(
               `Camera could not be started${cameraError?.message ? `: ${cameraError.message}` : "."}`,
