@@ -246,12 +246,12 @@ export default function CustomerQrProfile() {
                 <label>Warranty</label>
                 <p>
                   {warrantyStatus === "warranty" ? "Warranty" : "No Warranty"}
+                  {warrantyDate &&
+                  warrantyDate !== "NA" &&
+                  warrantyDate !== "N/A"
+                    ? ` (${formatDate(warrantyDate)})`
+                    : ""}
                 </p>
-                {warrantyDate ? (
-                  <span className="customer-detail-note">
-                    Warranty Date: {formatDate(warrantyDate)}
-                  </span>
-                ) : null}
               </div>
               <div>
                 <label>Customer Type</label>

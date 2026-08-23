@@ -257,6 +257,15 @@ export default function QrScanner({ onClose, initialResult = null }) {
     });
   };
 
+  const formatWarrantyDate = (dateString) => {
+    const match = String(dateString || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return String(dateString || "");
+    return date.toLocaleDateString("en-GB");
+  };
+
   const openJobcard = async (jobcard) => {
     if (!jobcard?._id || openingJobcardId) return;
     setOpeningJobcardId(jobcard._id);
@@ -391,11 +400,13 @@ export default function QrScanner({ onClose, initialResult = null }) {
             <div>
               <strong>Warranty</strong>
               <span>
-                {customer.warrantyStatus === "warranty" ? "Warranty" : "No Warranty"}
+                {customer.warrantyStatus === "warranty"
+                  ? "Warranty"
+                  : "No Warranty"}
                 {customer.warrantyDate &&
                 customer.warrantyDate !== "NA" &&
                 customer.warrantyDate !== "N/A"
-                  ? ` (${formatJobcardDate(customer.warrantyDate)})`
+                  ? ` (${formatWarrantyDate(customer.warrantyDate)})`
                   : ""}
               </span>
             </div>

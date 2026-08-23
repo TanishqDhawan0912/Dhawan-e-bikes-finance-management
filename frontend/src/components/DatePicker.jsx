@@ -75,7 +75,8 @@ export default function DatePicker({
       const pickerEl = pickerRef.current;
       const inputEl = inputRef.current;
       return Boolean(
-        (pickerEl && pickerEl.contains(target)) || (inputEl && inputEl.contains(target))
+        (pickerEl && pickerEl.contains(target)) ||
+        (inputEl && inputEl.contains(target)),
       );
     };
 
@@ -161,7 +162,11 @@ export default function DatePicker({
   };
 
   const handleDateSelect = (day) => {
-    const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+    const newDate = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth(),
+      day,
+    );
     setSelectedDate(newDate);
     const year = newDate.getFullYear();
     const month = String(newDate.getMonth() + 1).padStart(2, "0");
@@ -176,11 +181,15 @@ export default function DatePicker({
   };
 
   const handlePrevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+    setCurrentMonth(
+      new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1),
+    );
   };
 
   const handleNextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+    setCurrentMonth(
+      new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1),
+    );
   };
 
   const getDaysInMonth = (date) => {
@@ -192,8 +201,18 @@ export default function DatePicker({
   };
 
   const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
   ];
 
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -235,7 +254,14 @@ export default function DatePicker({
   const accentLight = isModern ? "#eef2ff" : "#eff6ff";
 
   return (
-    <div className={`date-picker-root ${className}`.trim()} style={{ position: "relative", width: "100%", zIndex: isOpen ? 10001 : "auto" }}>
+    <div
+      className={`date-picker-root ${className}`.trim()}
+      style={{
+        position: "relative",
+        width: "100%",
+        zIndex: isOpen ? 10001 : "auto",
+      }}
+    >
       <div
         className={
           isModern
@@ -306,123 +332,178 @@ export default function DatePicker({
           </span>
         ) : null}
       </div>
-      {isOpen && createPortal(
-        <div
-          ref={pickerRef}
-          className={dropdownClass}
-          style={{
-            position: "fixed",
-            top: (() => {
-              if (!inputRef.current) return "50%";
-              const rect = inputRef.current.getBoundingClientRect();
-              const preferredBelowTop = rect.bottom + 8;
-              const spaceBelow = window.innerHeight - preferredBelowTop;
-              // If not enough space below, show dropdown above input.
-              const placeAbove = spaceBelow < 260 && rect.top > 260;
-              return `${placeAbove ? rect.top - 8 : preferredBelowTop}px`;
-            })(),
-            left: inputRef.current ? `${inputRef.current.getBoundingClientRect().left}px` : "50%",
-            transform: (() => {
-              if (!inputRef.current) return "translate(-50%, -50%)";
-              const rect = inputRef.current.getBoundingClientRect();
-              const preferredBelowTop = rect.bottom + 8;
-              const spaceBelow = window.innerHeight - preferredBelowTop;
-              const placeAbove = spaceBelow < 260 && rect.top > 260;
-              return placeAbove ? "translateY(-100%)" : "none";
-            })(),
-            backgroundColor: "white",
-            borderRadius: isModern ? "12px" : "0.5rem",
-            boxShadow: isModern ? "0 25px 50px -12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05)" : "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-            border: "1px solid #e5e7eb",
-            zIndex: 10001,
-            padding: isModern ? "1.25rem" : "1rem",
-            minWidth: "300px",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <button
-              type="button"
-              className={isModern ? "date-picker-nav-btn-modern" : ""}
-              onClick={handlePrevMonth}
+      {isOpen &&
+        createPortal(
+          <div
+            ref={pickerRef}
+            className={dropdownClass}
+            style={{
+              position: "fixed",
+              top: (() => {
+                if (!inputRef.current) return "50%";
+                const rect = inputRef.current.getBoundingClientRect();
+                const preferredBelowTop = rect.bottom + 8;
+                const spaceBelow = window.innerHeight - preferredBelowTop;
+                // If not enough space below, show dropdown above input.
+                const placeAbove = spaceBelow < 260 && rect.top > 260;
+                return `${placeAbove ? rect.top - 8 : preferredBelowTop}px`;
+              })(),
+              left: inputRef.current
+                ? `${inputRef.current.getBoundingClientRect().left}px`
+                : "50%",
+              transform: (() => {
+                if (!inputRef.current) return "translate(-50%, -50%)";
+                const rect = inputRef.current.getBoundingClientRect();
+                const preferredBelowTop = rect.bottom + 8;
+                const spaceBelow = window.innerHeight - preferredBelowTop;
+                const placeAbove = spaceBelow < 260 && rect.top > 260;
+                return placeAbove ? "translateY(-100%)" : "none";
+              })(),
+              backgroundColor: "white",
+              borderRadius: isModern ? "12px" : "0.5rem",
+              boxShadow: isModern
+                ? "0 25px 50px -12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05)"
+                : "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+              border: "1px solid #e5e7eb",
+              zIndex: 10001,
+              padding: isModern ? "1.25rem" : "1rem",
+              minWidth: "300px",
+            }}
+          >
+            <div
               style={{
-                padding: "0.35rem 0.5rem",
-                border: "none",
-                backgroundColor: "transparent",
-                cursor: "pointer",
-                fontSize: "1.1rem",
-                color: "#6b7280",
-                borderRadius: "6px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1rem",
               }}
             >
-              ←
-            </button>
-            <h3 style={{ margin: 0, fontSize: isModern ? "1.05rem" : "1rem", fontWeight: 600, color: "#111827" }}>
-              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-            </h3>
-            <button
-              type="button"
-              className={isModern ? "date-picker-nav-btn-modern" : ""}
-              onClick={handleNextMonth}
-              style={{
-                padding: "0.35rem 0.5rem",
-                border: "none",
-                backgroundColor: "transparent",
-                cursor: "pointer",
-                fontSize: "1.1rem",
-                color: "#6b7280",
-                borderRadius: "6px",
-              }}
-            >
-              →
-            </button>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.25rem", marginBottom: "0.5rem" }}>
-            {dayNames.map((day) => (
-              <div key={day} style={{ textAlign: "center", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", padding: "0.35rem" }}>
-                {day}
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.35rem" }}>
-            {days.map((day, index) => (
               <button
-                key={index}
                 type="button"
-                onClick={() => day && handleDateSelect(day)}
-                disabled={!day}
-                className={isModern ? "date-picker-day-modern" : ""}
+                className={isModern ? "date-picker-nav-btn-modern" : ""}
+                onClick={handlePrevMonth}
                 style={{
-                  padding: "0.5rem",
+                  padding: "0.35rem 0.5rem",
                   border: "none",
-                  backgroundColor: isSelected(day) ? accentBg : isToday(day) ? accentLight : "transparent",
-                  color: isSelected(day) ? "white" : isToday(day) ? (isModern ? "#6366f1" : "#3b82f6") : "#111827",
-                  borderRadius: isModern ? "8px" : "0.375rem",
-                  cursor: day ? "pointer" : "default",
-                  fontSize: "0.875rem",
-                  fontWeight: isSelected(day) || isToday(day) ? 600 : 400,
-                  minHeight: "2.25rem",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  transition: "background-color 0.15s, color 0.15s",
-                }}
-                onMouseEnter={(e) => {
-                  if (day && !isSelected(day)) e.currentTarget.style.backgroundColor = "#f3f4f6";
-                }}
-                onMouseLeave={(e) => {
-                  if (day && !isSelected(day)) e.currentTarget.style.backgroundColor = isToday(day) ? accentLight : "transparent";
+                  backgroundColor: "transparent",
+                  cursor: "pointer",
+                  fontSize: "1.1rem",
+                  color: "#6b7280",
+                  borderRadius: "6px",
                 }}
               >
-                {day || ""}
+                ←
               </button>
-            ))}
-          </div>
-        </div>,
-        document.body
-      )}
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: isModern ? "1.05rem" : "1rem",
+                  fontWeight: 600,
+                  color: "#111827",
+                }}
+              >
+                {monthNames[currentMonth.getMonth()]}{" "}
+                {currentMonth.getFullYear()}
+              </h3>
+              <button
+                type="button"
+                className={isModern ? "date-picker-nav-btn-modern" : ""}
+                onClick={handleNextMonth}
+                style={{
+                  padding: "0.35rem 0.5rem",
+                  border: "none",
+                  backgroundColor: "transparent",
+                  cursor: "pointer",
+                  fontSize: "1.1rem",
+                  color: "#6b7280",
+                  borderRadius: "6px",
+                }}
+              >
+                →
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(7, 1fr)",
+                gap: "0.25rem",
+                marginBottom: "0.5rem",
+              }}
+            >
+              {dayNames.map((day) => (
+                <div
+                  key={day}
+                  style={{
+                    textAlign: "center",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: "#6b7280",
+                    padding: "0.35rem",
+                  }}
+                >
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(7, 1fr)",
+                gap: "0.35rem",
+              }}
+            >
+              {days.map((day, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => day && handleDateSelect(day)}
+                  disabled={!day}
+                  className={isModern ? "date-picker-day-modern" : ""}
+                  style={{
+                    padding: "0.5rem",
+                    border: "none",
+                    backgroundColor: isSelected(day)
+                      ? accentBg
+                      : isToday(day)
+                        ? accentLight
+                        : "transparent",
+                    color: isSelected(day)
+                      ? "white"
+                      : isToday(day)
+                        ? isModern
+                          ? "#6366f1"
+                          : "#3b82f6"
+                        : "#111827",
+                    borderRadius: isModern ? "8px" : "0.375rem",
+                    cursor: day ? "pointer" : "default",
+                    fontSize: "0.875rem",
+                    fontWeight: isSelected(day) || isToday(day) ? 600 : 400,
+                    minHeight: "2.25rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "background-color 0.15s, color 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (day && !isSelected(day))
+                      e.currentTarget.style.backgroundColor = "#f3f4f6";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (day && !isSelected(day))
+                      e.currentTarget.style.backgroundColor = isToday(day)
+                        ? accentLight
+                        : "transparent";
+                  }}
+                >
+                  {day || ""}
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
-
