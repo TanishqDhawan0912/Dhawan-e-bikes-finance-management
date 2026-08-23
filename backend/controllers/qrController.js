@@ -11,6 +11,7 @@ function serializeCustomer(customer) {
     name: customer.name,
     place: customer.place,
     phoneNumber: customer.mobile,
+    customerType: customer.customerType || "green",
   };
 }
 
@@ -97,10 +98,16 @@ const scanQrToken = async (req, res) => {
     .sort({ createdAt: -1 })
     .select("jobcardNumber date jobcardType status totalAmount pendingAmount");
 
+  const totalPendingAmount = jobcards.reduce(
+    (sum, jobcard) => sum + (Number(jobcard.pendingAmount) || 0),
+    0,
+  );
+
   return res.json({
     success: true,
     customer: serializeCustomer(record.customer),
     jobcards,
+    totalPendingAmount,
   });
 };
 

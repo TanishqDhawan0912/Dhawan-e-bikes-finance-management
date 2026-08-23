@@ -13,7 +13,9 @@ export default function QrScanner({ onClose }) {
   const [error, setError] = useState("");
   const [customer, setCustomer] = useState(null);
   const [jobcards, setJobcards] = useState([]);
+  const [totalPendingAmount, setTotalPendingAmount] = useState(0);
   const [showJobcards, setShowJobcards] = useState(false);
+  const [openingJobcardId, setOpeningJobcardId] = useState("");
   const [flash, setFlash] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
@@ -106,6 +108,7 @@ export default function QrScanner({ onClose }) {
               await stop();
               setCustomer(data.customer);
               setJobcards(Array.isArray(data.jobcards) ? data.jobcards : []);
+              setTotalPendingAmount(Number(data.totalPendingAmount) || 0);
               setStatus("Customer found");
             } catch (scanError) {
               if (import.meta.env.DEV) {
@@ -180,6 +183,43 @@ export default function QrScanner({ onClose }) {
     }
   };
 
+  const formatJobcardDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return String(dateString);
+    return date.toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "2-digit",
+    });
+  };
+
+  const openJobcard = async (jobcard) => {
+    if (!jobcard?._id || openingJobcardId) return;
+    setOpeningJobcardId(jobcard._id);
+    setError("");
+    try {
+      const response = await fetchWithRetry(`/jobcards/${jobcard._id}`);
+      if (!response.ok) throw new Error("Failed to load job card");
+      const fullJobcard = await response.json();
+      onClose();
+      if (fullJobcard.status === "pending") {
+        // Pending list scrolls this card into view.
+        navigate("/jobcards/pending", {
+          state: { editedJobcardId: String(fullJobcard._id) },
+        });
+      } else {
+        // Finalized list opens the full details modal.
+        navigate("/jobcards/all", {
+          state: { selectedJobcard: fullJobcard },
+        });
+      }
+    } catch {
+      setError("Unable to open this job card.");
+      setOpeningJobcardId("");
+    }
+  };
+
   return (
     <div
       className="qr-scanner-backdrop"
@@ -189,7 +229,21 @@ export default function QrScanner({ onClose }) {
     >
       <div className="qr-scanner-modal">
         <div className="qr-scanner-heading">
-          <h2>{customer ? "CUSTOMER FOUND ✓" : "Scan QR"}</h2>
+          <h2>
+            {customer ? (
+              <span className="qr-scanner-found-heading">
+                CUSTOMER FOUND ✓
+                <span
+                  className={`qr-type-dot qr-type-${
+                    customer.customerType || "green"
+                  }`}
+                  title={`${(customer.customerType || "green").toUpperCase()} customer`}
+                />
+              </span>
+            ) : (
+              "Scan QR"
+            )}
+          </h2>
           <button
             type="button"
             className="qr-scanner-close"
@@ -244,6 +298,29 @@ export default function QrScanner({ onClose }) {
               <strong>Phone</strong>
               <span>{customer.phoneNumber}</span>
             </div>
+            <div>
+              <strong>Pending</strong>
+              <span
+                className={
+                  totalPendingAmount > 0 ? "qr-pending-due" : "qr-pending-clear"
+                }
+              >
+                {totalPendingAmount > 0
+                  ? `₹${totalPendingAmount.toFixed(2)}`
+                  : "No dues"}
+              </span>
+            </div>
+            <div>
+              <strong>Type</strong>
+              <span className="qr-type-label">
+                <span
+                  className={`qr-type-dot qr-type-${
+                    customer.customerType || "green"
+                  }`}
+                />
+                {(customer.customerType || "green").toUpperCase()}
+              </span>
+            </div>
             <div className="qr-scanner-actions">
               <button
                 type="button"
@@ -277,10 +354,34 @@ export default function QrScanner({ onClose }) {
                 {jobcards.length === 0
                   ? "No job cards found."
                   : jobcards.map((jobcard) => (
-                      <div key={jobcard._id}>
-                        {jobcard.jobcardNumber || "Job card"} -{" "}
-                        {jobcard.status || "pending"}
-                      </div>
+                      <button
+                        type="button"
+                        key={jobcard._id}
+                        className="qr-jobcard-row"
+                        onClick={() => openJobcard(jobcard)}
+                        disabled={Boolean(openingJobcardId)}
+                      >
+                        <span className="qr-jc-number">
+                          {openingJobcardId === jobcard._id
+                            ? "Opening..."
+                            : jobcard.jobcardNumber || "Job card"}
+                        </span>
+                        <span className="qr-jc-date">
+                          {formatJobcardDate(jobcard.date)}
+                        </span>
+                        {Number(jobcard.pendingAmount) > 0 ? (
+                          <span className="qr-jc-due">
+                            ₹{Number(jobcard.pendingAmount).toFixed(0)}
+                          </span>
+                        ) : null}
+                        <span
+                          className={`qr-jc-status qr-jc-${
+                            jobcard.status || "pending"
+                          }`}
+                        >
+                          {jobcard.status || "pending"}
+                        </span>
+                      </button>
                     ))}
               </div>
             ) : null}
