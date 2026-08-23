@@ -4,23 +4,30 @@ import { useNavigate } from "react-router-dom";
 import { FiZap, FiZapOff } from "react-icons/fi";
 import { fetchWithRetry } from "../config/api";
 
-export default function QrScanner({ onClose }) {
+export default function QrScanner({ onClose, initialResult = null }) {
   const navigate = useNavigate();
   const scannerRef = useRef(null);
   const processingRef = useRef(false);
   const errorTimeoutRef = useRef(null);
-  const [status, setStatus] = useState("Opening camera...");
+  const [status, setStatus] = useState(
+    initialResult?.customer ? "Customer found" : "Opening camera...",
+  );
   const [error, setError] = useState("");
-  const [customer, setCustomer] = useState(null);
-  const [jobcards, setJobcards] = useState([]);
-  const [totalPendingAmount, setTotalPendingAmount] = useState(0);
-  const [showJobcards, setShowJobcards] = useState(false);
+  const [customer, setCustomer] = useState(initialResult?.customer || null);
+  const [jobcards, setJobcards] = useState(initialResult?.jobcards || []);
+  const [totalPendingAmount, setTotalPendingAmount] = useState(
+    initialResult?.totalPendingAmount || 0,
+  );
+  const [showJobcards, setShowJobcards] = useState(
+    Boolean(initialResult?.customer),
+  );
   const [openingJobcardId, setOpeningJobcardId] = useState("");
   const [flash, setFlash] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
 
   useEffect(() => {
+    if (initialResult?.customer) return undefined;
     let cancelled = false;
 
     const stop = async () => {
@@ -258,16 +265,20 @@ export default function QrScanner({ onClose }) {
       const response = await fetchWithRetry(`/jobcards/${jobcard._id}`);
       if (!response.ok) throw new Error("Failed to load job card");
       const fullJobcard = await response.json();
+      const returnToQr = { customer, jobcards, totalPendingAmount };
       onClose();
       if (fullJobcard.status === "pending") {
         // Pending list scrolls this card into view.
         navigate("/jobcards/pending", {
-          state: { editedJobcardId: String(fullJobcard._id) },
+          state: {
+            editedJobcardId: String(fullJobcard._id),
+            returnToQr,
+          },
         });
       } else {
         // Finalized list opens the full details modal.
         navigate("/jobcards/all", {
-          state: { selectedJobcard: fullJobcard },
+          state: { selectedJobcard: fullJobcard, returnToQr },
         });
       }
     } catch {

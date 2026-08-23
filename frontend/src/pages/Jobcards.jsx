@@ -82,6 +82,14 @@ export default function Jobcards() {
               <p>Manage your service and repair jobcards efficiently</p>
             </div>
             <div className="header-right">
+              {location.state?.returnToQr ? (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => navigate("/", { state: { returnToQr: location.state.returnToQr } })}
+                >
+                  Back to Customer
+                </button>
+              ) : null}
               <button
                 className="btn btn-back-home"
                 onClick={() => navigate("/")}

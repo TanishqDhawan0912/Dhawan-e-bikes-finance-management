@@ -34,7 +34,12 @@ export default function AllJobcards() {
     setSelectedJobcard(selectedFromNavigation);
     setShowDetailsModal(true);
     setReturnPath(location.state.returnPath || "");
-    navigate(location.pathname, { replace: true, state: null });
+    navigate(location.pathname, {
+      replace: true,
+      state: location.state.returnToQr
+        ? { returnToQr: location.state.returnToQr }
+        : null,
+    });
   }, [location.pathname, location.state, navigate]);
 
   useEffect(() => {

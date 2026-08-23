@@ -1,6 +1,6 @@
 import { FaMotorcycle } from "react-icons/fa";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import QrScanner from "../components/QrScanner.jsx";
 
 function FeatureCard({ icon, title, description }) {
@@ -14,7 +14,18 @@ function FeatureCard({ icon, title, description }) {
 }
 
 export default function Home() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [showScanner, setShowScanner] = useState(false);
+  const [scannerResult, setScannerResult] = useState(null);
+
+  useEffect(() => {
+    const result = location.state?.returnToQr;
+    if (!result?.customer) return;
+    setScannerResult(result);
+    setShowScanner(true);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   return (
     <div className="home-root">
@@ -35,7 +46,10 @@ export default function Home() {
             <button
               type="button"
               className="home-navbar-scan-btn"
-              onClick={() => setShowScanner(true)}
+              onClick={() => {
+                setScannerResult(null);
+                setShowScanner(true);
+              }}
             >
               📷 Scan QR
             </button>
@@ -71,7 +85,15 @@ export default function Home() {
           </Link>
         </div>
       </div>
-      {showScanner ? <QrScanner onClose={() => setShowScanner(false)} /> : null}
+      {showScanner ? (
+        <QrScanner
+          initialResult={scannerResult}
+          onClose={() => {
+            setShowScanner(false);
+            setScannerResult(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

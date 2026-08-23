@@ -88,7 +88,12 @@ export default function PendingJobcard() {
     if (editedId) {
       editedJobcardIdRef.current = editedId;
       // Clear state so refresh doesn't re-scroll
-      navigate(location.pathname, { replace: true, state: {} });
+      navigate(location.pathname, {
+        replace: true,
+        state: location.state?.returnToQr
+          ? { returnToQr: location.state.returnToQr }
+          : {},
+      });
     }
   }, [location.state?.editedJobcardId, location.pathname, navigate]);
 
