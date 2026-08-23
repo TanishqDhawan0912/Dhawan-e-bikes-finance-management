@@ -39,7 +39,10 @@ export default function QrScanner({ onClose }) {
     };
 
     const start = async () => {
-      const scanner = new Html5Qrcode("home-qr-reader");
+      const scanner = new Html5Qrcode("home-qr-reader", {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        useBarCodeDetectorIfSupported: true,
+      });
       scannerRef.current = scanner;
 
       const makeQrbox = (ratio) => (viewfinderWidth, viewfinderHeight) => {
@@ -51,8 +54,6 @@ export default function QrScanner({ onClose }) {
 
       const baseConfig = {
         aspectRatio: 4 / 3,
-        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-        useBarCodeDetectorIfSupported: true,
         disableFlip: false,
       };
 
@@ -134,88 +135,33 @@ export default function QrScanner({ onClose }) {
       const onScanFailure = () => {};
 
       try {
-        // Ideal: HD stream with continuous autofocus. iOS Safari rejects
-        // focusMode and may reject other constraints/config options, so try
-        // progressively simpler camera+config pairs until one is accepted.
-        const startAttempts = [
-          {
-            camera: {
-              facingMode: "environment",
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              frameRate: { ideal: 30 },
-              advanced: [{ focusMode: "continuous" }],
-            },
-            config: {
-              ...baseConfig,
-              fps: 30,
-              qrbox: makeQrbox(0.85),
-              rememberLastUsedCamera: true,
-            },
-          },
-          {
-            camera: {
-              facingMode: "environment",
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            },
-            config: { ...baseConfig, fps: 30, qrbox: makeQrbox(0.85) },
-          },
-          // Last resort: the exact combination known to work on this device.
-          {
-            camera: { facingMode: "environment" },
-            config: { ...baseConfig, fps: 15, qrbox: makeQrbox(0.78) },
-          },
-        ];
-
-        let started = false;
-        let lastError = null;
-        for (const attempt of startAttempts) {
-          if (started || cancelled) break;
-          try {
-            await scanner.start(
-              attempt.camera,
-              attempt.config,
-              onScanSuccess,
-              onScanFailure,
-            );
-            started = true;
-          } catch (startError) {
-            lastError = startError;
-            if (import.meta.env.DEV) {
-              console.warn("[QR] start attempt failed", {
-                name: startError?.name,
-                message: startError?.message,
-              });
-            }
-          }
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("Camera access is not supported by this browser.");
         }
 
-        // Laptops and some phones expose no rear-facing camera. Use the first
-        // available device after the rear-camera attempts have been exhausted.
-        if (!started && !cancelled) {
-          try {
-            const cameras = await Html5Qrcode.getCameras();
-            if (cameras.length > 0) {
-              await scanner.start(
-                cameras[0].id,
-                { ...baseConfig, fps: 15, qrbox: makeQrbox(0.78) },
-                onScanSuccess,
-                onScanFailure,
-              );
-              started = true;
-            }
-          } catch (startError) {
-            lastError = startError;
-            if (import.meta.env.DEV) {
-              console.warn("[QR] available-camera fallback failed", {
-                name: startError?.name,
-                message: startError?.message,
-              });
-            }
-          }
+        // Prompt for camera access directly so the browser supplies a useful
+        // permission or device error before the scanner selects a camera.
+        const permissionStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+        });
+        permissionStream.getTracks().forEach((track) => track.stop());
+
+        const cameras = await Html5Qrcode.getCameras();
+        const camera =
+          cameras.find((device) => /back|rear|environment/i.test(device.label)) ||
+          cameras[0];
+        if (!camera) {
+          throw new Error("No camera is available on this device.");
         }
-        if (!started) throw lastError || new Error("Unable to start camera");
+
+        // Html5Qrcode cannot safely retry start() on the same instance while a
+        // failed start is still settling, so select a device before starting.
+        await scanner.start(
+          camera.id,
+          { ...baseConfig, fps: 15, qrbox: makeQrbox(0.78) },
+          onScanSuccess,
+          onScanFailure,
+        );
 
         if (cancelled) return;
         setStatus("Scan QR code");
@@ -232,9 +178,20 @@ export default function QrScanner({ onClose }) {
           console.warn("[QR] camera start failed", cameraError);
         }
         if (!cancelled) {
-          const name = cameraError?.name || "";
+          const errorText =
+            typeof cameraError === "string"
+              ? cameraError
+              : `${cameraError?.name || ""} ${cameraError?.message || ""}`;
+          const name =
+            cameraError?.name ||
+            errorText.match(
+              /NotAllowedError|SecurityError|NotFoundError|OverconstrainedError|NotReadableError/,
+            )?.[0] ||
+            "";
           if (!window.isSecureContext) {
-            setError("Camera access requires HTTPS. Open this app using its HTTPS address.");
+            setError(
+              "Camera access requires HTTPS. Open this app using its HTTPS address.",
+            );
           } else if (name === "NotAllowedError" || name === "SecurityError") {
             setError(
               "Camera permission was denied. Allow camera access in your browser settings and try again.",
@@ -250,7 +207,7 @@ export default function QrScanner({ onClose }) {
             );
           } else {
             setError(
-              `Camera could not be started${cameraError?.message ? `: ${cameraError.message}` : "."}`,
+              `Camera could not be started${errorText ? `: ${errorText}` : "."}`,
             );
           }
           setStatus("Camera unavailable");
