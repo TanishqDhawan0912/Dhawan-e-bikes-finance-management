@@ -12,10 +12,34 @@ function formatMoney(value) {
 }
 
 function formatDate(dateString) {
-  if (!dateString) return "-";
   const d = new Date(dateString);
   if (Number.isNaN(d.getTime())) return String(dateString);
   return d.toLocaleDateString("en-GB");
+}
+
+function buildCustomerEditForm(customer, jobcards = []) {
+  const warrantyJobcard = jobcards.find(
+    (jobcard) => jobcard.warrantyType && jobcard.warrantyType !== "none",
+  );
+  const warrantyStatus =
+    customer?.warrantyStatus === "warranty" || warrantyJobcard
+      ? "warranty"
+      : "none";
+
+  return {
+    name: customer?.name || "",
+    place: customer?.place || "",
+    mobile: customer?.mobile || customer?.phoneNumber || "",
+    customerType: customer?.customerType || "green",
+    warrantyStatus,
+    warrantyDate:
+      customer?.warrantyDate || warrantyJobcard?.warrantyDate || "",
+    scootyModel:
+      customer?.scootyModel ||
+      jobcards.find((jobcard) => String(jobcard.ebikeDetails || "").trim())
+        ?.ebikeDetails ||
+      "",
+  };
 }
 
 export default function Customers() {
@@ -39,6 +63,7 @@ export default function Customers() {
     customerType: "green",
     warrantyStatus: "none",
     warrantyDate: "",
+    scootyModel: "",
   });
   const [editingCustomerId, setEditingCustomerId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -110,31 +135,35 @@ export default function Customers() {
   };
 
   useEffect(() => {
-    fetchCustomers();
-  }, []);
+    const searchTimer = window.setTimeout(() => {
+      fetchCustomers(search);
+    }, 300);
+
+    return () => window.clearTimeout(searchTimer);
+    // fetchCustomers is intentionally called after the debounce for each search value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   useEffect(() => {
     const customerFromQr = location.state?.editCustomer;
-    if (!customerFromQr?.id) return;
+    const customerId = customerFromQr?.id || customerFromQr?._id;
+    if (!customerId) return;
+
+    setEditingCustomerId(customerId);
+    setForm(buildCustomerEditForm(customerFromQr));
+    setSaveMessage("");
 
     const loadCustomerForEditing = async () => {
       try {
         const response = await fetchWithRetry(
-          `/customers/${customerFromQr.id}/history`,
+          `/customers/${customerId}/history`,
           { method: "GET" },
         );
         const data = await response.json();
         const customer = data?.customer;
         if (!customer?._id) return;
         setEditingCustomerId(customer._id);
-        setForm({
-          name: customer.name || "",
-          place: customer.place || "",
-          mobile: customer.mobile || "",
-          customerType: customer.customerType || "green",
-          warrantyStatus: customer.warrantyStatus || "none",
-          warrantyDate: customer.warrantyDate || "",
-        });
+        setForm(buildCustomerEditForm(customer, data?.jobcards || []));
         setSaveMessage("");
       } catch (error) {
         setCustomerError(error?.message || "Failed to load customer details.");
@@ -159,6 +188,7 @@ export default function Customers() {
       customerType: form.customerType || "green",
       warrantyStatus: form.warrantyStatus || "none",
       warrantyDate: form.warrantyDate || "",
+      scootyModel: String(form.scootyModel || "").trim(),
     };
 
     if (!payload.name || !payload.place || !payload.mobile) {
@@ -190,6 +220,7 @@ export default function Customers() {
         customerType: "green",
         warrantyStatus: "none",
         warrantyDate: "",
+        scootyModel: "",
       });
       setEditingCustomerId(null);
       await fetchCustomers(search);
@@ -205,15 +236,17 @@ export default function Customers() {
 
   const startEditingCustomer = (customer) => {
     setEditingCustomerId(customer._id);
-    setForm({
-      name: customer.name || "",
-      place: customer.place || "",
-      mobile: customer.mobile || "",
-      customerType: customer.customerType || "green",
-      warrantyStatus: customer.warrantyStatus || "none",
-      warrantyDate: customer.warrantyDate || "",
-    });
+    setForm(buildCustomerEditForm(customer));
     setSaveMessage("");
+
+    fetchWithRetry(`/customers/${customer._id}/history`, { method: "GET" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data?.customer) {
+          setForm(buildCustomerEditForm(data.customer, data.jobcards || []));
+        }
+      })
+      .catch(() => {});
   };
 
   const cancelEditingCustomer = () => {
@@ -225,6 +258,7 @@ export default function Customers() {
       customerType: "green",
       warrantyStatus: "none",
       warrantyDate: "",
+      scootyModel: "",
     });
     setSaveMessage("");
   };
@@ -286,6 +320,20 @@ export default function Customers() {
               }
             />
             <div className="customer-form-field">
+              <label htmlFor="customer-category">Category</label>
+              <select
+                id="customer-category"
+                value={form.customerType}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, customerType: e.target.value }))
+                }
+              >
+                <option value="green">Green</option>
+                <option value="red">Red</option>
+                <option value="black">Black</option>
+              </select>
+            </div>
+            <div className="customer-form-field">
               <label htmlFor="customer-warranty-status">Warranty Status</label>
               <select
                 id="customer-warranty-status"
@@ -305,11 +353,24 @@ export default function Customers() {
               <label htmlFor="customer-warranty-date">Warranty Date</label>
               <input
                 id="customer-warranty-date"
-                type="date"
+                type="text"
                 value={form.warrantyDate}
                 onChange={(e) =>
                   setForm((p) => ({ ...p, warrantyDate: e.target.value }))
                 }
+                placeholder="Enter warranty date/code"
+              />
+            </div>
+            <div className="customer-form-field">
+              <label htmlFor="customer-scooty-model">Scooty Model</label>
+              <input
+                id="customer-scooty-model"
+                type="text"
+                value={form.scootyModel}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, scootyModel: e.target.value }))
+                }
+                placeholder="Enter scooty model"
               />
             </div>
           </div>
@@ -426,11 +487,24 @@ export default function Customers() {
                 </label>
                 <input
                   id="edit-customer-warranty-date"
-                  type="date"
+                  type="text"
                   value={form.warrantyDate}
                   onChange={(e) =>
                     setForm((p) => ({ ...p, warrantyDate: e.target.value }))
                   }
+                  placeholder="Enter warranty date/code"
+                />
+              </div>
+              <div className="customer-form-field">
+                <label htmlFor="edit-customer-scooty-model">Scooty Model</label>
+                <input
+                  id="edit-customer-scooty-model"
+                  type="text"
+                  value={form.scootyModel}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, scootyModel: e.target.value }))
+                  }
+                  placeholder="Enter scooty model"
                 />
               </div>
             </div>

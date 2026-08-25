@@ -419,12 +419,8 @@ export default function QrScanner({ onClose, initialResult = null }) {
             <div>
               <strong>Warranty</strong>
               <span>
-                {warrantyStatus === "warranty"
-                  ? "Warranty"
-                  : "No Warranty"}
-                {warrantyDate &&
-                warrantyDate !== "NA" &&
-                warrantyDate !== "N/A"
+                {warrantyStatus === "warranty" ? "Warranty" : "No Warranty"}
+                {warrantyDate && warrantyDate !== "NA" && warrantyDate !== "N/A"
                   ? ` (${formatWarrantyDate(warrantyDate)})`
                   : ""}
               </span>
@@ -475,6 +471,9 @@ export default function QrScanner({ onClose, initialResult = null }) {
             </div>
             {showJobcards ? (
               <div className="qr-scanner-jobcards">
+                <strong className="qr-scanner-jobcards-count">
+                  Total Jobcards: {jobcards.length}
+                </strong>
                 {jobcards.length === 0
                   ? "No job cards found."
                   : jobcards.map((jobcard) => (

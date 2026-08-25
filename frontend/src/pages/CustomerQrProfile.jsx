@@ -51,7 +51,8 @@ export default function CustomerQrProfile() {
     customer?.warrantyDate || warrantyJobcard?.warrantyDate || "";
   const scootyModel =
     customer?.scootyModel ||
-    jobcards.find((row) => String(row.ebikeDetails || "").trim())?.ebikeDetails ||
+    jobcards.find((row) => String(row.ebikeDetails || "").trim())
+      ?.ebikeDetails ||
     "";
 
   const customerType = customer?.customerType || "green";
@@ -90,7 +91,9 @@ export default function CustomerQrProfile() {
         });
         const data = await res.json();
         setCustomer(data?.customer || null);
-        const loadedJobcards = Array.isArray(data?.jobcards) ? data.jobcards : [];
+        const loadedJobcards = Array.isArray(data?.jobcards)
+          ? data.jobcards
+          : [];
         setJobcards(loadedJobcards);
         setScootyModelInput(
           data?.customer?.scootyModel ||

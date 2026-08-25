@@ -121,6 +121,7 @@ const upsertCustomer = async (req, res) => {
           customerType,
           warrantyStatus: warranty.warrantyStatus,
           warrantyDate: warranty.warrantyDate,
+          scootyModel: cleanText(req.body?.scootyModel),
         },
       },
       {
@@ -202,6 +203,7 @@ const updateCustomer = async (req, res) => {
           nameNormalized,
           warrantyStatus: warranty.warrantyStatus,
           warrantyDate: warranty.warrantyDate,
+          scootyModel: cleanText(req.body?.scootyModel),
         },
       },
       { new: true, runValidators: true },

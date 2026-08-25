@@ -2487,8 +2487,7 @@ function NewJobcard() {
         charger: formData.charger || "no",
         date: formData.date || today,
         warrantyType: formData.warrantyType || "none",
-        warrantyDate:
-          formData.warrantyDate.trim(),
+        warrantyDate: formData.warrantyDate.trim(),
         ebikeDetails: formData.ebikeDetails?.trim() || "",
         mechanic: formData.mechanic?.trim() || "",
         billNo: formData.billNo?.trim() || "",
