@@ -18,6 +18,8 @@ const AdminLogin = lazy(() => import("./components/AdminLogin.jsx"));
 const Batteries = lazy(() => import("./pages/Batteries.jsx"));
 const Chargers = lazy(() => import("./pages/Chargers.jsx"));
 const Bills = lazy(() => import("./pages/Bills.jsx"));
+const Calling = lazy(() => import("./pages/Calling.jsx"));
+const CallingTierDetail = lazy(() => import("./pages/CallingTierDetail.jsx"));
 
 // Loading component
 const PageLoader = () => (
@@ -125,6 +127,8 @@ function AppLayout() {
               <Route path="/batteries/*" element={<Batteries />} />
               <Route path="/chargers/*" element={<Chargers />} />
               <Route path="/bills/*" element={<Bills />} />
+              <Route path="/calling" element={<Calling />} />
+              <Route path="/calling/:tierKey" element={<CallingTierDetail />} />
             </Routes>
           </Suspense>
         </main>

@@ -90,6 +90,9 @@ export default function Home() {
           <Link to="/customers" className="home-menu-button">
             Customers
           </Link>
+          <Link to="/calling" className="home-menu-button">
+            Calling
+          </Link>
         </div>
       </div>
       {showScanner ? (
