@@ -187,7 +187,7 @@ export default function CustomerQrProfile() {
       }
       h1 { font-size: 20px; margin: 0 0 4px; }
       p { font-size: 12px; color: #4b5563; margin: 0 0 12px; }
-      img { width: 320px; height: 320px; display: block; }
+      img { width: 192px; height: 192px; display: block; }
       @page { margin: 0; }
       @media print {
         body { min-height: auto; padding: 8mm; }

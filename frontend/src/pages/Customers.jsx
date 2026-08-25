@@ -32,8 +32,7 @@ function buildCustomerEditForm(customer, jobcards = []) {
     mobile: customer?.mobile || customer?.phoneNumber || "",
     customerType: customer?.customerType || "green",
     warrantyStatus,
-    warrantyDate:
-      customer?.warrantyDate || warrantyJobcard?.warrantyDate || "",
+    warrantyDate: customer?.warrantyDate || warrantyJobcard?.warrantyDate || "",
     scootyModel:
       customer?.scootyModel ||
       jobcards.find((jobcard) => String(jobcard.ebikeDetails || "").trim())
