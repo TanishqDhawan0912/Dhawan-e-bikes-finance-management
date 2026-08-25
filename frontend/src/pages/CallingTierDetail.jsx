@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { SERVICE_TIERS, formatDate, useCallingTiers } from "../utils/callingService";
+import {
+  SERVICE_TIERS,
+  formatDate,
+  useCallingTiers,
+} from "../utils/callingService";
 
 export default function CallingTierDetail() {
   const { tierKey } = useParams();
@@ -16,9 +20,13 @@ export default function CallingTierDetail() {
     if (!term) return list;
     return list.filter(
       ({ bill }) =>
-        String(bill.customerName || "").toLowerCase().includes(term) ||
+        String(bill.customerName || "")
+          .toLowerCase()
+          .includes(term) ||
         String(bill.mobile || "").includes(term) ||
-        String(bill.modelPurchased || "").toLowerCase().includes(term),
+        String(bill.modelPurchased || "")
+          .toLowerCase()
+          .includes(term),
     );
   }, [list, search]);
 
@@ -32,17 +40,22 @@ export default function CallingTierDetail() {
   }
 
   return (
-    <div className="calling-root" style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: "1.6rem" }}>{tier.label}</h1>
-          <p style={{ margin: "4px 0 0", color: "#666" }}>
-            {list.length} customer{list.length === 1 ? "" : "s"} pending for this service.
-          </p>
-        </div>
-        <Link to="/calling" className="home-menu-button" style={{ textDecoration: "none" }}>
-          ← Back to Calling
+    <div
+      className="calling-root"
+      style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto" }}
+    >
+      <div style={{ marginBottom: "16px" }}>
+        <Link to="/calling" className="calling-back-btn">
+          <span aria-hidden="true">←</span> Back to Calling
         </Link>
+      </div>
+
+      <div style={{ marginBottom: "20px" }}>
+        <h1 style={{ margin: 0, fontSize: "1.6rem" }}>{tier.label}</h1>
+        <p style={{ margin: "4px 0 0", color: "#666" }}>
+          {list.length} customer{list.length === 1 ? "" : "s"} pending for
+          this service.
+        </p>
       </div>
 
       <input
@@ -63,8 +76,9 @@ export default function CallingTierDetail() {
       {loading && <p>Loading bills...</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}
 
-      {!loading && !error && (
-        filteredList.length === 0 ? (
+      {!loading &&
+        !error &&
+        (filteredList.length === 0 ? (
           <p style={{ color: "#999" }}>No pending customers.</p>
         ) : (
           <div style={{ display: "grid", gap: "8px" }}>
@@ -83,18 +97,21 @@ export default function CallingTierDetail() {
                     status.tone === "overdue"
                       ? "#fdecea"
                       : status.tone === "today"
-                      ? "#fff8e1"
-                      : "#f4f7fb",
+                        ? "#fff8e1"
+                        : "#f4f7fb",
                 }}
               >
                 <div>
                   <strong>{bill.customerName}</strong>{" "}
                   <span style={{ color: "#666" }}>({bill.mobile})</span>
                   <div style={{ fontSize: "0.85rem", color: "#777" }}>
-                    {bill.modelPurchased} • Bill date: {bill.billDate} • Due: {formatDate(dueDate)}
+                    {bill.modelPurchased} • Bill date: {bill.billDate} • Due:{" "}
+                    {formatDate(dueDate)}
                   </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
+                >
                   <span
                     style={{
                       fontSize: "0.8rem",
@@ -103,8 +120,8 @@ export default function CallingTierDetail() {
                         status.tone === "overdue"
                           ? "#c0392b"
                           : status.tone === "today"
-                          ? "#b8860b"
-                          : "#2c6ecb",
+                            ? "#b8860b"
+                            : "#2c6ecb",
                     }}
                   >
                     {status.label}
@@ -126,8 +143,7 @@ export default function CallingTierDetail() {
               </div>
             ))}
           </div>
-        )
-      )}
+        ))}
     </div>
   );
 }

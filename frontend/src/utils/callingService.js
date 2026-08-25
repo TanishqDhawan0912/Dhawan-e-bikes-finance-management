@@ -45,7 +45,8 @@ export function getStatus(dueDate) {
   const due = new Date(dueDate);
   due.setHours(0, 0, 0, 0);
   const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return { label: `Overdue by ${Math.abs(diffDays)}d`, tone: "overdue" };
+  if (diffDays < 0)
+    return { label: `Overdue by ${Math.abs(diffDays)}d`, tone: "overdue" };
   if (diffDays === 0) return { label: "Due today", tone: "today" };
   return { label: `In ${diffDays}d`, tone: "upcoming" };
 }

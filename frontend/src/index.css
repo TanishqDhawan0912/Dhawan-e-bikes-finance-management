@@ -2471,6 +2471,30 @@ button {
   text-align: right;
 }
 
+.qr-phone-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.qr-call-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #2c6ecb;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.qr-call-btn:hover {
+  background: #2258a8;
+}
+
 .qr-scanner-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2722,6 +2746,38 @@ button {
   border-color: #2563eb;
   transform: translateY(-2px);
   box-shadow: 0 8px 16px rgba(15, 23, 42, 0.18);
+}
+
+.calling-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: #1e293b;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  transition:
+    background 0.12s ease-out,
+    border-color 0.12s ease-out,
+    box-shadow 0.12s ease-out,
+    transform 0.12s ease-out;
+}
+
+.calling-back-btn span {
+  font-size: 1rem;
+}
+
+.calling-back-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+  transform: translateX(-2px);
 }
 
 /* Admin → Finance: home-style large tiles (Jobcard / Bills) */

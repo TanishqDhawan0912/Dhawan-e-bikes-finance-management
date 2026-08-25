@@ -387,7 +387,18 @@ export default function QrScanner({ onClose, initialResult = null }) {
             </div>
             <div>
               <strong>Phone</strong>
-              <span>{customer.phoneNumber}</span>
+              <span className="qr-phone-value">
+                {customer.phoneNumber}
+                {customer.phoneNumber ? (
+                  <a
+                    href={`tel:${customer.phoneNumber}`}
+                    className="qr-call-btn"
+                    aria-label={`Call ${customer.phoneNumber}`}
+                  >
+                    📞 Call
+                  </a>
+                ) : null}
+              </span>
             </div>
             <div>
               <strong>Scooty Model</strong>
