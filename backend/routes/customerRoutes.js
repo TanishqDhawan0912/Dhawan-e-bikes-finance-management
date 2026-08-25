@@ -6,6 +6,7 @@ const {
   getCustomers,
   getCustomerHistoryById,
   updateCustomerType,
+  updateScootyModel,
 } = require("../controllers/customerController");
 
 const router = express.Router();
@@ -14,5 +15,6 @@ router.route("/").post(safe(upsertCustomer)).get(safe(getCustomers));
 router.route("/:id").put(safe(updateCustomer));
 router.route("/:id/history").get(safe(getCustomerHistoryById));
 router.route("/:id/type").patch(safe(updateCustomerType));
+router.route("/:id/model").patch(safe(updateScootyModel));
 
 module.exports = router;

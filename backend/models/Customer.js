@@ -47,6 +47,11 @@ const customerSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    scootyModel: {
+      type: String,
+      default: "",
+      trim: true,
+    },
   },
   {
     timestamps: true,

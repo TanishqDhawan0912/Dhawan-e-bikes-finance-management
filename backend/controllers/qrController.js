@@ -14,6 +14,7 @@ function serializeCustomer(customer) {
     customerType: customer.customerType || "green",
     warrantyStatus: customer.warrantyStatus || "none",
     warrantyDate: customer.warrantyDate || "",
+    scootyModel: customer.scootyModel || "",
   };
 }
 
@@ -98,7 +99,9 @@ const scanQrToken = async (req, res) => {
 
   const jobcards = await Jobcard.find({ customer: record.customer._id })
     .sort({ createdAt: -1 })
-    .select("jobcardNumber date jobcardType status totalAmount pendingAmount");
+    .select(
+      "jobcardNumber date warrantyType warrantyDate ebikeDetails jobcardType status totalAmount pendingAmount",
+    );
 
   const totalPendingAmount = jobcards.reduce(
     (sum, jobcard) => sum + (Number(jobcard.pendingAmount) || 0),

@@ -269,10 +269,29 @@ const updateCustomerType = async (req, res) => {
   }
 };
 
+const updateScootyModel = async (req, res) => {
+  try {
+    const scootyModel = cleanText(req.body?.scootyModel);
+    const customer = await Customer.findByIdAndUpdate(
+      req.params.id,
+      { $set: { scootyModel } },
+      { new: true, runValidators: true },
+    );
+    if (!customer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+    res.json({ customer });
+  } catch (error) {
+    console.error("Error updating scooty model:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 module.exports = {
   upsertCustomer,
   updateCustomer,
   getCustomers,
   getCustomerHistoryById,
   updateCustomerType,
+  updateScootyModel,
 };

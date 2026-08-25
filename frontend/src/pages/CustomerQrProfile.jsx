@@ -28,6 +28,7 @@ export default function CustomerQrProfile() {
   const [error, setError] = useState("");
   const [qrToken, setQrToken] = useState("");
   const [qrImageData, setQrImageData] = useState("");
+  const [scootyModelInput, setScootyModelInput] = useState("");
 
   const totalPending = useMemo(() => {
     return jobcards.reduce(
@@ -43,8 +44,15 @@ export default function CustomerQrProfile() {
   );
 
   const warrantyStatus =
-    customer?.warrantyStatus || (warrantyJobcard ? "warranty" : "none");
-  const warrantyDate = customer?.warrantyDate || warrantyJobcard?.date || "";
+    customer?.warrantyStatus === "warranty" || warrantyJobcard
+      ? "warranty"
+      : "none";
+  const warrantyDate =
+    customer?.warrantyDate || warrantyJobcard?.warrantyDate || "";
+  const scootyModel =
+    customer?.scootyModel ||
+    jobcards.find((row) => String(row.ebikeDetails || "").trim())?.ebikeDetails ||
+    "";
 
   const customerType = customer?.customerType || "green";
 
@@ -82,7 +90,14 @@ export default function CustomerQrProfile() {
         });
         const data = await res.json();
         setCustomer(data?.customer || null);
-        setJobcards(Array.isArray(data?.jobcards) ? data.jobcards : []);
+        const loadedJobcards = Array.isArray(data?.jobcards) ? data.jobcards : [];
+        setJobcards(loadedJobcards);
+        setScootyModelInput(
+          data?.customer?.scootyModel ||
+            loadedJobcards.find((row) => String(row.ebikeDetails || "").trim())
+              ?.ebikeDetails ||
+            "",
+        );
         const imageResponse = await fetchWithRetry(`/qr/customers/${id}/image`);
         const imageData = await imageResponse.json();
         setQrToken(imageData?.qrToken || "");
@@ -99,6 +114,22 @@ export default function CustomerQrProfile() {
     load();
   }, [id]);
 
+  const updateScootyModel = async () => {
+    const value = scootyModelInput.trim();
+    if (value === scootyModel) return;
+    try {
+      const response = await fetchWithRetry(`/customers/${id}/model`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scootyModel: value }),
+      });
+      const data = await response.json();
+      setCustomer(data?.customer || { ...customer, scootyModel: value });
+    } catch (e) {
+      setError(e?.message || "Failed to update scooty model");
+    }
+  };
+
   const openNewJobcardPrefilled = () => {
     if (!customer) return;
     navigate("/jobcards/new", {
@@ -108,6 +139,9 @@ export default function CustomerQrProfile() {
           customerName: customer.name || "",
           place: customer.place || "",
           mobile: customer.mobile || "",
+          warrantyStatus,
+          warrantyDate,
+          scootyModel,
         },
       },
     });
@@ -231,6 +265,16 @@ export default function CustomerQrProfile() {
               <div>
                 <label>Mobile</label>
                 <p>{customer.mobile || "-"}</p>
+              </div>
+              <div>
+                <label>Scooty Model</label>
+                <input
+                  type="text"
+                  value={scootyModelInput}
+                  onChange={(event) => setScootyModelInput(event.target.value)}
+                  onBlur={updateScootyModel}
+                  placeholder="Enter scooty model"
+                />
               </div>
               <div>
                 <label>Total Jobcards</label>

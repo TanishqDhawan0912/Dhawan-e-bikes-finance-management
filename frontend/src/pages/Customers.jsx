@@ -45,6 +45,24 @@ export default function Customers() {
   const [saveMessage, setSaveMessage] = useState("");
 
   const selectedCustomerId = selectedCustomer?._id || null;
+  const selectedCustomerScootyModel =
+    selectedCustomer?.scootyModel ||
+    history.find((jobcard) => String(jobcard.ebikeDetails || "").trim())
+      ?.ebikeDetails ||
+    "";
+
+  const selectedCustomerWarrantyJobcard = history.find(
+    (jobcard) => jobcard.warrantyType && jobcard.warrantyType !== "none",
+  );
+  const selectedCustomerWarrantyStatus =
+    selectedCustomer?.warrantyStatus === "warranty" ||
+    selectedCustomerWarrantyJobcard
+      ? "warranty"
+      : "none";
+  const selectedCustomerWarrantyDate =
+    selectedCustomer?.warrantyDate ||
+    selectedCustomerWarrantyJobcard?.warrantyDate ||
+    "";
 
   const totalPending = useMemo(() => {
     return history.reduce(
@@ -526,6 +544,9 @@ export default function Customers() {
                       customerName: selectedCustomer.name || "",
                       place: selectedCustomer.place || "",
                       mobile: selectedCustomer.mobile || "",
+                      warrantyStatus: selectedCustomerWarrantyStatus,
+                      warrantyDate: selectedCustomerWarrantyDate,
+                      scootyModel: selectedCustomerScootyModel,
                     },
                   },
                 })

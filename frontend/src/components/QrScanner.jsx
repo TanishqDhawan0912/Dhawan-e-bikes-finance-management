@@ -26,6 +26,21 @@ export default function QrScanner({ onClose, initialResult = null }) {
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
 
+  const warrantyJobcard = jobcards.find(
+    (jobcard) => jobcard.warrantyType && jobcard.warrantyType !== "none",
+  );
+  const warrantyStatus =
+    customer?.warrantyStatus === "warranty" || warrantyJobcard
+      ? "warranty"
+      : "none";
+  const warrantyDate =
+    customer?.warrantyDate || warrantyJobcard?.warrantyDate || "";
+  const scootyModel =
+    customer?.scootyModel ||
+    jobcards.find((jobcard) => String(jobcard.ebikeDetails || "").trim())
+      ?.ebikeDetails ||
+    "";
+
   useEffect(() => {
     if (initialResult?.customer) return undefined;
     let cancelled = false;
@@ -375,6 +390,10 @@ export default function QrScanner({ onClose, initialResult = null }) {
               <span>{customer.phoneNumber}</span>
             </div>
             <div>
+              <strong>Scooty Model</strong>
+              <span>{scootyModel || "-"}</span>
+            </div>
+            <div>
               <strong>Pending</strong>
               <span
                 className={
@@ -400,13 +419,13 @@ export default function QrScanner({ onClose, initialResult = null }) {
             <div>
               <strong>Warranty</strong>
               <span>
-                {customer.warrantyStatus === "warranty"
+                {warrantyStatus === "warranty"
                   ? "Warranty"
                   : "No Warranty"}
-                {customer.warrantyDate &&
-                customer.warrantyDate !== "NA" &&
-                customer.warrantyDate !== "N/A"
-                  ? ` (${formatWarrantyDate(customer.warrantyDate)})`
+                {warrantyDate &&
+                warrantyDate !== "NA" &&
+                warrantyDate !== "N/A"
+                  ? ` (${formatWarrantyDate(warrantyDate)})`
                   : ""}
               </span>
             </div>
@@ -443,6 +462,9 @@ export default function QrScanner({ onClose, initialResult = null }) {
                         customerName: customer.name,
                         place: customer.place,
                         mobile: customer.phoneNumber,
+                        warrantyStatus,
+                        warrantyDate,
+                        scootyModel,
                       },
                     },
                   });

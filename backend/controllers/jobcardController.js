@@ -78,6 +78,15 @@ async function upsertCustomerFromJobcardPayload(payload) {
     return null;
   }
 
+  const warrantyType = String(payload?.warrantyType || "none")
+    .trim()
+    .toLowerCase();
+  const warrantyStatus = warrantyType === "none" ? "none" : "warranty";
+  const warrantyDateValue = cleanText(payload?.warrantyDate);
+  const warrantyDate =
+    warrantyDateValue.toUpperCase() === "NA" ? "" : warrantyDateValue;
+  const scootyModel = cleanText(payload?.ebikeDetails);
+
   // Match on both name and mobile so different people sharing a mobile
   // number (e.g. a family) are kept as distinct customer records.
   const customer = await Customer.findOneAndUpdate(
@@ -89,6 +98,9 @@ async function upsertCustomerFromJobcardPayload(payload) {
         mobile,
         mobileNormalized,
         nameNormalized,
+        warrantyStatus,
+        warrantyDate,
+        ...(scootyModel ? { scootyModel } : {}),
       },
     },
     {
@@ -1584,6 +1596,18 @@ const updateJobcard = async (req, res) => {
         jobcardData.place !== undefined ? jobcardData.place : existing.place,
       mobile:
         jobcardData.mobile !== undefined ? jobcardData.mobile : existing.mobile,
+      warrantyType:
+        jobcardData.warrantyType !== undefined
+          ? jobcardData.warrantyType
+          : existing.warrantyType,
+      warrantyDate:
+        jobcardData.warrantyDate !== undefined
+          ? jobcardData.warrantyDate
+          : existing.warrantyDate,
+      ebikeDetails:
+        jobcardData.ebikeDetails !== undefined
+          ? jobcardData.ebikeDetails
+          : existing.ebikeDetails,
     });
     if (customer) {
       jobcardData.customer = customer._id;

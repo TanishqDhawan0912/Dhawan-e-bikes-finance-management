@@ -109,7 +109,7 @@ function mergeOldChargerStockStats(entries, summaryData) {
   };
 }
 
-export default function NewJobcard() {
+function NewJobcard() {
   const navigate = useNavigate();
   const location = useLocation();
   const editJobcard = location.state?.editJobcard || null;
@@ -562,6 +562,12 @@ export default function NewJobcard() {
         String(prefillCustomer.mobile || "")
           .replace(/\D/g, "")
           .slice(-10) || prev.mobile,
+      warrantyType:
+        prefillCustomer.warrantyStatus === "warranty" ? "full" : "none",
+      warrantyDate:
+        String(prefillCustomer.warrantyDate || "").trim() || prev.warrantyDate,
+      ebikeDetails:
+        String(prefillCustomer.scootyModel || "").trim() || prev.ebikeDetails,
     }));
   }, [isEditMode, prefillCustomer]);
 
@@ -600,21 +606,6 @@ export default function NewJobcard() {
     fetchSparesForControllerMotor();
   }, []);
 
-  // Set warranty date to "NA" when service tab is active and warranty type is "none"
-  useEffect(() => {
-    if (
-      activeTab === "service" &&
-      formData.warrantyType === "none" &&
-      formData.warrantyDate === ""
-    ) {
-      setFormData((prev) => ({
-        ...prev,
-        warrantyDate: "NA",
-      }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
-
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
@@ -639,7 +630,6 @@ export default function NewJobcard() {
       setFormData((prev) => ({
         ...prev,
         warrantyType: value,
-        warrantyDate: activeTab === "service" ? "NA" : prev.warrantyDate,
       }));
       // Replacement section is disabled when no warranty; switch away from replacement tab if active
       if (activeTab === "replacement") {
@@ -2498,8 +2488,7 @@ export default function NewJobcard() {
         date: formData.date || today,
         warrantyType: formData.warrantyType || "none",
         warrantyDate:
-          formData.warrantyDate.trim() ||
-          (formData.warrantyType === "none" ? "NA" : "N/A"),
+          formData.warrantyDate.trim(),
         ebikeDetails: formData.ebikeDetails?.trim() || "",
         mechanic: formData.mechanic?.trim() || "",
         billNo: formData.billNo?.trim() || "",
@@ -2973,14 +2962,6 @@ export default function NewJobcard() {
                 value={formData.warrantyDate}
                 onChange={handleInputChange}
                 placeholder="Enter warranty date/code"
-                readOnly={formData.warrantyType === "none"}
-                disabled={formData.warrantyType === "none"}
-                style={{
-                  backgroundColor:
-                    formData.warrantyType === "none" ? "#f3f4f6" : "white",
-                  cursor:
-                    formData.warrantyType === "none" ? "not-allowed" : "text",
-                }}
               />
             </div>
           </div>
@@ -11145,3 +11126,5 @@ export default function NewJobcard() {
     </div>
   );
 }
+
+export default NewJobcard;
