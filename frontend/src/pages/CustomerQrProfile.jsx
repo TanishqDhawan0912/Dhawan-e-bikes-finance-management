@@ -156,19 +156,28 @@ export default function CustomerQrProfile() {
     const imgSrc = qrImageData || qrImageUrl;
     if (!imgSrc) return;
 
-    // Open a dedicated print window with only the QR sticker. This avoids
-    // the main app's fixed-height/overflow-hidden shell clipping the page
-    // to a blank sheet when printing the SPA route directly.
-    const printWindow = window.open("", "_blank", "width=480,height=640");
-    if (!printWindow) {
-      // Popup blocked: fall back to printing the current page
-      window.print();
-      return;
-    }
-
     const customerName = customer?.name || "";
 
-    printWindow.document.write(`<!doctype html>
+    // Print via a hidden iframe instead of window.open(): popups are
+    // frequently blocked (silently falling back to printing the clipped SPA
+    // shell, which looks like a blank page), while an iframe always works
+    // and keeps the exact same sticker markup/size.
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const cleanup = () => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    };
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
@@ -198,23 +207,23 @@ export default function CustomerQrProfile() {
     <h1>Dhawan E-Bikes</h1>
     <p>${customerName ? `Owner: ${customerName}` : "Scooty QR Sticker"}</p>
     <img id="qrImg" src="${imgSrc}" alt="QR code" />
-    <script>
-      var img = document.getElementById('qrImg');
-      function doPrint() {
-        window.focus();
-        window.print();
-        window.onafterprint = function () { window.close(); };
-      }
-      if (img.complete) {
-        doPrint();
-      } else {
-        img.onload = doPrint;
-        img.onerror = doPrint;
-      }
-    <\/script>
   </body>
 </html>`);
-    printWindow.document.close();
+    doc.close();
+
+    const runPrint = () => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(cleanup, 1000);
+    };
+
+    const img = doc.getElementById("qrImg");
+    if (img.complete) {
+      runPrint();
+    } else {
+      img.onload = runPrint;
+      img.onerror = runPrint;
+    }
   };
 
   return (

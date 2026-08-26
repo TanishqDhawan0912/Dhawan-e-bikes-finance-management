@@ -53,8 +53,8 @@ export default function CallingTierDetail() {
       <div style={{ marginBottom: "20px" }}>
         <h1 style={{ margin: 0, fontSize: "1.6rem" }}>{tier.label}</h1>
         <p style={{ margin: "4px 0 0", color: "#666" }}>
-          {list.length} customer{list.length === 1 ? "" : "s"} pending for
-          this service.
+          {list.length} customer{list.length === 1 ? "" : "s"} pending for this
+          service.
         </p>
       </div>
 
