@@ -313,7 +313,11 @@ export default function QrScanner({ onClose, initialResult = null }) {
       onClose();
       // Finalized list opens the full details modal.
       navigate("/jobcards/all", {
-        state: { selectedJobcard: fullJobcard, returnToQr },
+        state: {
+          selectedJobcard: fullJobcard,
+          returnToQr,
+          customerId: customer?.id || customer?._id,
+        },
       });
     } catch {
       setError("Unable to open this job card.");

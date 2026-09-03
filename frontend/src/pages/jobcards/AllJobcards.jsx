@@ -56,7 +56,9 @@ export default function AllJobcards() {
       const customerFilter = location.state?.customerId
         ? `&customerId=${encodeURIComponent(location.state.customerId)}`
         : "";
-      const response = await fetchWithRetry(`/jobcards?${filter}${customerFilter}`);
+      const response = await fetchWithRetry(
+        `/jobcards?${filter}${customerFilter}`,
+      );
       if (!response.ok) {
         throw new Error("Failed to fetch finalized jobcards");
       }
