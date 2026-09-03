@@ -273,12 +273,20 @@ export default function QrScanner({ onClose, initialResult = null }) {
   };
 
   const formatWarrantyDate = (dateString) => {
-    const match = String(dateString || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+    const value = String(dateString || "").trim();
+    const dayFirstMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+    if (dayFirstMatch) {
+      const year =
+        dayFirstMatch[3].length === 2
+          ? `20${dayFirstMatch[3]}`
+          : dayFirstMatch[3];
+      return `${dayFirstMatch[1].padStart(2, "0")}/${dayFirstMatch[2].padStart(2, "0")}/${year}`;
+    }
 
-    const date = new Date(dateString);
-    if (Number.isNaN(date.getTime())) return String(dateString || "");
-    return date.toLocaleDateString("en-GB");
+    const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+
+    return value;
   };
 
   const openJobcard = async (jobcard) => {

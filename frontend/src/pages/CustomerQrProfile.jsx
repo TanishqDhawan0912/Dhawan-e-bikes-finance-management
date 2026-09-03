@@ -29,6 +29,8 @@ export default function CustomerQrProfile() {
   const [qrToken, setQrToken] = useState("");
   const [qrImageData, setQrImageData] = useState("");
   const [scootyModelInput, setScootyModelInput] = useState("");
+  const [showPrintOptions, setShowPrintOptions] = useState(false);
+  const [printPosition, setPrintPosition] = useState("middle");
 
   const totalPending = useMemo(() => {
     return jobcards.reduce(
@@ -150,13 +152,19 @@ export default function CustomerQrProfile() {
     });
   };
 
-  const printQrSticker = () => {
+  const printQrSticker = (position = printPosition) => {
     // Use the locally generated data URL so printing does not depend on a
     // cross-origin image, which Chrome can fail to rasterize (blank page).
     const imgSrc = qrImageData || qrImageUrl;
     if (!imgSrc) return;
 
     const customerName = customer?.name || "";
+    const alignment =
+      position === "left"
+        ? "flex-start"
+        : position === "right"
+          ? "flex-end"
+          : "center";
 
     // Print via a hidden iframe instead of window.open(): popups are
     // frequently blocked (silently falling back to printing the clipped SPA
@@ -194,9 +202,19 @@ export default function CustomerQrProfile() {
         font-family: system-ui, -apple-system, sans-serif;
         color: #111827;
       }
+      .sticker-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        align-self: ${alignment};
+      }
       h1 { font-size: 20px; margin: 0 0 4px; }
       p { font-size: 12px; color: #4b5563; margin: 0 0 12px; }
-      img { width: 192px; height: 192px; display: block; }
+      img {
+        width: 192px;
+        height: 192px;
+        display: block;
+      }
       @page { margin: 0; }
       @media print {
         body { min-height: auto; padding: 8mm; }
@@ -204,9 +222,11 @@ export default function CustomerQrProfile() {
     </style>
   </head>
   <body>
-    <h1>Dhawan E-Bikes</h1>
-    <p>${customerName ? `Owner: ${customerName}` : "Scooty QR Sticker"}</p>
-    <img id="qrImg" src="${imgSrc}" alt="QR code" />
+    <div class="sticker-content">
+      <h1>Dhawan E-Bikes</h1>
+      <p>${customerName ? `Owner: ${customerName}` : "Scooty QR Sticker"}</p>
+      <img id="qrImg" src="${imgSrc}" alt="QR code" />
+    </div>
   </body>
 </html>`);
     doc.close();
@@ -224,6 +244,17 @@ export default function CustomerQrProfile() {
       img.onload = runPrint;
       img.onerror = runPrint;
     }
+  };
+
+  const openPrintOptions = () => {
+    if (!qrImageUrl) return;
+    setPrintPosition("middle");
+    setShowPrintOptions(true);
+  };
+
+  const confirmPrint = () => {
+    setShowPrintOptions(false);
+    printQrSticker(printPosition);
   };
 
   return (
@@ -341,12 +372,90 @@ export default function CustomerQrProfile() {
                 />
               ) : null}
               <div className="customer-qr-print-actions">
-                <button className="btn btn-primary" onClick={printQrSticker}>
+                <button className="btn btn-primary" onClick={openPrintOptions}>
                   Print QR
                 </button>
               </div>
             </div>
           </section>
+
+          {showPrintOptions ? (
+            <div
+              className="qr-print-options-backdrop"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="qr-print-options-title"
+            >
+              <div className="qr-print-options-modal">
+                <div className="qr-print-options-header">
+                  <div>
+                    <h2 id="qr-print-options-title">Choose QR position</h2>
+                    <p>
+                      Select how the QR should be aligned on the printed page.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="qr-print-options-close"
+                    onClick={() => setShowPrintOptions(false)}
+                    aria-label="Close print options"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="qr-print-previews">
+                  {[
+                    ["left", "Left"],
+                    ["middle", "Middle"],
+                    ["right", "Right"],
+                  ].map(([position, label]) => (
+                    <button
+                      type="button"
+                      key={position}
+                      className={`qr-print-preview${
+                        printPosition === position ? " selected" : ""
+                      }`}
+                      onClick={() => setPrintPosition(position)}
+                    >
+                      <span className="qr-print-preview-label">{label}</span>
+                      <span
+                        className="qr-print-preview-page"
+                        style={{
+                          alignItems:
+                            position === "left"
+                              ? "flex-start"
+                              : position === "right"
+                                ? "flex-end"
+                                : "center",
+                        }}
+                      >
+                        <strong>Dhawan E-Bikes</strong>
+                        <small>{customer.name || "Owner"}</small>
+                        <img src={qrImageUrl} alt={`${label} QR preview`} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div className="qr-print-options-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setShowPrintOptions(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={confirmPrint}
+                  >
+                    Print{" "}
+                    {printPosition[0].toUpperCase() + printPosition.slice(1)}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <section className="customer-history-panel">
             <div className="customer-history-header">

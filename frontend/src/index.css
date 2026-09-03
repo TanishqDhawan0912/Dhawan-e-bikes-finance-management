@@ -4176,6 +4176,109 @@ textarea {
   flex-wrap: wrap;
 }
 
+.qr-print-options-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.qr-print-options-modal {
+  width: min(720px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+}
+
+.qr-print-options-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.qr-print-options-header h2,
+.qr-print-options-header p {
+  margin: 0;
+}
+
+.qr-print-options-header p {
+  margin-top: 0.35rem;
+  color: #4b5563;
+}
+
+.qr-print-options-close {
+  border: 0;
+  background: transparent;
+  color: #374151;
+  font-size: 1.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.qr-print-previews {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.qr-print-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  color: #111827;
+  cursor: pointer;
+}
+
+.qr-print-preview.selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.qr-print-preview-label {
+  font-weight: 700;
+}
+
+.qr-print-preview-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+}
+
+.qr-print-preview-page strong,
+.qr-print-preview-page small {
+  width: 100%;
+  text-align: center;
+}
+
+.qr-print-preview-page img {
+  width: 108px;
+  height: 108px;
+  margin-top: 0.75rem;
+  object-fit: contain;
+}
+
+.qr-print-options-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
 .customer-qr-owner-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(120px, 1fr));
@@ -4251,6 +4354,14 @@ textarea {
 
   .customer-qr-owner-grid {
     grid-template-columns: 1fr;
+  }
+
+  .qr-print-previews {
+    grid-template-columns: 1fr;
+  }
+
+  .qr-print-preview-page {
+    min-height: 180px;
   }
 }
 
