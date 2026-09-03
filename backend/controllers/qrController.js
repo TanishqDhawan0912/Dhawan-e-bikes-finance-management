@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const QRCode = require("qrcode");
 const Customer = require("../models/Customer");
 const QRRecord = require("../models/QRRecord");
-const Jobcard = require("../models/Jobcard");
+const { getCustomerJobcards } = require("./customerController");
 
 function serializeCustomer(customer) {
   return {
@@ -97,12 +97,9 @@ const scanQrToken = async (req, res) => {
       .json({ success: false, message: "Customer QR code not found" });
   }
 
-  const jobcards = await Jobcard.find({ customer: record.customer._id })
-    .sort({ createdAt: -1 })
-    .select(
-      "jobcardNumber date warrantyType warrantyDate ebikeDetails jobcardType status totalAmount pendingAmount",
-    )
-    .lean();
+  const jobcards = await getCustomerJobcards(record.customer, {
+    lightweight: true,
+  });
 
   const totalPendingAmount = jobcards.reduce(
     (sum, jobcard) => sum + (Number(jobcard.pendingAmount) || 0),

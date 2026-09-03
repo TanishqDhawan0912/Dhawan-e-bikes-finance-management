@@ -44,7 +44,7 @@ function readWarrantyFields(payload) {
   };
 }
 
-async function getCustomerJobcards(customer) {
+async function getCustomerJobcards(customer, { lightweight = false } = {}) {
   const or = [{ customer: customer._id }];
 
   const mobileRegex = buildMobileRegex(customer.mobileNormalized);
@@ -61,10 +61,19 @@ async function getCustomerJobcards(customer) {
 
   const historyFilter = or.length === 1 ? or[0] : { $or: or };
 
-  const jobcards = await Jobcard.find(historyFilter)
-    .sort({ createdAt: -1 })
-    .populate("parts.spareId", "name sku")
-    .populate("customer", "name place mobile mobileNormalized");
+  let query = Jobcard.find(historyFilter).sort({ createdAt: -1 });
+  if (lightweight) {
+    query = query
+      .select(
+        "jobcardNumber date warrantyType warrantyDate ebikeDetails jobcardType status totalAmount pendingAmount",
+      )
+      .lean();
+  } else {
+    query = query
+      .populate("parts.spareId", "name sku")
+      .populate("customer", "name place mobile mobileNormalized");
+  }
+  const jobcards = await query;
 
   const missingCustomerIds = jobcards
     .filter((j) => !j.customer)
@@ -293,6 +302,7 @@ module.exports = {
   upsertCustomer,
   updateCustomer,
   getCustomers,
+  getCustomerJobcards,
   getCustomerHistoryById,
   updateCustomerType,
   updateScootyModel,
