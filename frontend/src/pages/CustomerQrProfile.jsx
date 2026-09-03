@@ -268,8 +268,8 @@ export default function CustomerQrProfile() {
           <div className="header-right customer-qr-header-actions">
             <button
               className="btn btn-secondary"
-              onClick={() => navigate(-1)}
-              title="Go back"
+              onClick={() => navigate("/customers")}
+              title="Back to Customers"
             >
               Back
             </button>
@@ -483,14 +483,27 @@ export default function CustomerQrProfile() {
                     <tr
                       key={j._id}
                       className="customer-history-row"
-                      onClick={() =>
+                      onClick={() => {
+                        const status = String(j.status || "pending")
+                          .trim()
+                          .toLowerCase();
+                        if (status !== "finalized") {
+                          navigate("/jobcards/pending", {
+                            state: {
+                              editedJobcardId: String(j._id),
+                              customerName: customer.name || "",
+                            },
+                          });
+                          return;
+                        }
                         navigate("/jobcards/all", {
                           state: {
                             selectedJobcard: j,
                             returnPath: `/customer-card/${id}`,
+                            customerId: id,
                           },
-                        })
-                      }
+                        });
+                      }}
                       title={`Open ${j.jobcardNumber || "jobcard"}`}
                     >
                       <td>{j.jobcardNumber || "-"}</td>

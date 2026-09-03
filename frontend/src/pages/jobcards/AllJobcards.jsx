@@ -53,7 +53,10 @@ export default function AllJobcards() {
         filterType === "all"
           ? "status=finalized"
           : `status=finalized&jobcardType=${filterType}`;
-      const response = await fetchWithRetry(`/jobcards?${filter}`);
+      const customerFilter = location.state?.customerId
+        ? `&customerId=${encodeURIComponent(location.state.customerId)}`
+        : "";
+      const response = await fetchWithRetry(`/jobcards?${filter}${customerFilter}`);
       if (!response.ok) {
         throw new Error("Failed to fetch finalized jobcards");
       }

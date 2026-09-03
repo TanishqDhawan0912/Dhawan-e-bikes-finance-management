@@ -1513,11 +1513,15 @@ const createJobcard = async (req, res) => {
 // @access  Public
 const getJobcards = async (req, res) => {
   try {
-    const { status, jobcardType, updatedSince } = req.query;
+    const { status, jobcardType, customerId, updatedSince } = req.query;
     const filter = {};
 
     if (status) {
       filter.status = status;
+    }
+
+    if (customerId) {
+      filter.customer = customerId;
     }
 
     if (jobcardType) {
