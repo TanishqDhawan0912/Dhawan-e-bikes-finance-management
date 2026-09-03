@@ -293,26 +293,28 @@ export default function QrScanner({ onClose, initialResult = null }) {
     if (!jobcard?._id || openingJobcardId) return;
     setOpeningJobcardId(jobcard._id);
     setError("");
+    const returnToQr = { customer, jobcards, totalPendingAmount };
+
+    if (jobcard.status === "pending") {
+      onClose();
+      navigate("/jobcards/pending", {
+        state: {
+          editedJobcardId: String(jobcard._id),
+          returnToQr,
+        },
+      });
+      return;
+    }
+
     try {
       const response = await fetchWithRetry(`/jobcards/${jobcard._id}`);
       if (!response.ok) throw new Error("Failed to load job card");
       const fullJobcard = await response.json();
-      const returnToQr = { customer, jobcards, totalPendingAmount };
       onClose();
-      if (fullJobcard.status === "pending") {
-        // Pending list scrolls this card into view.
-        navigate("/jobcards/pending", {
-          state: {
-            editedJobcardId: String(fullJobcard._id),
-            returnToQr,
-          },
-        });
-      } else {
-        // Finalized list opens the full details modal.
-        navigate("/jobcards/all", {
-          state: { selectedJobcard: fullJobcard, returnToQr },
-        });
-      }
+      // Finalized list opens the full details modal.
+      navigate("/jobcards/all", {
+        state: { selectedJobcard: fullJobcard, returnToQr },
+      });
     } catch {
       setError("Unable to open this job card.");
       setOpeningJobcardId("");

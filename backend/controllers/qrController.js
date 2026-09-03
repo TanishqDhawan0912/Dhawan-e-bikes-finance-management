@@ -101,7 +101,8 @@ const scanQrToken = async (req, res) => {
     .sort({ createdAt: -1 })
     .select(
       "jobcardNumber date warrantyType warrantyDate ebikeDetails jobcardType status totalAmount pendingAmount",
-    );
+    )
+    .lean();
 
   const totalPendingAmount = jobcards.reduce(
     (sum, jobcard) => sum + (Number(jobcard.pendingAmount) || 0),
